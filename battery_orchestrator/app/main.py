@@ -10,6 +10,7 @@ from flask import Flask, jsonify, request, send_from_directory
 import battery_exec
 import config_store
 import ha_client
+import history_store
 import pv_source
 import scheduler
 import tariff_source
@@ -147,6 +148,21 @@ def run_cycle():
         log.info(line)
     log.info(f"Hora actual: {now_hp.tier} ({now_hp.price} EUR/kWh) - {now_hp.reason}")
 
+    # Registrar la decision REAL de esta hora en el historico (se
+    # sobreescribe con cada ciclo hasta que la hora termine, quedando la
+    # ultima decision tomada como "lo que paso" esa hora).
+    try:
+        history_store.record(now, {
+            "dt": now.replace(minute=0, second=0, microsecond=0).isoformat(),
+            "price": now_hp.price, "tier": now_hp.tier,
+            "pv_w": round(now_hp.pv_w), "load_w": round(now_hp.load_w),
+            "charge_w": round(now_hp.charge_w), "discharge_w": round(now_hp.discharge_w),
+            "soc_pct": round(100 * current_soc_wh / total_capacity_wh, 1) if total_capacity_wh else 0,
+            "reason": now_hp.reason,
+        })
+    except Exception as e:
+        log.warning(f"No se pudo guardar el historico: {e}")
+
     try:
         ha_client.publish_sensor(
             "sensor.battery_orchestrator_status",
@@ -166,19 +182,24 @@ def run_cycle():
     except Exception as e:  # no tumbar el ciclo si HA no responde
         log.warning(f"No se pudo publicar el sensor de estado: {e}")
 
+    # Tabla completa del dia: lo que YA paso hoy (del historico, real) +
+    # lo previsto desde ahora en adelante (el plan recien calculado).
+    today_history = [{**entry, "historical": True} for entry in history_store.get_today(now)]
+    future_plan = [
+        {
+            "dt": hp.dt.isoformat(), "price": hp.price, "tier": hp.tier,
+            "pv_w": round(hp.pv_w), "load_w": round(hp.load_w),
+            "charge_w": round(hp.charge_w), "discharge_w": round(hp.discharge_w),
+            "soc_pct": round(100 * hp.soc_wh / total_capacity_wh, 1) if total_capacity_wh else 0,
+            "reason": hp.reason, "historical": False,
+        }
+        for hp in plan
+    ]
+
     with _state_lock:
         _last_status.update(
             last_run=datetime.now().isoformat(),
-            plan=[
-                {
-                    "dt": hp.dt.isoformat(), "price": hp.price, "tier": hp.tier,
-                    "pv_w": round(hp.pv_w), "load_w": round(hp.load_w),
-                    "charge_w": round(hp.charge_w), "discharge_w": round(hp.discharge_w),
-                    "soc_pct": round(100 * hp.soc_wh / total_capacity_wh, 1) if total_capacity_wh else 0,
-                    "reason": hp.reason,
-                }
-                for hp in plan
-            ],
+            plan=today_history + future_plan,
             distribution=distribution,
             log_lines=log_lines,
             skipped_batteries=skipped,

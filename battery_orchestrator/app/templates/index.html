@@ -176,6 +176,10 @@
   td:last-child { font-family: var(--font-body); }
   tr:last-child td { border-bottom: none; }
   tr:hover td { background: var(--bg-alt); }
+  .row-historical td { opacity: .55; }
+  .row-historical:hover td { opacity: .85; }
+  .row-badge { color: var(--green); font-weight: 700; }
+  .row-future td:first-child { border-left: 2px solid var(--accent); }
 
   .tier { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 700; letter-spacing: .02em; font-family: var(--font-mono); }
   .tier-punta { background: var(--red-soft); color: var(--red); }
@@ -371,10 +375,10 @@
 </div>
 
 <div class="card">
-  <h2>Plan próximas horas</h2>
+  <h2>Plan del día <span class="hint">de 00:00 a 00:00 — lo ya ocurrido hoy + lo previsto</span></h2>
   <div style="overflow-x:auto">
     <table id="plan-table">
-      <thead><tr><th>Hora</th><th>Tramo</th><th>Precio</th><th>Sol</th><th>Consumo</th><th>Carga</th><th>Descarga</th><th>SOC</th><th>Motivo</th></tr></thead>
+      <thead><tr><th></th><th>Hora</th><th>Tramo</th><th>Precio</th><th>Sol</th><th>Consumo</th><th>Carga</th><th>Descarga</th><th>SOC</th><th>Motivo</th></tr></thead>
       <tbody></tbody>
     </table>
   </div>
@@ -682,7 +686,8 @@ function renderStatus(status) {
 
   const tbody = document.querySelector('#plan-table tbody');
   tbody.innerHTML = (status.plan || []).map(hp => `
-    <tr>
+    <tr class="${hp.historical ? 'row-historical' : 'row-future'}">
+      <td>${hp.historical ? '<span class="row-badge" title="Ya ocurrió">✓</span>' : ''}</td>
       <td>${new Date(hp.dt).toLocaleString('es-ES', {weekday:'short', hour:'2-digit', minute:'2-digit'})}</td>
       <td><span class="tier tier-${hp.tier}">${hp.tier}</span></td>
       <td>${hp.price.toFixed(3)}</td>

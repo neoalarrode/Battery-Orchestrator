@@ -192,9 +192,22 @@
   }
   .pill-dry { background: var(--amber-soft); color: var(--amber); box-shadow: 0 0 0 1px #fbbf2433; }
   .pill-live { background: var(--red-soft); color: var(--red); box-shadow: 0 0 0 1px #fb718533, 0 0 16px -4px #fb718580; }
+  .pill-ok { background: var(--green-soft); color: var(--green); box-shadow: 0 0 0 1px #34d39933; }
+  .pill-anomaly { background: var(--red-soft); color: var(--red); box-shadow: 0 0 0 1px #fb718533, 0 0 16px -4px #fb718580; }
   .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-  @media (prefers-reduced-motion: no-preference) { .pill-live::before { animation: pulse 1.8s ease-in-out infinite; } }
+  @media (prefers-reduced-motion: no-preference) { .pill-live::before, .pill-anomaly::before { animation: pulse 1.8s ease-in-out infinite; } }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+
+  #health-pill { margin-left: 10px; }
+
+  .anomaly-box {
+    border: 1px solid var(--red); background: var(--red-soft); border-radius: var(--radius);
+    padding: 18px 22px; margin-bottom: 16px;
+  }
+  .anomaly-box h3 { margin: 0 0 8px; font-family: var(--font-display); font-size: .88rem; color: var(--red); }
+  .anomaly-box .kv { font-size: .82rem; }
+
+  .punta-countdown { font-family: var(--font-mono); font-size: 1.6rem; font-weight: 700; color: var(--accent); }
 
   .status-line {
     font-family: var(--font-mono); font-size: 0.78rem; white-space: pre-wrap;
@@ -291,12 +304,19 @@
 <div class="tab-panel active" data-tab="inicio">
 
 <div class="card">
-  <h2>Estado actual <span class="hint" id="last-run"></span></h2>
+  <h2>Estado actual <span class="hint" id="last-run"></span><span id="health-pill" class="pill"></span></h2>
   <div id="stat-grid" class="stat-grid" style="margin-bottom:16px"></div>
   <div id="status"></div>
   <div class="actions">
     <button onclick="runNow()">Ejecutar ciclo ahora</button>
   </div>
+</div>
+
+<div id="anomaly-box"></div>
+
+<div class="card">
+  <h2>Próxima punta</h2>
+  <div id="next-punta"></div>
 </div>
 
 </div>
@@ -465,6 +485,18 @@
 </div>
 
 <div class="card">
+  <h2>Prioridad</h2>
+  <label>Cómo decide el planificador</label>
+  <select id="g-priority" onchange="updatePriorityHelp()">
+    <option value="ahorro">Ahorro (recomendado) — carga con sol y también desde red en valle si hace falta</option>
+    <option value="autoconsumo">Autoconsumo solar — solo carga con excedente solar, nunca desde red</option>
+    <option value="longevidad">Longevidad de batería — como ahorro, pero sin superar el 90% de SOC</option>
+  </select>
+  <p class="help" id="priority-help"></p>
+  <div class="actions"><button onclick="saveConfig()">Guardar</button></div>
+</div>
+
+<div class="card">
   <h2>General</h2>
   <div class="grid2">
     <div>
@@ -480,6 +512,16 @@
   <div class="actions"><button onclick="saveConfig()">Guardar configuración</button></div>
 </div>
 
+<div class="card">
+  <h2>Copia de seguridad</h2>
+  <p class="help">Descarga toda tu configuración (baterías, tarifa, solar, consumo) en un archivo, o restáurala si reinstalas el add-on.</p>
+  <div class="actions">
+    <button class="secondary" onclick="exportConfig()" type="button">Descargar configuración</button>
+    <button class="secondary" onclick="document.getElementById('import-config-file').click()" type="button">Restaurar desde archivo</button>
+    <input type="file" id="import-config-file" accept="application/json" style="display:none" onchange="importConfigFile(this)">
+  </div>
+</div>
+
 </div>
 
 <div class="toast" id="toast"></div>
@@ -488,6 +530,7 @@
 let cfg = null;
 let editingBatteryId = null;
 let lastStatus = null;
+let lastSavings = null;
 
 function switchTab(name) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
@@ -525,12 +568,25 @@ async function loadConfig() {
   document.getElementById('g-pvrefresh').value = cfg.general.pv_refresh_seconds;
   document.getElementById('g-histdays').value = cfg.general.history_days_for_load;
   document.getElementById('g-dryrun').checked = cfg.general.dry_run;
+  document.getElementById('g-priority').value = cfg.general.priority_mode || 'ahorro';
+  updatePriorityHelp();
 }
 
 function toggleTariffMode() {
   const mode = document.getElementById('t-mode').value;
   document.getElementById('tariff-fixed').style.display = mode === 'fixed' ? 'block' : 'none';
   document.getElementById('tariff-pvpc').style.display = mode === 'pvpc_sensor' ? 'block' : 'none';
+}
+
+const PRIORITY_HELP = {
+  ahorro: 'Carga con excedente solar siempre, y además desde red en horas valle (o llano si no queda otra) lo justo para cubrir la próxima punta. Es el equilibrio recomendado entre ahorro y uso de la batería.',
+  autoconsumo: 'La batería solo carga con excedente solar. Nunca compra energía de red para cargarla, ni siquiera en valle — menos ahorro potencial, pero cero ciclos "artificiales" pagados.',
+  longevidad: 'Igual que "ahorro", pero el objetivo de carga nunca supera el 90% del SOC máximo real, para reducir el desgaste de mantener la batería siempre llena.',
+};
+
+function updatePriorityHelp() {
+  const mode = document.getElementById('g-priority').value;
+  document.getElementById('priority-help').textContent = PRIORITY_HELP[mode] || '';
 }
 
 function togglePvMode() {
@@ -743,6 +799,7 @@ async function saveConfig() {
   cfg.general.pv_refresh_seconds = parseInt(document.getElementById('g-pvrefresh').value, 10);
   cfg.general.history_days_for_load = parseInt(document.getElementById('g-histdays').value, 10);
   cfg.general.dry_run = document.getElementById('g-dryrun').checked;
+  cfg.general.priority_mode = document.getElementById('g-priority').value;
 
   try {
     const res = await fetch('api/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(cfg) });
@@ -752,6 +809,39 @@ async function saveConfig() {
   }
   toast('Configuración guardada.');
   refreshStatus();
+}
+
+function exportConfig() {
+  window.location.href = 'api/config/export';
+}
+
+async function importConfigFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  let parsed;
+  try {
+    parsed = JSON.parse(await file.text());
+  } catch (err) {
+    toast('El archivo no es un JSON válido: ' + err.message);
+    input.value = '';
+    return;
+  }
+  try {
+    const res = await fetch('api/config/import', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(parsed) });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      toast('Error al importar: ' + (body.error || res.status));
+      input.value = '';
+      return;
+    }
+  } catch (err) {
+    toast('No se pudo conectar con el servicio: ' + err.message);
+    input.value = '';
+    return;
+  }
+  input.value = '';
+  await loadConfig();
+  toast('Configuración restaurada.');
 }
 
 async function runNow() {
@@ -792,8 +882,12 @@ function renderStatus(status) {
       extra += `<p class="help">Generación real ahora: ${Math.round(status.pv_now_actual)} W</p>`;
     }
     el.innerHTML = extra + `<div class="status-line">${(status.log_lines || []).join('\n')}</div>`;
-    statGrid.innerHTML = renderStatTiles(status);
+    statGrid.innerHTML = renderStatTiles(status, lastSavings);
   }
+
+  renderHealthPill(status.anomaly);
+  renderAnomalyBox(status.anomaly);
+  renderNextPunta(status.next_punta);
 
   const tbody = document.querySelector('#plan-table tbody');
   tbody.innerHTML = (status.plan || []).map(hp => `
@@ -814,7 +908,7 @@ function renderStatus(status) {
   if (socChartPanel && socChartPanel.classList.contains('active')) renderSocChart(status.plan || []);
 }
 
-function renderStatTiles(status) {
+function renderStatTiles(status, savings) {
   const now = (status.plan || []).find(hp => !hp.historical) || (status.plan || [])[0];
   if (!now) return '';
   const dist = status.distribution || {};
@@ -828,11 +922,75 @@ function renderStatTiles(status) {
     { label: 'Consumo', value: now.load_w + ' W' },
     { label: actionLabel, value: (netW === 0 ? '0' : (netW > 0 ? '+' : '') + netW) + ' W', accent: netW !== 0 },
   ];
+  if (savings) {
+    tiles.push(
+      { label: 'Ahorro hoy', value: fmtEur(savings.today_savings_eur), accent: savings.today_savings_eur > 0 },
+      { label: 'Ahorro total', value: fmtEur(savings.total_savings_eur), accent: savings.total_savings_eur > 0 },
+    );
+  }
   return tiles.map(t => `
     <div class="stat-tile">
       <div class="stat-label">${t.label}</div>
       <div class="stat-value ${t.accent ? 'accent' : ''}">${t.raw ? t.value : t.value}</div>
     </div>`).join('');
+}
+
+function fmtEur(v) {
+  const sign = v > 0 ? '+' : '';
+  return `${sign}${v.toFixed(2)} €`;
+}
+
+async function loadSavings() {
+  try {
+    lastSavings = await (await fetch('api/savings')).json();
+  } catch (err) {
+    lastSavings = null;
+  }
+}
+
+function renderHealthPill(anomaly) {
+  const pill = document.getElementById('health-pill');
+  if (!anomaly) { pill.textContent = ''; pill.className = 'pill'; return; }
+  const isAnomaly = anomaly.status === 'anomaly';
+  pill.textContent = isAnomaly ? 'ANÓMALO' : 'SALUDABLE';
+  pill.className = 'pill ' + (isAnomaly ? 'pill-anomaly' : 'pill-ok');
+}
+
+function renderAnomalyBox(anomaly) {
+  const host = document.getElementById('anomaly-box');
+  if (!anomaly || anomaly.status !== 'anomaly') { host.innerHTML = ''; return; }
+  const since = anomaly.since ? new Date(anomaly.since).toLocaleString('es-ES') : '—';
+  const delta = anomaly.live_load_w - anomaly.expected_load_w;
+  const deltaPct = anomaly.expected_load_w ? Math.round(100 * delta / anomaly.expected_load_w) : 0;
+  host.innerHTML = `
+    <div class="anomaly-box">
+      <h3>Consumo anómalo detectado</h3>
+      <div class="kv"><span>Desde</span><code>${since}</code></div>
+      <div class="kv"><span>Consumo real ahora</span><code>${anomaly.live_load_w} W</code></div>
+      <div class="kv"><span>Esperado para esta hora</span><code>${anomaly.expected_load_w} W</code></div>
+      <div class="kv"><span>Diferencia</span><code>+${delta} W (+${deltaPct}%)</code></div>
+      <p class="help" style="margin-top:10px">Se avisa cuando el consumo real supera la previsión histórica en más de un 60% Y al menos 400W de diferencia, sostenido varios ciclos seguidos (para no disparar con un pico de un instante). Revisa si se ha quedado algo encendido. La alerta se retira sola cuando el consumo vuelve a lo esperado.</p>
+    </div>`;
+}
+
+function renderNextPunta(nextPunta) {
+  const host = document.getElementById('next-punta');
+  if (!nextPunta) { host.innerHTML = '<p class="empty">No hay ninguna hora punta en el horizonte de previsión configurado.</p>'; return; }
+  const label = nextPunta.hours_until === 0 ? 'Estás en punta ahora mismo'
+    : nextPunta.hours_until === 1 ? 'En 1 hora' : `En ${nextPunta.hours_until} horas`;
+  const dt = new Date(nextPunta.dt).toLocaleString('es-ES', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+  const pct = Math.min(100, nextPunta.reserve_pct);
+  const colorVar = pct >= 95 ? '--green' : pct >= 60 ? '--amber' : '--red';
+  host.innerHTML = `
+    <div class="punta-countdown">${label}</div>
+    <p class="help" style="margin-top:2px">${dt}</p>
+    <div class="stat-grid" style="margin-top:14px">
+      <div class="stat-tile"><div class="stat-label">Reserva actual</div><div class="stat-value" style="color:var(${colorVar})">${nextPunta.reserve_pct}%</div></div>
+      <div class="stat-tile"><div class="stat-label">SOC ahora</div><div class="stat-value">${(nextPunta.current_soc_wh/1000).toFixed(1)} kWh</div></div>
+      <div class="stat-tile"><div class="stat-label">Objetivo de reserva</div><div class="stat-value">${(nextPunta.reserve_target_wh/1000).toFixed(1)} kWh</div></div>
+    </div>
+    <div class="health-bar-track" style="margin-top:12px"><div class="health-bar-fill" style="width:${pct}%;background:var(${colorVar})"></div></div>
+    <p class="help">"Reserva actual" es cuánto de lo que el planificador cree necesario para cubrir toda la punta que queda por delante ya tienes acumulado — el mismo número que usa para decidir si cargar en llano de emergencia.</p>`;
 }
 
 function tierColorVar(tier) {
@@ -941,6 +1099,7 @@ async function loadBatteryHealth() {
 }
 
 async function refreshStatus() {
+  await loadSavings();
   const status = await (await fetch('api/status')).json();
   renderStatus(status);
 }

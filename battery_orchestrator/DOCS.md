@@ -9,6 +9,8 @@
   <a href="#primeros-pasos">Primeros pasos</a> ·
   <a href="#las-pestañas">Las pestañas</a> ·
   <a href="#salud-de-batería-cómo-se-calcula">Salud de batería</a> ·
+  <a href="#ahorro-y-alertas-de-consumo">Ahorro y alertas</a> ·
+  <a href="#prioridad-ahorro-autoconsumo-o-longevidad">Prioridad</a> ·
   <a href="#notas-de-seguridad">Notas de seguridad</a>
 </p>
 
@@ -25,10 +27,10 @@ Cada ciclo (configurable, por defecto cada 60s):
    o PVPC dinámico vía sensor de HA, donde los tramos se calculan solos por terciles de precio del día.
 2. Suma la previsión solar de todos los paneles/arrays que declares, corrigiendo la hora actual con la generación real medida si tienes un sensor configurado.
 3. Calcula el consumo previsto de la casa a partir del histórico real (media por hora del día de los últimos N días).
-4. Decide si conviene cargar o descargar, con esta prioridad:
+4. Decide si conviene cargar o descargar, con esta prioridad (ajustable, ver [Prioridad](#prioridad-ahorro-autoconsumo-o-longevidad)):
    - Cargar siempre que haya excedente solar.
-   - Cargar en valle lo justo para cubrir la punta más próxima.
-   - Si con eso no basta (la previsión de punta futura supera lo que cabría cargar en valle), cargar también en llano — "carga de emergencia" — en vez de arriesgarse a quedarse corto.
+   - Cargar en valle lo justo para cubrir la punta más próxima (se salta en modo "Autoconsumo solar").
+   - Si con eso no basta (la previsión de punta futura supera lo que cabría cargar en valle), cargar también en llano — "carga de emergencia" — en vez de arriesgarse a quedarse corto (también se salta en "Autoconsumo solar").
    - Descargar en punta primero; en llano solo con el excedente que sobre una vez reservado lo necesario para toda la punta futura del día.
 5. Reparte la potencia de carga entre tus baterías proporcional a su capacidad real declarada (una batería llena recibe 0W, el resto se reparte lo que sobra). La descarga NO se reparte — cada batería se autogestiona — pero sí se fija el límite de potencia de descarga de cada una: el máximo que declaraste, salvo que esté llena y siga habiendo excedente solar, en cuyo caso se pone a 0W para que no se autodescargue sin necesidad.
 6. Aplica la decisión a Home Assistant (o solo la registra, en modo simulación) y actualiza el histórico del día y las observaciones de salud de cada batería.
@@ -47,14 +49,16 @@ texto plano.
 6. Consumo real de la casa, en "Configuración → Consumo de la casa": indica un sensor que **ya reste la carga AC de las baterías** (por ejemplo un "consumo instantáneo" de tu instalación) — **no** un medidor de red en bruto que sí la incluya. La app le suma sola, hora a hora, la producción solar y la descarga de cada batería (los sensores del paso 3) para reconstruir el consumo real completo, sea cual sea la fuente que lo esté cubriendo en cada momento. No hace falta ningún sensor con signo ni de carga: los términos de carga se cancelan matemáticamente al partir de un sensor que ya los resta.
 7. Si tienes potencia contratada, indícala en "Configuración → Seguridad y límites" para que nunca la supere al cargar desde red (la carga con excedente solar no cuenta, no tira de la red).
 8. Pulsa "Ejecutar ciclo ahora" en "Estado actual" y revisa el plan del día y la gráfica de SOC en la pestaña "Previsión".
-9. Cuando confíes en las decisiones, desactiva el modo simulación.
+9. Elige tu modo de prioridad en "Configuración → Prioridad" si el comportamiento por defecto ("Ahorro") no es el que quieres — ver [Prioridad](#prioridad-ahorro-autoconsumo-o-longevidad).
+10. Cuando confíes en las decisiones, desactiva el modo simulación.
+11. Descarga una copia de tu configuración desde "Configuración → Copia de seguridad" — útil si algún día reinstalas el add-on.
 
 ## Las pestañas
 
-- **Estado actual** — resumen del ciclo más reciente: SOC agregado, tramo tarifario, precio, solar y consumo ahora mismo, y si se está cargando/descargando. Debajo, el log de lo que hizo la última ejecución.
+- **Estado actual** — resumen del ciclo más reciente: SOC agregado, tramo tarifario, precio, solar, consumo, si se está cargando/descargando, y el ahorro acumulado hoy y en total. Un indicador junto al título marca "Saludable" o "Anómalo" según si se ha detectado un consumo fuera de lo normal (ver [Ahorro y alertas](#ahorro-y-alertas-de-consumo)). Debajo, el log de lo que hizo la última ejecución, y una tarjeta con la cuenta atrás a la próxima hora punta y cuánta reserva llevas acumulada para cubrirla.
 - **Previsión** — gráfica del SOC agregado de todas tus baterías a lo largo del día (con las franjas de tarifa de fondo y una línea marcando "ahora"), y la tabla "Plan del día" completa: de 00:00 a 00:00, combinando lo que ya pasó hoy (histórico real) con lo previsto desde ahora.
 - **Salud de batería** — ver más abajo.
-- **Configuración** — todo lo que declaras tú: baterías, tarifa, solar, consumo, límites y ajustes generales.
+- **Configuración** — todo lo que declaras tú: baterías, tarifa, solar, consumo, límites, prioridad, ajustes generales y copia de seguridad.
 
 ## Salud de batería: cómo se calcula
 
@@ -68,6 +72,20 @@ estado real de las celdas sin uno. Son estimaciones honestas: se explica
 de dónde sale cada número y con qué margen de confianza (el número de
 observaciones), nada de caja negra.
 
+## Ahorro y alertas de consumo
+
+**Ahorro acumulado.** Cada ciclo se calcula lo que se ha pagado de verdad (lo que se compra a red para consumo directo, más lo que se cargue de red en la batería) y se compara contra lo que se habría pagado sin batería (comprar directamente a red lo que el solar no cubra, cada hora a su precio real). La diferencia es el ahorro; se acumula por día y en total desde que la app lleva la cuenta. En horas de carga desde red puede salir momentáneamente negativo — es normal, esa energía se recupera después al evitar comprar en punta.
+
+**Alerta de consumo anómalo.** Cada ciclo se compara el consumo real medido ahora mismo contra lo que la previsión histórica esperaba para esta hora del día. Si el consumo real supera la previsión en más de un 60% **y** la diferencia es de al menos 400W (para no disparar con bases de consumo pequeñas), y eso se sostiene 3 ciclos seguidos, el indicador de "Estado actual" pasa de "Saludable" a "Anómalo", se abre un cuadro debajo con el detalle (desde cuándo, consumo real vs. esperado, diferencia) y se crea una notificación persistente en Home Assistant. Se retira sola (indicador, cuadro y notificación) cuando el consumo vuelve a lo esperado durante 3 ciclos seguidos. Solo funciona si tienes el sensor de consumo configurado en "Configuración → Consumo de la casa".
+
+## Prioridad: ahorro, autoconsumo o longevidad
+
+En "Configuración → Prioridad" eliges cómo decide el planificador entre tres modos, cada uno una regla clara, no un peso difuso:
+
+- **Ahorro** (por defecto) — el comportamiento de siempre: carga con excedente solar, y también desde red en valle (o en llano de emergencia si hace falta) lo justo para cubrir la próxima punta.
+- **Autoconsumo solar** — la batería SOLO carga con excedente solar, nunca desde red aunque esté barata. Menos ahorro potencial en días con poco sol, pero cero ciclos de carga "artificiales" pagados.
+- **Longevidad de batería** — igual que "Ahorro", pero el objetivo de carga nunca supera el 90% del SOC máximo real configurado, para reducir el desgaste de mantener la batería siempre llena.
+
 ## Notas de seguridad
 
 - Una batería con el sensor de SOC caído se omite ese ciclo entero (no se inventa un valor), y aparece listada como omitida en "Estado actual".
@@ -75,3 +93,5 @@ observaciones), nada de caja negra.
 - El objetivo de carga respeta el SOC máximo real que hayas configurado por batería (si pones un tope por debajo del 100% para alargar su vida útil, la reserva de energía para la punta lo tiene en cuenta y no intenta superarlo).
 - La potencia contratada solo limita la carga desde red (la carga con excedente solar no cuenta, no tira de la red).
 - La previsión de consumo/solar por histórico reintenta sola con ventanas más cortas si tu Home Assistant conserva menos días de los que pides (por defecto el `recorder` solo guarda 10).
+- El ahorro acumulado y la alerta de consumo anómalo necesitan el sensor de "Consumo de la casa" configurado — sin él, ni se calculan ni aparecen en "Estado actual".
+- Restaurar una configuración desde archivo solo comprueba que tenga las claves básicas esperadas (baterías, tarifa, solar, general); revisa los datos después de importar por si vienen de una versión antigua del add-on.

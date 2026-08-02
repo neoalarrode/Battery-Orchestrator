@@ -49,9 +49,19 @@ con excedente solar"...).
 - **Estima la salud real de cada batería** observando cuánta energía hace
   falta para mover su SOC un tramo grande, y comparándolo con la
   capacidad que declaraste — no un contador de ciclos a ciegas.
+- **Calcula el ahorro real acumulado**, comparando lo que has pagado con
+  lo que habrías pagado sin batería, hora a hora.
+- **Avisa de consumos anómalos**: si el consumo real se dispara muy por
+  encima de lo esperado y se sostiene varios ciclos, lo marca en la
+  interfaz y notifica en Home Assistant — con el detalle siempre a la
+  vista, nunca solo un aviso sin explicación.
+- **Prioridad configurable**: ahorro (por defecto), autoconsumo solar
+  puro (nunca carga desde red) o longevidad de batería (no supera el 90%
+  de SOC).
 - **Todo configurable desde la web**: baterías, tarifa, paneles solares,
   sensor de consumo — nada hardcodeado salvo la URL base de la API
-  gratuita de Forecast.Solar.
+  gratuita de Forecast.Solar. Configuración exportable/importable en un
+  archivo, por si reinstalas el add-on.
 
 ## Instalación
 

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import json
 import logging
 import threading
 import time
 from datetime import datetime
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, Response, jsonify, request, send_from_directory
 
+import anomaly_store
 import battery_exec
 import capacity_store
 import config_store
@@ -14,6 +16,7 @@ import ha_client
 import history_store
 import lifetime_store
 import pv_source
+import savings_store
 import scheduler
 import tariff_source
 
@@ -30,8 +33,12 @@ _last_status = {
     "log_lines": [],
     "skipped_batteries": [],
     "pv_now_actual": None,
+    "next_punta": None,
+    "anomaly": None,
     "error": None,
 }
+
+ANOMALY_NOTIFICATION_ID = "battery_orchestrator_anomaly"
 
 
 def _battery_from_cfg(b: dict) -> battery_exec.Battery:
@@ -124,7 +131,18 @@ def run_cycle():
                                  error="Ninguna bateria tiene el sensor de SOC disponible ahora mismo.")
         return
 
-    plan = scheduler.build_plan(
+    # Prioridad elegida por el usuario: "ahorro" es el comportamiento de
+    # siempre (carga tambien desde red si hace falta); "autoconsumo" solo
+    # carga con excedente solar, nunca desde red aunque este barata;
+    # "longevidad" es como "ahorro" pero sin apurar el SOC objetivo mas
+    # alla del 90%, para no forzar cargas completas innecesarias.
+    priority_mode = cfg["general"].get("priority_mode", "ahorro")
+    allow_grid_charging = priority_mode != "autoconsumo"
+    effective_max_usable_wh = max_usable_wh
+    if priority_mode == "longevidad" and total_capacity_wh:
+        effective_max_usable_wh = min(max_usable_wh, total_capacity_wh * 0.90)
+
+    plan, reserve_wh = scheduler.build_plan(
         now=now,
         pv_forecast_w=pv_forecast,
         load_forecast_w=load_forecast,
@@ -135,7 +153,8 @@ def run_cycle():
         min_soc_wh=min_soc_wh,
         prices_tiers=prices_tiers,
         contracted_power_w=float(cfg["general"].get("contracted_power_w") or 0),
-        max_usable_wh=max_usable_wh,
+        max_usable_wh=effective_max_usable_wh,
+        allow_grid_charging=allow_grid_charging,
     )
 
     now_hp = plan[0]
@@ -149,6 +168,21 @@ def run_cycle():
     for line in log_lines:
         log.info(line)
     log.info(f"Hora actual: {now_hp.tier} ({now_hp.price} EUR/kWh) - {now_hp.reason}")
+
+    # Cuenta atras a la proxima punta: la propia reserva (reserve_wh) que
+    # acaba de calcular el planificador es el numero real que se esta
+    # usando para decidir, asi que se reutiliza tal cual en vez de volver
+    # a calcularlo aparte.
+    next_punta = None
+    next_punta_idx = next((i for i, hp in enumerate(plan) if hp.tier == "punta"), None)
+    if next_punta_idx is not None:
+        next_punta = {
+            "hours_until": next_punta_idx,
+            "dt": plan[next_punta_idx].dt.isoformat(),
+            "reserve_target_wh": round(reserve_wh),
+            "current_soc_wh": round(current_soc_wh),
+            "reserve_pct": round(min(100.0, 100 * current_soc_wh / reserve_wh), 1) if reserve_wh else 100.0,
+        }
 
     # Energia (Wh) movida en este ciclo, por bateria. En carga usamos la
     # potencia real repartida a cada una; en descarga cada bateria se
@@ -199,6 +233,59 @@ def run_cycle():
     except Exception as e:
         log.warning(f"No se pudo guardar el historico: {e}")
 
+    # Ahorro real: coste de lo que se ha comprado de verdad a red (consumo
+    # directo que el solar no cubre, mas lo que se cargue de red en la
+    # bateria) frente al coste SIN bateria (comprar directamente a red lo
+    # que el solar no cubra). Mismos numeros que usa el planificador, sin
+    # inventar nada nuevo.
+    try:
+        grid_bought_w = max(0.0, now_hp.load_w - now_hp.pv_w - now_hp.discharge_w)
+        if now_hp.charge_source == "grid":
+            grid_bought_w += now_hp.charge_w
+        real_cost_eur = now_hp.price * (grid_bought_w / 1000) * cycle_hours
+        baseline_deficit_w = max(0.0, now_hp.load_w - now_hp.pv_w)
+        baseline_cost_eur = now_hp.price * (baseline_deficit_w / 1000) * cycle_hours
+        savings_store.record(now, real_cost_eur, baseline_cost_eur)
+    except Exception as e:
+        log.warning(f"No se pudo actualizar el ahorro acumulado: {e}")
+
+    # Deteccion de anomalias de consumo: compara el consumo real medido
+    # AHORA MISMO (no la previsión) contra lo que la previsión historica
+    # esperaba para esta hora. Solo se puede calcular si hay sensor de
+    # consumo configurado.
+    anomaly = None
+    if load_sensor:
+        try:
+            live_base = ha_client.get_numeric_state(load_sensor, default=None)
+            if live_base is not None:
+                live_pv = pv_now_actual if pv_now_actual is not None else pv_forecast[0]
+                live_discharge = sum(
+                    ha_client.get_numeric_state(b.get("power_sensor"), default=0.0) or 0.0
+                    for b in batteries_cfg if b.get("power_sensor")
+                )
+                live_load_w = live_base + live_pv + live_discharge
+                anomaly = anomaly_store.update(now, live_load_w, load_forecast[0])
+                if anomaly["changed"]:
+                    if anomaly["status"] == "anomaly":
+                        ha_client.call_service("persistent_notification", "create", extra={
+                            "notification_id": ANOMALY_NOTIFICATION_ID,
+                            "title": "Battery Orchestrator: consumo anómalo",
+                            "message": (
+                                f"Consumo real ~{anomaly['live_load_w']}W, muy por encima de lo "
+                                f"esperado para esta hora (~{anomaly['expected_load_w']}W)."
+                            ),
+                        })
+                        log.warning(f"Anomalia de consumo detectada: {anomaly['live_load_w']}W vs {anomaly['expected_load_w']}W esperados")
+                    else:
+                        ha_client.call_service("persistent_notification", "dismiss", extra={
+                            "notification_id": ANOMALY_NOTIFICATION_ID,
+                        })
+                        log.info("Anomalia de consumo resuelta")
+        except Exception as e:
+            log.warning(f"No se pudo comprobar la anomalia de consumo: {e}")
+    if anomaly is None:
+        anomaly = anomaly_store.get_status()
+
     try:
         ha_client.publish_sensor(
             "sensor.battery_orchestrator_status",
@@ -240,6 +327,8 @@ def run_cycle():
             log_lines=log_lines,
             skipped_batteries=skipped,
             pv_now_actual=pv_now_actual,
+            next_punta=next_punta,
+            anomaly=anomaly,
             error=None,
         )
 
@@ -266,6 +355,26 @@ def api_get_config():
 @app.post("/api/config")
 def api_save_config():
     cfg = request.get_json(force=True)
+    config_store.save_config(cfg)
+    return jsonify(cfg)
+
+
+@app.get("/api/config/export")
+def api_export_config():
+    cfg = config_store.load_config()
+    body = json.dumps(cfg, indent=2, ensure_ascii=False)
+    return Response(
+        body, mimetype="application/json",
+        headers={"Content-Disposition": "attachment; filename=battery_orchestrator_config.json"},
+    )
+
+
+@app.post("/api/config/import")
+def api_import_config():
+    cfg = request.get_json(force=True)
+    required_keys = {"batteries", "tariff", "pv_arrays", "general"}
+    if not isinstance(cfg, dict) or not required_keys.issubset(cfg.keys()):
+        return jsonify({"error": "El archivo no tiene el formato esperado de configuración."}), 400
     config_store.save_config(cfg)
     return jsonify(cfg)
 
@@ -338,6 +447,16 @@ def api_battery_health():
             "since": cyc.get("since"),
         })
     return jsonify(combined)
+
+
+@app.get("/api/savings")
+def api_savings():
+    return jsonify(savings_store.get_summary(datetime.now()))
+
+
+@app.get("/api/anomaly")
+def api_anomaly():
+    return jsonify(anomaly_store.get_status())
 
 
 @app.post("/api/run_now")

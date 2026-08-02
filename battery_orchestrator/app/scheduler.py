@@ -34,6 +34,7 @@ class HourPlan:
     discharge_w: float = 0.0
     soc_wh: float = 0.0
     reason: str = ""
+    charge_source: str | None = None  # "solar" | "grid" | None — de donde sale la carga de esta hora
 
 
 def build_plan(
@@ -48,7 +49,8 @@ def build_plan(
     prices_tiers: list[tuple[float, str]],
     contracted_power_w: float = 0,
     max_usable_wh: float | None = None,
-) -> list[HourPlan]:
+    allow_grid_charging: bool = True,
+) -> tuple[list[HourPlan], float]:
     """
     pv_forecast_w / load_forecast_w: listas de potencia media (W) para cada
     una de las proximas horas, empezando por la hora actual (indice 0).
@@ -67,6 +69,17 @@ def build_plan(
     alargar su vida util). Si no se indica, se usa total_capacity_wh
     (100% nominal). total_capacity_wh se sigue usando tal cual para
     calcular el % de SOC en el plan.
+
+    allow_grid_charging: si es False, la bateria SOLO carga con excedente
+    solar — nunca desde red, ni en valle ni en emergencia de llano (modo
+    "autoconsumo"). Si es True (por defecto), tambien carga desde red en
+    valle (y en llano de emergencia) lo justo para cubrir la punta que
+    quede por delante (modo "ahorro").
+
+    Devuelve (plan, reserve_wh): el plan hora a hora, y el nivel de SOC
+    absoluto (Wh) que el motor esta intentando alcanzar ahora mismo para
+    cubrir punta/llano futuros — util para mostrar "cuanto falta para la
+    reserva" en la interfaz sin duplicar esta cuenta en otro sitio.
     """
     horizon = len(pv_forecast_w)
     hours = [now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=i) for i in range(horizon)]
@@ -117,11 +130,13 @@ def build_plan(
             if charge > 0:
                 soc += charge
                 hp.charge_w = charge
+                hp.charge_source = "solar"
                 hp.reason = "carga con excedente solar"
 
         # 2) Carga desde red en VALLE, oportunista, hasta la reserva completa
         #    (punta + llano que quepa). Respetando la potencia contratada.
-        elif tier == "valle" and soc < reserve_wh:
+        #    Se salta por completo en modo "autoconsumo" (allow_grid_charging=False).
+        elif allow_grid_charging and tier == "valle" and soc < reserve_wh:
             headroom = min(ceiling_wh - soc, reserve_wh - soc)
             charge_limit = max_charge_w
             if contracted_power_w > 0:
@@ -131,6 +146,7 @@ def build_plan(
             if charge > 0:
                 soc += charge
                 hp.charge_w = charge
+                hp.charge_source = "grid"
                 hp.reason = f"carga en valle (objetivo reserva {reserve_wh/1000:.2f} kWh)"
             elif charge_limit <= 0:
                 hp.reason = "sin carga: al limite de potencia contratada"
@@ -140,7 +156,8 @@ def build_plan(
         #     en llano aunque sea mas caro que valle — sigue siendo mas
         #     barato que dejar esa punta sin cubrir (llano < punta siempre).
         #     Solo carga lo justo para tapar ese hueco, no la reserva completa.
-        elif tier == "llano" and soc < min_soc_wh + future_punta_after[i]:
+        #     Tambien se salta en modo "autoconsumo".
+        elif allow_grid_charging and tier == "llano" and soc < min_soc_wh + future_punta_after[i]:
             target = min(ceiling_wh, min_soc_wh + future_punta_after[i])
             headroom = min(ceiling_wh - soc, target - soc)
             charge_limit = max_charge_w
@@ -151,6 +168,7 @@ def build_plan(
             if charge > 0:
                 soc += charge
                 hp.charge_w = charge
+                hp.charge_source = "grid"
                 hp.reason = "carga en llano (no llegaba a cubrir la punta que queda)"
             elif charge_limit <= 0:
                 hp.reason = "sin carga: al limite de potencia contratada"
@@ -183,7 +201,7 @@ def build_plan(
         hp.soc_wh = soc
         plan.append(hp)
 
-    return plan
+    return plan, reserve_wh
 
 
 if __name__ == "__main__":
@@ -202,7 +220,7 @@ if __name__ == "__main__":
 
     cfg = FixedTariffConfig()
     prices_tiers = fixed_tariff_prices(now, horizon, cfg)
-    plan = build_plan(
+    plan, reserve_wh = build_plan(
         now=now,
         pv_forecast_w=pv,
         load_forecast_w=load,

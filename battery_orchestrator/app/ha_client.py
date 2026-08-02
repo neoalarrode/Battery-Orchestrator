@@ -57,8 +57,10 @@ def get_numeric_state(entity_id: str, default: float | None = 0.0) -> float | No
         return default
 
 
-def call_service(domain: str, service: str, entity_id: str, extra: dict | None = None):
-    payload = {"entity_id": entity_id}
+def call_service(domain: str, service: str, entity_id: str | None = None, extra: dict | None = None):
+    payload = {}
+    if entity_id:
+        payload["entity_id"] = entity_id
     if extra:
         payload.update(extra)
     r = requests.post(f"{BASE_URL}/services/{domain}/{service}", headers=HEADERS, json=payload, timeout=TIMEOUT)

@@ -37,6 +37,7 @@ DEFAULT_CONFIG = {
         "dry_run": True,
         "history_days_for_load": 10,  # el recorder de HA por defecto solo guarda 10 dias; la app reintenta con menos si hace falta
         "contracted_power_w": 0,
+        "priority_mode": "ahorro",  # "ahorro" | "autoconsumo" | "longevidad"
     },
 }
 

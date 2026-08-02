@@ -13,7 +13,7 @@ import uuid
 
 CONFIG_PATH = os.environ.get("CONFIG_PATH", "/data/config.json")
 
-_lock = threading.Lock()
+_lock = threading.RLock()  # reentrante: load_config() llama a save_config() en el primer arranque
 
 DEFAULT_CONFIG = {
     "batteries": [],

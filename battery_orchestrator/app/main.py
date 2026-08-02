@@ -110,6 +110,10 @@ def run_cycle():
     min_soc_wh = sum(b.min_soc_pct / 100 * b.capacity_wh for b in usable_batteries)
     max_charge_w = sum(b.max_charge_w for b in usable_batteries)
     max_discharge_w = sum(b.max_discharge_w for b in usable_batteries)
+    # techo real de carga: si alguna bateria tiene un SOC maximo declarado
+    # por debajo del 100% (habitual para alargar vida util), el objetivo
+    # de reserva tiene que respetarlo, no apuntar al 100% nominal.
+    max_usable_wh = sum(b.max_soc_pct / 100 * b.capacity_wh for b in usable_batteries)
 
     if not usable_batteries:
         with _state_lock:
@@ -128,6 +132,7 @@ def run_cycle():
         min_soc_wh=min_soc_wh,
         prices_tiers=prices_tiers,
         contracted_power_w=float(cfg["general"].get("contracted_power_w") or 0),
+        max_usable_wh=max_usable_wh,
     )
 
     now_hp = plan[0]

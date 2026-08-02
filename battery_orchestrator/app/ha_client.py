@@ -89,7 +89,13 @@ def publish_sensor(entity_id: str, state, attributes: dict | None = None):
 
 
 def get_history(entity_id: str, days: int) -> list[dict]:
-    start = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    # OJO: la marca de tiempo va EMBEBIDA en la ruta de la URL (no en un
+    # parametro de query), asi que tiene que ir "limpia". .isoformat() por
+    # defecto produce algo como "...T21:58:03.123456+00:00": el "+" ahi
+    # dentro rompe la ruta (se puede interpretar como espacio o generar una
+    # fecha invalida) y HA devuelve una respuesta vacia sin avisar de error.
+    # Formato limpio con sufijo "Z" (UTC) en su lugar.
+    start = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
     r = requests.get(
         f"{BASE_URL}/history/period/{start}",
         headers=HEADERS,
@@ -106,8 +112,20 @@ def hourly_average_forecast(entity_id: str, horizon_hours: int, days: int = 21, 
     Previsión simple y explicable para CUALQUIER sensor numerico: para cada
     hora del horizonte, la media de esa MISMA hora-del-dia en los ultimos
     `days` dias de historico real. Nada de aprendizaje automatico opaco.
+
+    Si `days` supera lo que tu Home Assistant realmente conserva (por
+    defecto el recorder solo guarda 10 dias), reintenta con ventanas mas
+    cortas antes de rendirse - asi no depende de que sepas/ajustes ese
+    detalle de configuracion tuyo.
     """
     raw = get_history(entity_id, days)
+    if not raw:
+        for fallback_days in (10, 7, 3, 1):
+            if fallback_days >= days:
+                continue
+            raw = get_history(entity_id, fallback_days)
+            if raw:
+                break
     if not raw:
         current = get_numeric_state(entity_id, default=default)
         return [current] * horizon_hours

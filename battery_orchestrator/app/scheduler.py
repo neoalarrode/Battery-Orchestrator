@@ -47,6 +47,7 @@ def build_plan(
     min_soc_wh: float,
     prices_tiers: list[tuple[float, str]],
     contracted_power_w: float = 0,
+    max_usable_wh: float | None = None,
 ) -> list[HourPlan]:
     """
     pv_forecast_w / load_forecast_w: listas de potencia media (W) para cada
@@ -60,9 +61,16 @@ def build_plan(
     contracted_power_w: potencia contratada de la vivienda (0 = sin limite).
     Solo se aplica a la carga desde RED (en valle) — la carga con excedente
     solar no consume potencia contratada porque no tira de red.
+
+    max_usable_wh: techo real de carga (p.ej. si tus baterias tienen un
+    SOC maximo declarado por debajo del 100% nominal, como 97%, para
+    alargar su vida util). Si no se indica, se usa total_capacity_wh
+    (100% nominal). total_capacity_wh se sigue usando tal cual para
+    calcular el % de SOC en el plan.
     """
     horizon = len(pv_forecast_w)
     hours = [now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=i) for i in range(horizon)]
+    ceiling_wh = max_usable_wh if max_usable_wh is not None else total_capacity_wh
 
     deficit_w = [max(0.0, load_forecast_w[i] - pv_forecast_w[i]) for i in range(horizon)]
     surplus_w = [max(0.0, pv_forecast_w[i] - load_forecast_w[i]) for i in range(horizon)]
@@ -72,11 +80,27 @@ def build_plan(
     punta_need_wh = sum(deficit_w[i] for i in range(horizon) if prices_tiers[i][1] == "punta")
     llano_need_wh = sum(deficit_w[i] for i in range(horizon) if prices_tiers[i][1] == "llano")
 
-    usable_capacity_wh = total_capacity_wh - min_soc_wh
-    # Reserva objetivo: cubrir punta primero, luego llano si cabe, limitado a
-    # lo que la bateria puede fisicamente almacenar.
-    reserve_wh = min(punta_need_wh, usable_capacity_wh)
-    reserve_wh += min(llano_need_wh, max(0.0, usable_capacity_wh - reserve_wh))
+    usable_capacity_wh = ceiling_wh - min_soc_wh
+    # Cuanta ENERGIA hace falta acumular (cubrir punta primero, luego llano
+    # si cabe), limitado a lo que la bateria puede fisicamente entregar.
+    energy_needed_wh = min(punta_need_wh, usable_capacity_wh)
+    energy_needed_wh += min(llano_need_wh, max(0.0, usable_capacity_wh - energy_needed_wh))
+    # Convertido a NIVEL ABSOLUTO de SOC (no un delta): el suelo minimo mas
+    # la energia que hace falta, sin superar nunca el techo real declarado.
+    # (antes esto se comparaba mal contra el SOC absoluto y el objetivo
+    # quedaba siempre min_soc_wh por debajo del techo real, p.ej. un 97%
+    # aunque el techo configurado fuera 100%)
+    reserve_wh = min(ceiling_wh, min_soc_wh + energy_needed_wh)
+
+    # Cuanto deficit de PUNTA queda por delante desde cada hora i (sin
+    # incluir la propia hora i si es punta, esa la cubre la rama 3 directamente).
+    # Sirve para que la descarga en LLANO nunca se coma battery que hace
+    # falta reservar para una punta posterior.
+    future_punta_after = [0.0] * (horizon + 1)
+    for i in range(horizon - 1, -1, -1):
+        extra = deficit_w[i] if prices_tiers[i][1] == "punta" else 0.0
+        future_punta_after[i] = future_punta_after[i + 1] + extra
+    # future_punta_after[i] = deficit total en punta desde la hora i (inclusive) en adelante
 
     # --- PASADA B: simulacion hacia adelante ---
     plan: list[HourPlan] = []
@@ -88,18 +112,17 @@ def build_plan(
 
         # 1) Carga gratis con excedente solar, siempre.
         if surplus_w[i] > 0:
-            headroom = total_capacity_wh - soc
+            headroom = ceiling_wh - soc
             charge = min(surplus_w[i], max_charge_w, headroom)
             if charge > 0:
                 soc += charge
                 hp.charge_w = charge
                 hp.reason = "carga con excedente solar"
 
-        # 2) Carga desde red SOLO en valle y SOLO si aun no llegamos a la reserva.
-        #    Respetando la potencia contratada: no cargar mas de lo que deja
-        #    libre el consumo previsto de la casa en esa hora.
+        # 2) Carga desde red en VALLE, oportunista, hasta la reserva completa
+        #    (punta + llano que quepa). Respetando la potencia contratada.
         elif tier == "valle" and soc < reserve_wh:
-            headroom = min(total_capacity_wh - soc, reserve_wh - soc)
+            headroom = min(ceiling_wh - soc, reserve_wh - soc)
             charge_limit = max_charge_w
             if contracted_power_w > 0:
                 grid_headroom = max(0.0, contracted_power_w - load_forecast_w[i])
@@ -112,14 +135,47 @@ def build_plan(
             elif charge_limit <= 0:
                 hp.reason = "sin carga: al limite de potencia contratada"
 
-        # 3) Descarga en punta/llano para cubrir el deficit previsto.
-        elif deficit_w[i] > 0 and tier in ("punta", "llano"):
+        # 2b) Carga de EMERGENCIA en LLANO: si con lo que hay no va a llegar
+        #     a cubrir toda la punta que queda por delante, compensa cargar
+        #     en llano aunque sea mas caro que valle — sigue siendo mas
+        #     barato que dejar esa punta sin cubrir (llano < punta siempre).
+        #     Solo carga lo justo para tapar ese hueco, no la reserva completa.
+        elif tier == "llano" and soc < min_soc_wh + future_punta_after[i]:
+            target = min(ceiling_wh, min_soc_wh + future_punta_after[i])
+            headroom = min(ceiling_wh - soc, target - soc)
+            charge_limit = max_charge_w
+            if contracted_power_w > 0:
+                grid_headroom = max(0.0, contracted_power_w - load_forecast_w[i])
+                charge_limit = min(charge_limit, grid_headroom)
+            charge = min(charge_limit, headroom)
+            if charge > 0:
+                soc += charge
+                hp.charge_w = charge
+                hp.reason = "carga en llano (no llegaba a cubrir la punta que queda)"
+            elif charge_limit <= 0:
+                hp.reason = "sin carga: al limite de potencia contratada"
+
+        # 3) Descarga en PUNTA: siempre prioritaria, cubre el deficit previsto.
+        elif deficit_w[i] > 0 and tier == "punta":
             available = max(0.0, soc - min_soc_wh)
             discharge = min(deficit_w[i], max_discharge_w, available)
             if discharge > 0:
                 soc -= discharge
                 hp.discharge_w = discharge
-                hp.reason = f"descarga para cubrir consumo en {tier}"
+                hp.reason = "descarga para cubrir consumo en punta"
+
+        # 4) Descarga en LLANO: solo con lo que sobre por encima de lo que
+        #    haga falta reservar para TODA la punta que quede por delante.
+        elif deficit_w[i] > 0 and tier == "llano":
+            reserved_for_future_punta = future_punta_after[i + 1]
+            available = max(0.0, soc - min_soc_wh - reserved_for_future_punta)
+            discharge = min(deficit_w[i], max_discharge_w, available)
+            if discharge > 0:
+                soc -= discharge
+                hp.discharge_w = discharge
+                hp.reason = "descarga para cubrir consumo en llano"
+            else:
+                hp.reason = "sin descargar en llano: reservado para punta posterior"
 
         if not hp.reason:
             hp.reason = "sin accion (no compensa)"

@@ -16,6 +16,8 @@
 
 ---
 
+*Las capturas de esta página son de una demo con datos de ejemplo, no de una instalación real.*
+
 ## Qué hace
 
 Cada ciclo (configurable, por defecto cada 60s):
@@ -55,12 +57,30 @@ texto plano.
 
 ## Las pestañas
 
+<p align="center">
+  <img src="screenshots/estado-actual.png" alt="Estado actual: SOC agregado, ahorro y cuenta atrás a la próxima punta" width="100%">
+</p>
+
 - **Estado actual** — resumen del ciclo más reciente: SOC agregado, tramo tarifario, precio, solar, consumo, si se está cargando/descargando, y el ahorro acumulado hoy y en total. Un indicador junto al título marca "Saludable" o "Anómalo" según si se ha detectado un consumo fuera de lo normal (ver [Ahorro y alertas](#ahorro-y-alertas-de-consumo)). Debajo, el log de lo que hizo la última ejecución, y una tarjeta con la cuenta atrás a la próxima hora punta y cuánta reserva llevas acumulada para cubrirla.
+
+<p align="center">
+  <img src="screenshots/prevision.png" alt="Previsión: gráfica del SOC agregado a lo largo del día con franjas de tarifa" width="100%">
+</p>
+
 - **Previsión** — gráfica del SOC agregado de todas tus baterías a lo largo del día (con las franjas de tarifa de fondo y una línea marcando "ahora"), y la tabla "Plan del día" completa: de 00:00 a 00:00, combinando lo que ya pasó hoy (histórico real) con lo previsto desde ahora.
 - **Salud de batería** — ver más abajo.
+
+<p align="center">
+  <img src="screenshots/configuracion.png" alt="Configuración: baterías declaradas y tarifa eléctrica" width="100%">
+</p>
+
 - **Configuración** — todo lo que declaras tú: baterías, tarifa, solar, consumo, límites, prioridad, ajustes generales y copia de seguridad.
 
 ## Salud de batería: cómo se calcula
+
+<p align="center">
+  <img src="screenshots/salud-bateria.png" alt="Salud de batería: capacidad real estimada vs. declarada, una sana y otra degradada" width="100%">
+</p>
 
 Dos métricas distintas, con orígenes distintos:
 
@@ -73,6 +93,10 @@ de dónde sale cada número y con qué margen de confianza (el número de
 observaciones), nada de caja negra.
 
 ## Ahorro y alertas de consumo
+
+<p align="center">
+  <img src="screenshots/anomalia.png" alt="Estado actual con una alerta de consumo anómalo detectada" width="100%">
+</p>
 
 **Ahorro acumulado.** Cada ciclo se calcula lo que se ha pagado de verdad (lo que se compra a red para consumo directo, más lo que se cargue de red en la batería) y se compara contra lo que se habría pagado sin batería (comprar directamente a red lo que el solar no cubra, cada hora a su precio real). La diferencia es el ahorro; se acumula por día y en total desde que la app lleva la cuenta. En horas de carga desde red puede salir momentáneamente negativo — es normal, esa energía se recupera después al evitar comprar en punta.
 

@@ -17,6 +17,11 @@
 
 ---
 
+<p align="center">
+  <img src="screenshots/estado-actual.png" alt="Pestaña Estado actual: SOC agregado, tramo tarifario, ahorro acumulado y cuenta atrás a la próxima punta" width="100%">
+</p>
+<p align="center"><em>Datos de ejemplo — no son de una instalación real.</em></p>
+
 Add-on de Home Assistant que planifica y ejecuta la carga/descarga de tus
 baterías domésticas cada minuto, en directo contra tu instalación real.
 Nada de Node-RED, nada de EMHASS: un motor propio, determinista y legible
@@ -62,6 +67,17 @@ con excedente solar"...).
   sensor de consumo — nada hardcodeado salvo la URL base de la API
   gratuita de Forecast.Solar. Configuración exportable/importable en un
   archivo, por si reinstalas el add-on.
+
+## Capturas
+
+<table>
+<tr>
+<td width="50%"><img src="screenshots/prevision.png" alt="Gráfica de SOC previsto a lo largo del día"></td>
+<td width="50%"><img src="screenshots/salud-bateria.png" alt="Pestaña Salud de batería: capacidad real estimada vs. declarada"></td>
+</tr>
+</table>
+
+Más capturas (configuración, alerta de consumo anómalo) en [DOCS.md](DOCS.md).
 
 ## Instalación
 

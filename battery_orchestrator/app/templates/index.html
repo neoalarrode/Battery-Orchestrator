@@ -914,8 +914,9 @@ function renderStatTiles(status, savings) {
   const dist = status.distribution || {};
   const actionLabel = dist.action === 'charge' ? 'Cargando' : dist.action === 'discharge' ? 'Descargando' : 'En reposo';
   const netW = dist.action === 'charge' ? now.charge_w : dist.action === 'discharge' ? -now.discharge_w : 0;
+  const socNow = status.current_soc_pct !== null && status.current_soc_pct !== undefined ? status.current_soc_pct : now.soc_pct;
   const tiles = [
-    { label: 'SOC agregado', value: now.soc_pct + '%', accent: true },
+    { label: 'SOC agregado', value: socNow + '%', accent: true },
     { label: 'Tramo actual', value: `<span class="tier tier-${now.tier}">${now.tier}</span>`, raw: true },
     { label: 'Precio', value: now.price.toFixed(3) + ' €/kWh' },
     { label: 'Solar', value: now.pv_w + ' W' },

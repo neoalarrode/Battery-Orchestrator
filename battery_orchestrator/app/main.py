@@ -33,6 +33,7 @@ _last_status = {
     "log_lines": [],
     "skipped_batteries": [],
     "pv_now_actual": None,
+    "current_soc_pct": None,
     "next_punta": None,
     "anomaly": None,
     "error": None,
@@ -117,6 +118,12 @@ def run_cycle():
 
     total_capacity_wh = sum(b.capacity_wh for b in usable_batteries)
     current_soc_wh = sum(socs[b.id] / 100 * b.capacity_wh for b in usable_batteries)
+    # SOC real AHORA MISMO, medido — distinto de hp.soc_wh del plan, que es
+    # una PROYECCION de como quedara el SOC al final de esta hora si se
+    # carga/descarga al ritmo decidido (el plan trabaja en pasos de una
+    # hora). Mezclarlos hacia mostrar un "SOC agregado" que salta muy por
+    # encima del real mientras se esta cargando.
+    current_soc_pct = round(100 * current_soc_wh / total_capacity_wh, 1) if total_capacity_wh else 0
     min_soc_wh = sum(b.min_soc_pct / 100 * b.capacity_wh for b in usable_batteries)
     max_charge_w = sum(b.max_charge_w for b in usable_batteries)
     max_discharge_w = sum(b.max_discharge_w for b in usable_batteries)
@@ -227,7 +234,7 @@ def run_cycle():
             "price": now_hp.price, "tier": now_hp.tier,
             "pv_w": round(now_hp.pv_w), "load_w": round(now_hp.load_w),
             "charge_w": round(now_hp.charge_w), "discharge_w": round(now_hp.discharge_w),
-            "soc_pct": round(100 * current_soc_wh / total_capacity_wh, 1) if total_capacity_wh else 0,
+            "soc_pct": current_soc_pct,
             "reason": now_hp.reason,
         })
     except Exception as e:
@@ -295,7 +302,7 @@ def run_cycle():
                 "precio": now_hp.price,
                 "carga_w": now_hp.charge_w,
                 "descarga_w": now_hp.discharge_w,
-                "soc_total_pct": round(100 * current_soc_wh / total_capacity_wh, 1) if total_capacity_wh else 0,
+                "soc_total_pct": current_soc_pct,
                 "dry_run": dry_run,
                 "pv_actual_w": pv_now_actual,
                 "baterias_omitidas": skipped,
@@ -327,6 +334,7 @@ def run_cycle():
             log_lines=log_lines,
             skipped_batteries=skipped,
             pv_now_actual=pv_now_actual,
+            current_soc_pct=current_soc_pct,
             next_punta=next_punta,
             anomaly=anomaly,
             error=None,

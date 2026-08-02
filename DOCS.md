@@ -110,6 +110,10 @@ En "Configuración → Prioridad" eliges cómo decide el planificador entre tres
 - **Autoconsumo solar** — la batería SOLO carga con excedente solar, nunca desde red aunque esté barata. Menos ahorro potencial en días con poco sol, pero cero ciclos de carga "artificiales" pagados.
 - **Longevidad de batería** — igual que "Ahorro", pero el objetivo de carga nunca supera el 90% del SOC máximo real configurado, para reducir el desgaste de mantener la batería siempre llena.
 
+Además, con "Ahorro" o "Longevidad" seleccionado (no aplica con "Autoconsumo solar", que nunca carga desde red), hay un interruptor aparte:
+
+- **Carga sostenida** — en vez de cargar siempre a máxima potencia, la carga deliberada desde red (valle y la de emergencia en llano) se reparte a una potencia sostenida a lo largo de las horas que quedan hasta la primera vez que la batería vaya a hacer falta de verdad (la próxima hora, sea llano o punta, con consumo previsto por encima del solar — en valle nunca se descarga, así que no cuenta), con un margen de seguridad del 20% por si la previsión falla un poco. Cargar despacio y sostenido genera menos calor y estrés que ráfagas a máxima potencia. Si el tiempo se echa encima (por ejemplo, entra en la carga de emergencia en llano con la punta ya cerca), el mismo cálculo da una potencia alta por sí solo — no hay una rama de "pánico" aparte, es el mismo número con menos horas para repartir. La carga con excedente solar no se ve afectada: es oportunista y gratis, no tiene sentido ir más despacio y desperdiciar sol.
+
 ## Notas de seguridad
 
 - Una batería con el sensor de SOC caído se omite ese ciclo entero (no se inventa un valor), y aparece listada como omitida en "Estado actual".

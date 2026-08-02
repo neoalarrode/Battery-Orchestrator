@@ -493,6 +493,11 @@
     <option value="longevidad">Longevidad de batería — como ahorro, pero sin superar el 90% de SOC</option>
   </select>
   <p class="help" id="priority-help"></p>
+  <div class="checkline" id="paced-charging-row">
+    <input id="g-paced" type="checkbox">
+    <label>Carga sostenida — reparte la carga desde red en el tiempo disponible en vez de ir siempre al máximo</label>
+  </div>
+  <p class="help" id="paced-charging-help">Menos calor y estrés en la batería: en vez de cargar a tope y luego parar, reparte la potencia a lo largo de las horas que quedan hasta que vaya a hacer falta descargar. Si el tiempo se echa encima, sube sola hasta el máximo — no te va a dejar sin cubrir la punta por ir despacio.</p>
   <div class="actions"><button onclick="saveConfig()">Guardar</button></div>
 </div>
 
@@ -569,6 +574,7 @@ async function loadConfig() {
   document.getElementById('g-histdays').value = cfg.general.history_days_for_load;
   document.getElementById('g-dryrun').checked = cfg.general.dry_run;
   document.getElementById('g-priority').value = cfg.general.priority_mode || 'ahorro';
+  document.getElementById('g-paced').checked = !!cfg.general.paced_charging;
   updatePriorityHelp();
 }
 
@@ -587,6 +593,9 @@ const PRIORITY_HELP = {
 function updatePriorityHelp() {
   const mode = document.getElementById('g-priority').value;
   document.getElementById('priority-help').textContent = PRIORITY_HELP[mode] || '';
+  const pacedAvailable = mode !== 'autoconsumo';
+  document.getElementById('paced-charging-row').style.display = pacedAvailable ? 'flex' : 'none';
+  document.getElementById('paced-charging-help').style.display = pacedAvailable ? 'block' : 'none';
 }
 
 function togglePvMode() {
@@ -800,6 +809,7 @@ async function saveConfig() {
   cfg.general.history_days_for_load = parseInt(document.getElementById('g-histdays').value, 10);
   cfg.general.dry_run = document.getElementById('g-dryrun').checked;
   cfg.general.priority_mode = document.getElementById('g-priority').value;
+  cfg.general.paced_charging = document.getElementById('g-paced').checked;
 
   try {
     const res = await fetch('api/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(cfg) });

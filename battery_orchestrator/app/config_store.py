@@ -38,6 +38,7 @@ DEFAULT_CONFIG = {
         "history_days_for_load": 10,  # el recorder de HA por defecto solo guarda 10 dias; la app reintenta con menos si hace falta
         "contracted_power_w": 0,
         "priority_mode": "ahorro",  # "ahorro" | "autoconsumo" | "longevidad"
+        "paced_charging": False,  # repartir la carga desde red en el tiempo disponible en vez de ir siempre al maximo (solo aplica con "ahorro" o "longevidad")
     },
 }
 

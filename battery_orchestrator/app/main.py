@@ -142,9 +142,13 @@ def run_cycle():
     # siempre (carga tambien desde red si hace falta); "autoconsumo" solo
     # carga con excedente solar, nunca desde red aunque este barata;
     # "longevidad" es como "ahorro" pero sin apurar el SOC objetivo mas
-    # alla del 90%, para no forzar cargas completas innecesarias.
+    # alla del 90%. La carga sostenida (reparto de potencia en el tiempo
+    # disponible en vez de siempre al maximo) es un interruptor aparte,
+    # disponible tanto en "ahorro" como en "longevidad" — en "autoconsumo"
+    # no aplica porque ahi nunca se carga desde red.
     priority_mode = cfg["general"].get("priority_mode", "ahorro")
     allow_grid_charging = priority_mode != "autoconsumo"
+    paced_charging = bool(cfg["general"].get("paced_charging", False)) and allow_grid_charging
     effective_max_usable_wh = max_usable_wh
     if priority_mode == "longevidad" and total_capacity_wh:
         effective_max_usable_wh = min(max_usable_wh, total_capacity_wh * 0.90)
@@ -162,6 +166,7 @@ def run_cycle():
         contracted_power_w=float(cfg["general"].get("contracted_power_w") or 0),
         max_usable_wh=effective_max_usable_wh,
         allow_grid_charging=allow_grid_charging,
+        paced_charging=paced_charging,
     )
 
     now_hp = plan[0]

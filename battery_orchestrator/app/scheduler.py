@@ -22,6 +22,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+# Margen sobre la potencia sostenida calculada (carga_pausada): la prevision
+# de consumo/solar puede fallar un poco, asi que apuntamos a llegar con un
+# 20% de mas potencia de la estrictamente necesaria, no al filo.
+PACED_CHARGE_SAFETY_MARGIN = 1.2
+
 
 @dataclass
 class HourPlan:
@@ -50,6 +55,7 @@ def build_plan(
     contracted_power_w: float = 0,
     max_usable_wh: float | None = None,
     allow_grid_charging: bool = True,
+    paced_charging: bool = False,
 ) -> tuple[list[HourPlan], float]:
     """
     pv_forecast_w / load_forecast_w: listas de potencia media (W) para cada
@@ -75,6 +81,16 @@ def build_plan(
     "autoconsumo"). Si es True (por defecto), tambien carga desde red en
     valle (y en llano de emergencia) lo justo para cubrir la punta que
     quede por delante (modo "ahorro").
+
+    paced_charging: si es True, la carga deliberada desde red (valle y
+    emergencia en llano) NO va siempre a maxima potencia: se reparte a lo
+    largo de las horas que quedan hasta que la bateria vaya a hacer falta
+    de verdad (la proxima hora, sea llano o punta, en la que se prevea
+    consumo por encima de la produccion solar), con un margen de seguridad.
+    Menos calor/estres en la bateria a cambio de, a veces, no acabar de
+    cargar tan rapido. Si el tiempo se echa encima, la potencia calculada
+    sube sola (mismo calculo, menos horas) hasta el maximo si hace falta —
+    no es una rama de emergencia aparte, es el mismo numero.
 
     Devuelve (plan, reserve_wh): el plan hora a hora, y el nivel de SOC
     absoluto (Wh) que el motor esta intentando alcanzar ahora mismo para
@@ -115,6 +131,30 @@ def build_plan(
         future_punta_after[i] = future_punta_after[i + 1] + extra
     # future_punta_after[i] = deficit total en punta desde la hora i (inclusive) en adelante
 
+    # Para la carga sostenida (paced_charging): en que hora, de aqui en
+    # adelante, va a hacer falta de verdad la bateria por primera vez — sea
+    # llano o punta, nos da igual el tramo, solo que haya consumo por
+    # encima del solar previsto (en valle nunca se descarga, se paga barato
+    # directo de red, asi que no cuenta como "necesidad").
+    needs_battery = [prices_tiers[i][1] != "valle" and deficit_w[i] > 0 for i in range(horizon)]
+    next_need_idx: list[int | None] = [None] * (horizon + 1)
+    for i in range(horizon - 1, -1, -1):
+        next_need_idx[i] = i if needs_battery[i] else next_need_idx[i + 1]
+
+    def _paced_charge_limit(i: int, soc_now: float, target_wh: float) -> float:
+        """Potencia sostenida que reparte lo que falta hasta que la bateria
+        haga falta por primera vez. Si esa necesidad es AHORA MISMO (o no
+        se ve ninguna en el horizonte), no hay margen que repartir: maxima
+        potencia disponible, sin rodeos."""
+        deadline = next_need_idx[i]
+        if deadline is None:
+            return max_charge_w
+        hours_remaining = deadline - i
+        if hours_remaining <= 0:
+            return max_charge_w
+        energy_needed_wh = max(0.0, target_wh - soc_now)
+        return min(max_charge_w, (energy_needed_wh / hours_remaining) * PACED_CHARGE_SAFETY_MARGIN)
+
     # --- PASADA B: simulacion hacia adelante ---
     plan: list[HourPlan] = []
     soc = current_soc_wh
@@ -138,7 +178,7 @@ def build_plan(
         #    Se salta por completo en modo "autoconsumo" (allow_grid_charging=False).
         elif allow_grid_charging and tier == "valle" and soc < reserve_wh:
             headroom = min(ceiling_wh - soc, reserve_wh - soc)
-            charge_limit = max_charge_w
+            charge_limit = _paced_charge_limit(i, soc, reserve_wh) if paced_charging else max_charge_w
             if contracted_power_w > 0:
                 grid_headroom = max(0.0, contracted_power_w - load_forecast_w[i])
                 charge_limit = min(charge_limit, grid_headroom)
@@ -147,7 +187,10 @@ def build_plan(
                 soc += charge
                 hp.charge_w = charge
                 hp.charge_source = "grid"
-                hp.reason = f"carga en valle (objetivo reserva {reserve_wh/1000:.2f} kWh)"
+                if paced_charging and charge_limit < max_charge_w:
+                    hp.reason = f"carga sostenida en valle (objetivo reserva {reserve_wh/1000:.2f} kWh)"
+                else:
+                    hp.reason = f"carga en valle (objetivo reserva {reserve_wh/1000:.2f} kWh)"
             elif charge_limit <= 0:
                 hp.reason = "sin carga: al limite de potencia contratada"
 
@@ -160,7 +203,7 @@ def build_plan(
         elif allow_grid_charging and tier == "llano" and soc < min_soc_wh + future_punta_after[i]:
             target = min(ceiling_wh, min_soc_wh + future_punta_after[i])
             headroom = min(ceiling_wh - soc, target - soc)
-            charge_limit = max_charge_w
+            charge_limit = _paced_charge_limit(i, soc, target) if paced_charging else max_charge_w
             if contracted_power_w > 0:
                 grid_headroom = max(0.0, contracted_power_w - load_forecast_w[i])
                 charge_limit = min(charge_limit, grid_headroom)
@@ -169,7 +212,10 @@ def build_plan(
                 soc += charge
                 hp.charge_w = charge
                 hp.charge_source = "grid"
-                hp.reason = "carga en llano (no llegaba a cubrir la punta que queda)"
+                if paced_charging and charge_limit < max_charge_w:
+                    hp.reason = "carga sostenida en llano (no llegaba a cubrir la punta que queda)"
+                else:
+                    hp.reason = "carga en llano (no llegaba a cubrir la punta que queda)"
             elif charge_limit <= 0:
                 hp.reason = "sin carga: al limite de potencia contratada"
 

@@ -8,9 +8,11 @@ from datetime import datetime
 from flask import Flask, jsonify, request, send_from_directory
 
 import battery_exec
+import capacity_store
 import config_store
 import ha_client
 import history_store
+import lifetime_store
 import pv_source
 import scheduler
 import tariff_source
@@ -148,6 +150,40 @@ def run_cycle():
         log.info(line)
     log.info(f"Hora actual: {now_hp.tier} ({now_hp.price} EUR/kWh) - {now_hp.reason}")
 
+    # Energia (Wh) movida en este ciclo, por bateria. En carga usamos la
+    # potencia real repartida a cada una; en descarga cada bateria se
+    # autogestiona (no la repartimos de verdad), asi que aqui SOLO para
+    # llevar la cuenta se estima proporcional a su potencia maxima de
+    # descarga entre las que estan activas — es una estimacion, no una
+    # medicion exacta de lo que ha hecho cada una.
+    cycle_hours = cfg["general"]["cycle_seconds"] / 3600
+    by_id = {b.id: b for b in batteries}
+    per_battery_energy: dict[str, tuple[str | None, float]] = {b.id: (None, 0.0) for b in batteries}
+    if distribution["action"] == "charge":
+        for entry in distribution["per_battery"]:
+            wh = entry["power_w"] * cycle_hours
+            if wh > 0:
+                per_battery_energy[entry["id"]] = ("charge", wh)
+    elif distribution["action"] == "discharge":
+        enabled = [e for e in distribution["per_battery"] if e.get("enabled")]
+        total_max_discharge = sum(by_id[e["id"]].max_discharge_w for e in enabled) or 1
+        for e in enabled:
+            share = by_id[e["id"]].max_discharge_w / total_max_discharge
+            wh = now_hp.discharge_w * share * cycle_hours
+            if wh > 0:
+                per_battery_energy[e["id"]] = ("discharge", wh)
+
+    # Acumular energia de por vida (para "ciclos equivalentes") y
+    # alimentar la estimacion de capacidad real (para la "salud" por
+    # comparacion con la capacidad declarada). Ver capacity_store.py.
+    for b in batteries:
+        action, wh = per_battery_energy[b.id]
+        if action == "charge":
+            lifetime_store.accumulate(b.id, b.name, charged_wh=wh, discharged_wh=0)
+        elif action == "discharge":
+            lifetime_store.accumulate(b.id, b.name, charged_wh=0, discharged_wh=wh)
+        capacity_store.update(b.id, b.name, socs.get(b.id), action, wh)
+
     # Registrar la decision REAL de esta hora en el historico (se
     # sobreescribe con cada ciclo hasta que la hora termine, quedando la
     # ultima decision tomada como "lo que paso" esa hora).
@@ -284,6 +320,24 @@ def api_delete_pv_array(array_id):
 def api_status():
     with _state_lock:
         return jsonify(_last_status)
+
+
+@app.get("/api/battery_health")
+def api_battery_health():
+    cfg = config_store.load_config()
+    cycles = {h["name"]: h for h in lifetime_store.get_all_health(cfg["batteries"])}
+    capacity = capacity_store.get_all_health(cfg["batteries"])
+    combined = []
+    for c in capacity:
+        cyc = cycles.get(c["name"], {})
+        combined.append({
+            **c,
+            "equivalent_cycles": cyc.get("equivalent_cycles", 0.0),
+            "charged_kwh": cyc.get("charged_kwh", 0.0),
+            "discharged_kwh": cyc.get("discharged_kwh", 0.0),
+            "since": cyc.get("since"),
+        })
+    return jsonify(combined)
 
 
 @app.post("/api/run_now")

@@ -210,6 +210,60 @@
   .toast.show { opacity: 0.95; }
 
   fieldset { border: none; padding: 0; margin: 0 0 16px; }
+
+  /* --- Pestañas --- */
+  .tabs {
+    display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  .tab-btn {
+    background: transparent; color: var(--muted); border: none; box-shadow: none;
+    padding: 10px 4px; margin-right: 22px; font-size: 0.85rem; font-weight: 600;
+    border-radius: 0; border-bottom: 2px solid transparent; white-space: nowrap;
+  }
+  .tab-btn:hover { color: var(--text); filter: none; box-shadow: none; }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* --- Tarjetas de estadistica (resumen del estado actual) --- */
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 4px; }
+  .stat-tile {
+    background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .stat-tile .stat-label {
+    font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .06em;
+    font-size: .65rem; color: var(--muted); margin-bottom: 6px;
+  }
+  .stat-tile .stat-value {
+    font-family: var(--font-mono); font-size: 1.3rem; font-weight: 700;
+    font-variant-numeric: tabular-nums; color: var(--text);
+  }
+  .stat-tile .stat-value.accent { color: var(--accent); }
+  .stat-tile .stat-sub { font-size: .72rem; color: var(--muted); margin-top: 2px; }
+
+  /* --- Grafica SOC --- */
+  .chart-wrap { position: relative; margin-top: 8px; }
+  .chart-legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 10px; font-size: .74rem; color: var(--muted); }
+  .chart-legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+  .chart-tooltip {
+    position: absolute; pointer-events: none; background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 10px; font-size: .74rem; box-shadow: var(--shadow);
+    transform: translate(-50%, -110%); white-space: nowrap; opacity: 0; transition: opacity .1s;
+    font-family: var(--font-mono); z-index: 5;
+  }
+  .chart-tooltip.show { opacity: 1; }
+  .chart-tooltip .tt-title { font-family: var(--font-body); font-weight: 700; margin-bottom: 3px; }
+
+  /* --- Salud de bateria --- */
+  .health-card {
+    background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 10px;
+  }
+  .health-card .item-name { display: block; margin-bottom: 8px; }
+  .health-bar-track { height: 6px; border-radius: 4px; background: var(--border); overflow: hidden; margin: 4px 0 10px; }
+  .health-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 4px; }
 </style>
 </head>
 <body>
@@ -227,13 +281,65 @@
   <span id="mode-pill" class="pill"></span>
 </div>
 
+<nav class="tabs" role="tablist">
+  <button class="tab-btn active" data-tab="inicio" onclick="switchTab('inicio')" type="button">Estado actual</button>
+  <button class="tab-btn" data-tab="prevision" onclick="switchTab('prevision')" type="button">Previsión</button>
+  <button class="tab-btn" data-tab="salud" onclick="switchTab('salud')" type="button">Salud de batería</button>
+  <button class="tab-btn" data-tab="config" onclick="switchTab('config')" type="button">Configuración</button>
+</nav>
+
+<div class="tab-panel active" data-tab="inicio">
+
 <div class="card">
   <h2>Estado actual <span class="hint" id="last-run"></span></h2>
+  <div id="stat-grid" class="stat-grid" style="margin-bottom:16px"></div>
   <div id="status"></div>
   <div class="actions">
     <button onclick="runNow()">Ejecutar ciclo ahora</button>
   </div>
 </div>
+
+</div>
+
+<div class="tab-panel" data-tab="prevision">
+
+<div class="card">
+  <h2>SOC previsto <span class="hint">nivel agregado de baterías a lo largo del día</span></h2>
+  <div class="chart-wrap">
+    <div id="soc-chart"></div>
+    <div class="chart-tooltip" id="chart-tooltip"></div>
+  </div>
+  <div class="chart-legend">
+    <span><span class="dot" style="background:var(--accent)"></span>SOC (%)</span>
+    <span><span class="dot" style="background:var(--green)"></span>Valle</span>
+    <span><span class="dot" style="background:var(--amber)"></span>Llano</span>
+    <span><span class="dot" style="background:var(--red)"></span>Punta</span>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Plan del día <span class="hint">de 00:00 a 00:00 — lo ya ocurrido hoy + lo previsto</span></h2>
+  <div style="overflow-x:auto">
+    <table id="plan-table">
+      <thead><tr><th></th><th>Hora</th><th>Tramo</th><th>Precio</th><th>Sol</th><th>Consumo</th><th>Carga</th><th>Descarga</th><th>SOC</th><th>Motivo</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+</div>
+
+<div class="tab-panel" data-tab="salud">
+
+<div class="card">
+  <h2>Salud de batería <span class="hint">capacidad real estimada vs. declarada</span></h2>
+  <p class="help">Cada vez que una batería carga o descarga un tramo grande de SOC, la app mide cuánta energía ha hecho falta para ese movimiento y de ahí calcula cuánta energía cabe realmente hoy — <code>capacidad real = energía movida / (Δ SOC % / 100)</code>. La salud es esa capacidad real dividida por la que declaraste al darla de alta. Es una estimación (mediana de las últimas observaciones fiables), no una medición del BMS.</p>
+  <div id="health-list"></div>
+</div>
+
+</div>
+
+<div class="tab-panel" data-tab="config">
 
 <div class="card">
   <h2>Baterías <span class="hint" id="battery-count"></span></h2>
@@ -374,14 +480,6 @@
   <div class="actions"><button onclick="saveConfig()">Guardar configuración</button></div>
 </div>
 
-<div class="card">
-  <h2>Plan del día <span class="hint">de 00:00 a 00:00 — lo ya ocurrido hoy + lo previsto</span></h2>
-  <div style="overflow-x:auto">
-    <table id="plan-table">
-      <thead><tr><th></th><th>Hora</th><th>Tramo</th><th>Precio</th><th>Sol</th><th>Consumo</th><th>Carga</th><th>Descarga</th><th>SOC</th><th>Motivo</th></tr></thead>
-      <tbody></tbody>
-    </table>
-  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -389,6 +487,14 @@
 <script>
 let cfg = null;
 let editingBatteryId = null;
+let lastStatus = null;
+
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.dataset.tab === name));
+  if (name === 'prevision' && lastStatus) renderSocChart(lastStatus.plan || []);
+  if (name === 'salud') loadBatteryHealth();
+}
 
 function toast(msg) {
   const t = document.getElementById('toast');
@@ -661,6 +767,7 @@ async function runNow() {
 }
 
 function renderStatus(status) {
+  lastStatus = status;
   const pill = document.getElementById('mode-pill');
   const isDry = cfg && cfg.general.dry_run;
   pill.textContent = isDry ? 'SIMULACIÓN' : 'EN VIVO';
@@ -669,10 +776,13 @@ function renderStatus(status) {
   document.getElementById('last-run').textContent = status.last_run ? new Date(status.last_run).toLocaleString() : '';
 
   const el = document.getElementById('status');
+  const statGrid = document.getElementById('stat-grid');
   if (status.error) {
     el.innerHTML = `<p style="color:var(--red)">${status.error}</p>`;
+    statGrid.innerHTML = '';
   } else if (!status.last_run) {
     el.innerHTML = '<p class="empty">Todavía no se ha ejecutado ningún ciclo.</p>';
+    statGrid.innerHTML = '';
   } else {
     let extra = '';
     if (status.skipped_batteries && status.skipped_batteries.length) {
@@ -682,6 +792,7 @@ function renderStatus(status) {
       extra += `<p class="help">Generación real ahora: ${Math.round(status.pv_now_actual)} W</p>`;
     }
     el.innerHTML = extra + `<div class="status-line">${(status.log_lines || []).join('\n')}</div>`;
+    statGrid.innerHTML = renderStatTiles(status);
   }
 
   const tbody = document.querySelector('#plan-table tbody');
@@ -698,6 +809,135 @@ function renderStatus(status) {
       <td>${hp.soc_pct}%</td>
       <td class="meta">${hp.reason}</td>
     </tr>`).join('');
+
+  const socChartPanel = document.querySelector('.tab-panel[data-tab="prevision"]');
+  if (socChartPanel && socChartPanel.classList.contains('active')) renderSocChart(status.plan || []);
+}
+
+function renderStatTiles(status) {
+  const now = (status.plan || []).find(hp => !hp.historical) || (status.plan || [])[0];
+  if (!now) return '';
+  const dist = status.distribution || {};
+  const actionLabel = dist.action === 'charge' ? 'Cargando' : dist.action === 'discharge' ? 'Descargando' : 'En reposo';
+  const netW = dist.action === 'charge' ? now.charge_w : dist.action === 'discharge' ? -now.discharge_w : 0;
+  const tiles = [
+    { label: 'SOC agregado', value: now.soc_pct + '%', accent: true },
+    { label: 'Tramo actual', value: `<span class="tier tier-${now.tier}">${now.tier}</span>`, raw: true },
+    { label: 'Precio', value: now.price.toFixed(3) + ' €/kWh' },
+    { label: 'Solar', value: now.pv_w + ' W' },
+    { label: 'Consumo', value: now.load_w + ' W' },
+    { label: actionLabel, value: (netW === 0 ? '0' : (netW > 0 ? '+' : '') + netW) + ' W', accent: netW !== 0 },
+  ];
+  return tiles.map(t => `
+    <div class="stat-tile">
+      <div class="stat-label">${t.label}</div>
+      <div class="stat-value ${t.accent ? 'accent' : ''}">${t.raw ? t.value : t.value}</div>
+    </div>`).join('');
+}
+
+function tierColorVar(tier) {
+  return tier === 'punta' ? '--red' : tier === 'llano' ? '--amber' : '--green';
+}
+
+function renderSocChart(plan) {
+  const host = document.getElementById('soc-chart');
+  if (!host) return;
+  if (!plan.length) { host.innerHTML = '<p class="empty">Todavía no hay datos suficientes para dibujar la gráfica.</p>'; return; }
+
+  const w = Math.max(host.clientWidth || 640, 280);
+  const h = 220;
+  const padL = 34, padR = 8, padT = 12, padB = 24;
+  const plotW = w - padL - padR, plotH = h - padT - padB;
+  const n = plan.length;
+  const xAt = i => padL + (n === 1 ? 0 : (i / (n - 1)) * plotW);
+  const yAt = pct => padT + plotH - (Math.max(0, Math.min(100, pct)) / 100) * plotH;
+
+  const style = getComputedStyle(document.documentElement);
+  const colorOf = v => style.getPropertyValue(v).trim();
+
+  let bands = '';
+  const bandW = n === 1 ? plotW : plotW / (n - 1);
+  plan.forEach((hp, i) => {
+    const x = xAt(i) - bandW / 2;
+    bands += `<rect x="${Math.max(padL, x)}" y="${padT}" width="${bandW}" height="${plotH}" fill="${colorOf(tierColorVar(hp.tier))}" opacity="0.08"></rect>`;
+  });
+
+  const nowIdx = plan.findIndex(hp => !hp.historical);
+  const nowLine = nowIdx > 0 ? `<line x1="${xAt(nowIdx)}" y1="${padT}" x2="${xAt(nowIdx)}" y2="${padT+plotH}" stroke="${colorOf('--muted')}" stroke-width="1" stroke-dasharray="3,3"></line>` : '';
+
+  const pathD = plan.map((hp, i) => `${i === 0 ? 'M' : 'L'} ${xAt(i).toFixed(1)} ${yAt(hp.soc_pct).toFixed(1)}`).join(' ');
+
+  const gridLines = [0, 25, 50, 75, 100].map(pct => `
+    <line x1="${padL}" y1="${yAt(pct)}" x2="${w-padR}" y2="${yAt(pct)}" stroke="${colorOf('--border')}" stroke-width="1"></line>
+    <text x="${padL-6}" y="${yAt(pct)+3}" text-anchor="end" font-size="10" font-family="var(--font-mono)" fill="${colorOf('--muted')}">${pct}</text>
+  `).join('');
+
+  const points = plan.map((hp, i) => `<circle class="soc-pt" data-i="${i}" cx="${xAt(i).toFixed(1)}" cy="${yAt(hp.soc_pct).toFixed(1)}" r="9" fill="transparent"></circle>`).join('');
+
+  host.innerHTML = `
+    <svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" role="img" aria-label="Evolución del SOC de las baterías a lo largo del día">
+      ${bands}
+      ${gridLines}
+      ${nowLine}
+      <path d="${pathD}" fill="none" stroke="${colorOf('--accent')}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+      ${points}
+    </svg>`;
+
+  const tooltip = document.getElementById('chart-tooltip');
+  host.querySelectorAll('.soc-pt').forEach(pt => {
+    pt.addEventListener('mouseenter', (ev) => {
+      const i = parseInt(pt.dataset.i, 10);
+      const hp = plan[i];
+      const rect = host.getBoundingClientRect();
+      const cx = parseFloat(pt.getAttribute('cx')) / w * rect.width;
+      const cy = parseFloat(pt.getAttribute('cy')) / h * rect.height;
+      tooltip.innerHTML = `<div class="tt-title">${new Date(hp.dt).toLocaleString('es-ES', {weekday:'short', hour:'2-digit', minute:'2-digit'})}${hp.historical ? ' (ya ocurrió)' : ''}</div>
+        SOC: ${hp.soc_pct}%<br>Tramo: ${hp.tier}<br>${hp.charge_w > 0 ? 'Carga: ' + hp.charge_w + ' W' : hp.discharge_w > 0 ? 'Descarga: ' + hp.discharge_w + ' W' : 'Sin actividad'}`;
+      tooltip.style.left = cx + 'px';
+      tooltip.style.top = cy + 'px';
+      tooltip.classList.add('show');
+    });
+    pt.addEventListener('mouseleave', () => tooltip.classList.remove('show'));
+  });
+}
+
+async function loadBatteryHealth() {
+  const host = document.getElementById('health-list');
+  host.innerHTML = '<p class="empty">Cargando...</p>';
+  let data;
+  try {
+    data = await (await fetch('api/battery_health')).json();
+  } catch (err) {
+    host.innerHTML = `<p style="color:var(--red)">No se pudo conectar con el servicio: ${err.message}</p>`;
+    return;
+  }
+  if (!data.length) { host.innerHTML = '<p class="empty">Todavía no has añadido ninguna batería.</p>'; return; }
+  host.innerHTML = data.map(h => {
+    const since = h.since ? new Date(h.since).toLocaleDateString('es-ES') : null;
+    const cyclesLine = `${h.equivalent_cycles || 0} ciclos equivalentes · ${h.charged_kwh || 0} kWh cargados · ${h.discharged_kwh || 0} kWh descargados${since ? ' · desde ' + since : ''}`;
+
+    if (h.health_pct === null || h.health_pct === undefined) {
+      return `
+      <div class="health-card">
+        <span class="item-name">${h.name}</span>
+        <p class="help">Todavía no hay suficientes cargas/descargas grandes (≥8% de SOC de un tirón) para estimar la capacidad real. En cuanto se observe una, aparecerá aquí.</p>
+        <p class="help">${cyclesLine}</p>
+      </div>`;
+    }
+
+    const colorVar = h.health_pct >= 90 ? '--green' : h.health_pct >= 75 ? '--amber' : '--red';
+    return `
+    <div class="health-card">
+      <span class="item-name">${h.name}</span>
+      <div class="stat-grid">
+        <div class="stat-tile"><div class="stat-label">Salud estimada</div><div class="stat-value" style="color:var(${colorVar})">${h.health_pct}%</div></div>
+        <div class="stat-tile"><div class="stat-label">Capacidad declarada</div><div class="stat-value">${(h.declared_capacity_wh/1000).toFixed(1)} kWh</div></div>
+        <div class="stat-tile"><div class="stat-label">Capacidad real estimada</div><div class="stat-value">${(h.estimated_capacity_wh/1000).toFixed(1)} kWh</div></div>
+      </div>
+      <div class="health-bar-track"><div class="health-bar-fill" style="width:${h.health_pct}%;background:var(${colorVar})"></div></div>
+      <p class="help">Basado en ${h.observations} ${h.observations === 1 ? 'observación reciente' : 'observaciones recientes'}. ${cyclesLine}</p>
+    </div>`;
+  }).join('');
 }
 
 async function refreshStatus() {

@@ -80,11 +80,23 @@ def run_cycle():
         if pv_now_actual is not None and pv_forecast:
             pv_forecast[0] = pv_now_actual
 
+    # Consumo real: preferido, calculado a partir de red + sol + baterias
+    # (asi funciona aunque tu sensor de "consumo" solo mida importacion de
+    # red, que baja a 0 cuando la bateria cubre el consumo). Si no hay
+    # sensor de red configurado, se usa el sensor de consumo directo como
+    # alternativa mas simple (con la limitacion ya conocida).
+    grid_sensor = cfg.get("grid_power_sensor")
     load_sensor = cfg.get("load_sensor")
-    if load_sensor:
-        load_forecast = ha_client.load_forecast_from_history(
-            load_sensor, horizon, days=cfg["general"]["history_days_for_load"]
+    history_days = cfg["general"]["history_days_for_load"]
+
+    if grid_sensor:
+        battery_power_sensors = [b.get("power_sensor") for b in batteries_cfg if b.get("power_sensor")]
+        solar_sensor_for_load = cfg.get("current_pv_sensor") or None
+        load_forecast = ha_client.true_load_forecast(
+            grid_sensor, solar_sensor_for_load, battery_power_sensors, horizon, days=history_days
         )
+    elif load_sensor:
+        load_forecast = ha_client.hourly_average_forecast(load_sensor, horizon, days=history_days, default=300.0)
     else:
         load_forecast = [300.0] * horizon
 

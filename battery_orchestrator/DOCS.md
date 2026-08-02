@@ -18,7 +18,9 @@ Cada ciclo (configurable, por defecto cada 60s):
 3. Da de alta cada batería: nombre, capacidad real en Wh, el sensor de su SOC (%), el switch de carga y el de descarga. Si tu batería expone entidades `number` para limitar la potencia de carga/descarga, decláralas también (opcional pero recomendado).
 4. Configura la tarifa: fija (introduce tus precios punta/llano/valle y horarios) o PVPC (indica tu sensor de HA).
 5. Añade tus paneles solares: por sensor de HA que ya publique previsión, o directamente por la API de Forecast.Solar (necesitas lat/lon/inclinación/azimut/kWp de tu instalación).
-6. Indica el **sensor de consumo total de la casa** — importante: debe ser el consumo *sin* la carga de las baterías (si no, el sistema confunde su propia carga con consumo real).
+6. Consumo real de la casa — dos formas:
+   - **Recomendada:** indica el sensor de potencia de red (neto, +importa/−exporta) en "Consumo de la casa", y opcionalmente un sensor de potencia con signo por batería (+descarga/−carga) al dar de alta cada una. La app calcula el consumo real sumando red + sol + baterías hora a hora, así que funciona bien aunque las baterías cubran buena parte del consumo (no depende de un único sensor que se quede a 0 cuando la red no interviene).
+   - **Alternativa simple:** si ya tienes un sensor que sea directamente el consumo real de la casa (sin incluir la carga de las baterías), indícalo en "sensor de consumo directo". Solo se usa si no has puesto el sensor de potencia de red.
 7. Si tienes potencia contratada, indícala en "Seguridad y límites" para que nunca la supere al cargar.
 8. Pulsa "Ejecutar ciclo ahora" y revisa el plan de las próximas horas.
 9. Cuando confíes en las decisiones, desactiva el modo simulación.

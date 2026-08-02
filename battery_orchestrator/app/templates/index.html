@@ -252,6 +252,8 @@
         <label>SOC máximo (%)</label><input id="b-maxsoc" type="number" value="100">
         <label>Entidad límite potencia carga (opcional)</label><input id="b-charge-limit" placeholder="number...charging_power_limit">
         <label>Entidad límite potencia descarga (opcional)</label><input id="b-discharge-limit" placeholder="number...discharging_power_limit">
+        <label>Sensor de potencia neta (opcional)</label><input id="b-power-sensor" placeholder="sensor.mi_bateria_battery_power">
+        <p class="help">Tiene que ser un sensor <strong>con signo</strong>: positivo cuando descarga, negativo cuando carga (típicamente se llama algo como <code>..._battery_power</code>). <strong>No uses</strong> un sensor que solo dé positivos como <code>..._load_from_battery</code> — al no distinguir carga de descarga, descuadraría el cálculo de consumo real. Si no tienes uno con signo, déjalo vacío.</p>
       </div>
     </div>
     <p class="help" id="battery-form-error" style="display:none"></p>
@@ -324,13 +326,21 @@
   <label style="margin-top:16px">Sensor de generación solar instantánea (opcional, recomendado)</label>
   <input id="pv-current" placeholder="sensor.solar">
   <p class="help">Corrige la hora actual del plan con el dato real en vez de depender solo de la previsión (nubes, etc.). Las horas futuras siguen usando la previsión.</p>
+  <div class="actions"><button onclick="saveConfig()">Guardar</button></div>
 </div>
 
 <div class="card">
   <h2>Consumo de la casa</h2>
-  <label>Sensor de consumo total (W)</label>
+
+  <label>Sensor de potencia de red (recomendado)</label>
+  <input id="grid-power-sensor" placeholder="sensor.shellypro3em..._total_active_power">
+  <p class="help">Potencia neta de red, con signo: positivo = importando, negativo = exportando. Con esto (+ la previsión solar + los sensores de potencia de batería que hayas puesto arriba) la app calcula ella misma el consumo real de la casa, sea cual sea la fuente que lo esté cubriendo en cada momento.</p>
+
+  <label style="margin-top:16px">Alternativa: sensor de consumo directo</label>
   <input id="load-sensor" placeholder="sensor.consumo_instantaneo">
-  <p class="help warn"><strong>Importante:</strong> debe ser el consumo <strong>sin incluir</strong> la carga AC de las baterías (si tu sensor de red total SÍ incluye la carga de baterías, usa uno que la reste — si no, el sistema confundirá su propia carga con consumo de la casa y se descoordinará).</p>
+  <p class="help">Solo se usa si el campo de arriba está vacío. <strong>Importante</strong> si lo usas: tiene que ser el consumo <strong>sin incluir</strong> la carga de las baterías, y ten en cuenta que si el sensor solo mide "lo que entra de red", marcará ~0 siempre que la batería esté cubriendo el consumo — mejor usa el sensor de potencia de red de arriba.</p>
+
+  <div class="actions"><button onclick="saveConfig()">Guardar</button></div>
   <p class="help">La previsión se calcula como la media real de esa hora del día en los últimos N días — sin aprendizaje automático opaco, puedes verificarla tú mismo.</p>
 </div>
 
@@ -400,6 +410,7 @@ async function loadConfig() {
   toggleTariffMode();
 
   document.getElementById('pv-current').value = cfg.current_pv_sensor || '';
+  document.getElementById('grid-power-sensor').value = cfg.grid_power_sensor || '';
   document.getElementById('load-sensor').value = cfg.load_sensor || '';
   document.getElementById('g-contracted').value = cfg.general.contracted_power_w || 0;
   document.getElementById('g-horizon').value = cfg.general.horizon_hours;
@@ -441,6 +452,7 @@ function renderBatteries() {
         <div class="kv"><span>SOC min / max</span><code>${b.min_soc_pct}% / ${b.max_soc_pct}%</code></div>
         ${b.charge_power_limit_entity ? `<div class="kv"><span>Límite carga</span><code>${b.charge_power_limit_entity}</code></div>` : ''}
         ${b.discharge_power_limit_entity ? `<div class="kv"><span>Límite descarga</span><code>${b.discharge_power_limit_entity}</code></div>` : ''}
+        ${b.power_sensor ? `<div class="kv"><span>Sensor de potencia</span><code>${b.power_sensor}</code></div>` : '<p class="help">Sin sensor de potencia declarado — no participa en el cálculo de consumo real.</p>'}
         <div class="actions"><button class="danger" onclick="deleteBattery('${b.id}')" type="button">Eliminar esta batería</button></div>
       </div>
     </details>`).join('');
@@ -479,6 +491,7 @@ async function addBattery() {
     max_soc_pct: parseFloat(document.getElementById('b-maxsoc').value) || 100,
     charge_power_limit_entity: document.getElementById('b-charge-limit').value.trim() || null,
     discharge_power_limit_entity: document.getElementById('b-discharge-limit').value.trim() || null,
+    power_sensor: document.getElementById('b-power-sensor').value.trim() || null,
   };
   if (!battery.name || !battery.soc_sensor || !battery.charge_switch || !battery.discharge_switch) {
     showBatteryFormError('Nombre, sensor de SOC y los dos switches son obligatorios.'); return;
@@ -498,7 +511,7 @@ async function addBattery() {
     return;
   }
   // limpiar el formulario y cerrar el desplegable de alta
-  ['b-name','b-capacity','b-soc','b-charge-sw','b-discharge-sw','b-charge-limit','b-discharge-limit']
+  ['b-name','b-capacity','b-soc','b-charge-sw','b-discharge-sw','b-charge-limit','b-discharge-limit','b-power-sensor']
     .forEach(id => document.getElementById(id).value = '');
   document.getElementById('b-maxcharge').value = 1200;
   document.getElementById('b-maxdischarge').value = 1200;
@@ -571,6 +584,7 @@ async function saveConfig() {
   cfg.tariff.pvpc_sensor = document.getElementById('t-pvpc-sensor').value;
 
   cfg.current_pv_sensor = document.getElementById('pv-current').value;
+  cfg.grid_power_sensor = document.getElementById('grid-power-sensor').value;
   cfg.load_sensor = document.getElementById('load-sensor').value;
   cfg.general.contracted_power_w = parseFloat(document.getElementById('g-contracted').value) || 0;
   cfg.general.horizon_hours = parseInt(document.getElementById('g-horizon').value, 10);

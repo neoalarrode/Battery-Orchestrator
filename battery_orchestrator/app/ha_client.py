@@ -101,16 +101,15 @@ def get_history(entity_id: str, days: int) -> list[dict]:
     return data[0] if data else []
 
 
-def load_forecast_from_history(entity_id: str, horizon_hours: int, days: int = 21) -> list[float]:
+def hourly_average_forecast(entity_id: str, horizon_hours: int, days: int = 21, default: float = 0.0) -> list[float]:
     """
-    Previsión de consumo simple y explicable: para cada hora del horizonte,
-    la media de esa MISMA hora-del-dia en los ultimos `days` dias de
-    historico real. Nada de aprendizaje automatico opaco.
+    Previsión simple y explicable para CUALQUIER sensor numerico: para cada
+    hora del horizonte, la media de esa MISMA hora-del-dia en los ultimos
+    `days` dias de historico real. Nada de aprendizaje automatico opaco.
     """
     raw = get_history(entity_id, days)
     if not raw:
-        # sin historico: devolver un valor plano conservador
-        current = get_numeric_state(entity_id, default=300.0)
+        current = get_numeric_state(entity_id, default=default)
         return [current] * horizon_hours
 
     buckets: dict[int, list[float]] = {h: [] for h in range(24)}
@@ -126,15 +125,47 @@ def load_forecast_from_history(entity_id: str, horizon_hours: int, days: int = 2
     for h, vals in buckets.items():
         hourly_avg[h] = statistics.mean(vals) if vals else None
 
-    # rellenar huecos con la media global si falta alguna hora
     known = [v for v in hourly_avg.values() if v is not None]
-    fallback = statistics.mean(known) if known else 300.0
+    fallback = statistics.mean(known) if known else default
     for h in range(24):
         if hourly_avg[h] is None:
             hourly_avg[h] = fallback
 
     now = datetime.now()
     return [hourly_avg[(now.hour + i) % 24] for i in range(horizon_hours)]
+
+
+# alias retrocompatible
+load_forecast_from_history = hourly_average_forecast
+
+
+def true_load_forecast(grid_sensor: str, solar_sensor: str | None, battery_sensors: list[str],
+                        horizon_hours: int, days: int = 21) -> list[float]:
+    """
+    Reconstruye el consumo REAL de la vivienda (independiente de si lo
+    cubre red, sol o bateria) sumando el historico de cada componente por
+    separado, hora a hora:
+
+        consumo = potencia_red (neta, +importa/-exporta)
+                + produccion_solar
+                + potencia_neta_baterias (+descarga/-carga)
+
+    No hace falta un sensor nuevo en HA: se calcula aqui mismo a partir de
+    sensores que ya existen y ya tienen historico acumulado.
+    """
+    total = hourly_average_forecast(grid_sensor, horizon_hours, days, default=0.0)
+
+    if solar_sensor:
+        solar = hourly_average_forecast(solar_sensor, horizon_hours, days, default=0.0)
+        total = [total[i] + solar[i] for i in range(horizon_hours)]
+
+    for bs in battery_sensors:
+        if not bs:
+            continue
+        batt = hourly_average_forecast(bs, horizon_hours, days, default=0.0)
+        total = [total[i] + batt[i] for i in range(horizon_hours)]
+
+    return total
 
 
 def pv_forecast_from_entity(entity_id: str, horizon_hours: int) -> list[float]:

@@ -681,7 +681,7 @@ function renderStatus(status) {
   }
 
   const tbody = document.querySelector('#plan-table tbody');
-  tbody.innerHTML = (status.plan || []).slice(0, 24).map(hp => `
+  tbody.innerHTML = (status.plan || []).map(hp => `
     <tr>
       <td>${new Date(hp.dt).toLocaleString('es-ES', {weekday:'short', hour:'2-digit', minute:'2-digit'})}</td>
       <td><span class="tier tier-${hp.tier}">${hp.tier}</span></td>

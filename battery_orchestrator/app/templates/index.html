@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Battery Orchestrator</title>
+<style>
+  /*
+    Direccion: panel de control futurista. Violeta electrico sobre grafito
+    casi negro con tinte azul, retícula sutil de fondo tipo HUD, resplandor
+    en los elementos vivos/interactivos. Los colores semanticos de tarifa
+    (verde/ambar/rojo = valle/llano/punta) son independientes del acento
+    violeta, a proposito.
+  */
+  :root {
+    color-scheme: dark light;
+    --bg: #0b0a16; --bg-alt: #131226; --card: #14132a; --text: #eae8f7; --muted: #8b87ab;
+    --border: #2a2850; --accent: #8b5cf6; --accent-2: #22d3ee; --accent-soft: #8b5cf626; --accent-ink: #0b0a16;
+    --glow: 0 0 0 1px #8b5cf64d, 0 0 24px -6px #8b5cf673;
+    --green: #34d399; --amber: #fbbf24; --red: #fb7185;
+    --green-soft: #34d39920; --amber-soft: #fbbf2420; --red-soft: #fb718520;
+    --radius: 12px; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 28px -8px rgba(139,92,246,.18);
+    --font-display: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --font-body: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg:#f2f1fa; --bg-alt:#e7e5f6; --card:#ffffff; --text:#1c1a2e; --muted:#68648c;
+      --border:#dcd9f2; --accent:#7c3aed; --accent-2:#0891b2; --accent-soft:#7c3aed15; --accent-ink:#ffffff;
+      --glow: 0 0 0 1px #7c3aed33, 0 0 20px -8px #7c3aed4d;
+      --green:#159a67; --amber:#b3790a; --red:#e0475f;
+      --green-soft:#159a6715; --amber-soft:#b3790a15; --red-soft:#e0475f15;
+      --shadow: 0 1px 2px rgba(28,26,46,.05), 0 8px 24px -10px rgba(124,58,237,.15);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg:#f2f1fa; --bg-alt:#e7e5f6; --card:#ffffff; --text:#1c1a2e; --muted:#68648c;
+    --border:#dcd9f2; --accent:#7c3aed; --accent-2:#0891b2; --accent-soft:#7c3aed15; --accent-ink:#ffffff;
+    --glow: 0 0 0 1px #7c3aed33, 0 0 20px -8px #7c3aed4d;
+    --green:#159a67; --amber:#b3790a; --red:#e0475f;
+    --green-soft:#159a6715; --amber-soft:#b3790a15; --red-soft:#e0475f15;
+    --shadow: 0 1px 2px rgba(28,26,46,.05), 0 8px 24px -10px rgba(124,58,237,.15);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b0a16; --bg-alt: #131226; --card: #14132a; --text: #eae8f7; --muted: #8b87ab;
+    --border: #2a2850; --accent: #8b5cf6; --accent-2: #22d3ee; --accent-soft: #8b5cf626; --accent-ink: #0b0a16;
+    --glow: 0 0 0 1px #8b5cf64d, 0 0 24px -6px #8b5cf673;
+    --green: #34d399; --amber: #fbbf24; --red: #fb7185;
+    --green-soft: #34d39920; --amber-soft: #fbbf2420; --red-soft: #fb718520;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 28px -8px rgba(139,92,246,.18);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { overflow-x: hidden; }
+  body {
+    font-family: var(--font-body);
+    background:
+      linear-gradient(var(--bg-alt) 1px, transparent 1px) 0 0 / 100% 34px,
+      linear-gradient(90deg, var(--bg-alt) 1px, transparent 1px) 0 0 / 34px 100%,
+      var(--bg);
+    background-attachment: fixed;
+    color: var(--text);
+    max-width: 1080px; margin: 0 auto; padding: 28px 20px 90px;
+    line-height: 1.5; -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  ::selection { background: var(--accent); color: var(--accent-ink); }
+
+  .topbar {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid var(--border);
+  }
+  .topbar h1 {
+    font-family: var(--font-display); font-size: 1.6rem; font-weight: 700; margin: 0;
+    letter-spacing: -0.01em; text-wrap: balance;
+  }
+  .brand-mark {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; border-radius: 9px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: var(--accent-ink);
+    box-shadow: var(--glow);
+    font-size: 1rem; margin-right: 10px; vertical-align: middle; position: relative; top: -2px;
+  }
+  .eyebrow {
+    font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .12em;
+    font-size: .68rem; font-weight: 600; color: var(--accent-2); margin: 0 0 6px;
+  }
+  .subtitle { color: var(--muted); font-size: 0.92rem; margin-top: 6px; max-width: 52ch; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 22px 24px; margin-bottom: 16px;
+    position: relative; overflow: hidden;
+  }
+  .card::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent) 30%, var(--accent-2) 70%, transparent);
+    opacity: .55;
+  }
+  .card h2 {
+    font-family: var(--font-display); font-size: .95rem; font-weight: 700; margin: 0 0 16px;
+    display: flex; align-items: center; gap: 8px; letter-spacing: -.005em;
+  }
+  .card h2 .hint { font-weight: 400; color: var(--muted); font-size: 0.78rem; margin-left: auto; font-family: var(--font-body); }
+
+  label { font-size: 0.76rem; font-weight: 600; color: var(--muted); display: block; margin: 10px 0 4px; letter-spacing: .01em; }
+  input, select {
+    width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--bg-alt); color: var(--text); font-size: 0.9rem; font-family: var(--font-body);
+    transition: border-color .15s;
+  }
+  input:hover, select:hover { border-color: var(--muted); }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+  input[type=checkbox] { width: auto; accent-color: var(--accent); }
+  .checkline { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 0.85rem; }
+  .checkline label { margin: 0; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
+  @media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
+
+  .help { font-size: 0.78rem; color: var(--muted); margin-top: 5px; }
+  .help.warn { color: var(--red); font-weight: 500; }
+
+  button {
+    padding: 9px 16px; border-radius: 8px; border: none; cursor: pointer;
+    background: var(--accent); color: var(--accent-ink); font-size: 0.85rem; font-weight: 600;
+    transition: filter .15s, transform .05s, box-shadow .15s; font-family: var(--font-body);
+  }
+  button:hover { filter: brightness(1.1); box-shadow: var(--glow); }
+  button:active { transform: translateY(1px); }
+  button.secondary { background: var(--accent-soft); color: var(--accent); }
+  button.danger { background: var(--red-soft); color: var(--red); }
+  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+
+  summary { list-style: none; }
+  summary::-webkit-details-marker { display: none; }
+  .add-toggle {
+    cursor: pointer; font-size: 0.82rem; color: var(--accent); font-weight: 600;
+    margin-top: 10px; display: inline-flex; align-items: center; gap: 5px;
+  }
+
+  .item-card {
+    border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 8px;
+    display: flex; justify-content: space-between; align-items: center; gap: 12px; background: var(--bg-alt);
+  }
+  .item-card .meta { font-size: 0.78rem; color: var(--muted); margin-top: 2px; font-family: var(--font-mono); }
+  .item-name { font-weight: 600; font-family: var(--font-display); }
+  .empty { color: var(--muted); font-size: 0.85rem; padding: 10px 0; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  th {
+    text-align: left; padding: 8px 10px; color: var(--accent-2); font-weight: 700; font-size: .68rem;
+    text-transform: uppercase; letter-spacing: .06em; border-bottom: 1px solid var(--border);
+    font-family: var(--font-mono);
+  }
+  td { padding: 8px 10px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
+  td:last-child { font-family: var(--font-body); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--bg-alt); }
+
+  .tier { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 700; letter-spacing: .02em; font-family: var(--font-mono); }
+  .tier-punta { background: var(--red-soft); color: var(--red); }
+  .tier-llano { background: var(--amber-soft); color: var(--amber); }
+  .tier-valle { background: var(--green-soft); color: var(--green); }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px; border-radius: 20px;
+    font-size: 0.76rem; font-weight: 700; letter-spacing: .04em; white-space: nowrap; font-family: var(--font-mono);
+  }
+  .pill-dry { background: var(--amber-soft); color: var(--amber); box-shadow: 0 0 0 1px #fbbf2433; }
+  .pill-live { background: var(--red-soft); color: var(--red); box-shadow: 0 0 0 1px #fb718533, 0 0 16px -4px #fb718580; }
+  .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  @media (prefers-reduced-motion: no-preference) { .pill-live::before { animation: pulse 1.8s ease-in-out infinite; } }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+
+  .status-line {
+    font-family: var(--font-mono); font-size: 0.78rem; white-space: pre-wrap;
+    background: var(--bg-alt); border: 1px solid var(--border); border-left: 2px solid var(--accent); border-radius: 9px;
+    padding: 12px 14px; max-height: 220px; overflow-y: auto;
+  }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--text); color: var(--bg); padding: 10px 18px; border-radius: 9px;
+    font-size: 0.85rem; opacity: 0; transition: opacity .25s; pointer-events: none;
+  }
+  .toast.show { opacity: 0.95; }
+
+  fieldset { border: none; padding: 0; margin: 0 0 16px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <p class="eyebrow">Gestión energética del hogar</p>
+    <h1><span class="brand-mark" aria-hidden="true">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="currentColor"/>
+      </svg>
+    </span>Battery Orchestrator</h1>
+    <div class="subtitle">Carga y descarga adaptativa por precio, sol y consumo real — sin cajas negras.</div>
+  </div>
+  <span id="mode-pill" class="pill"></span>
+</div>
+
+<div class="card">
+  <h2>Estado actual <span class="hint" id="last-run"></span></h2>
+  <div id="status"></div>
+  <div class="actions">
+    <button onclick="runNow()">Ejecutar ciclo ahora</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Baterías</h2>
+  <div id="batteries-list"></div>
+  <details>
+    <summary style="cursor:pointer; font-size:0.85rem; color:var(--accent); margin-top:8px;">+ Añadir batería</summary>
+    <div class="grid2" style="margin-top:10px">
+      <div>
+        <label>Nombre</label><input id="b-name" placeholder="Ultra">
+        <label>Capacidad (Wh)</label><input id="b-capacity" type="number" placeholder="6000">
+        <label>Sensor SOC (%)</label><input id="b-soc" placeholder="sensor.mi_bateria_nivel">
+        <label>Switch de carga</label><input id="b-charge-sw" placeholder="switch.mi_bateria_charging_task">
+        <label>Switch de descarga</label><input id="b-discharge-sw" placeholder="switch.mi_bateria_discharging_task">
+      </div>
+      <div>
+        <label>Potencia máx. carga (W)</label><input id="b-maxcharge" type="number" value="1200">
+        <label>Potencia máx. descarga (W)</label><input id="b-maxdischarge" type="number" value="1200">
+        <label>SOC mínimo (%)</label><input id="b-minsoc" type="number" value="3">
+        <label>SOC máximo (%)</label><input id="b-maxsoc" type="number" value="100">
+        <label>Entidad límite potencia carga (opcional)</label><input id="b-charge-limit" placeholder="number...charging_power_limit">
+        <label>Entidad límite potencia descarga (opcional)</label><input id="b-discharge-limit" placeholder="number...discharging_power_limit">
+      </div>
+    </div>
+    <div class="actions"><button onclick="addBattery()">Añadir batería</button></div>
+  </details>
+</div>
+
+<div class="card">
+  <h2>Tarifa eléctrica</h2>
+  <label>Modo</label>
+  <select id="t-mode" onchange="toggleTariffMode()">
+    <option value="fixed">Precios fijos (punta / llano / valle)</option>
+    <option value="pvpc_sensor">PVPC dinámico (sensor de Home Assistant)</option>
+  </select>
+
+  <div id="tariff-fixed">
+    <div class="grid2">
+      <div>
+        <label>Precio punta (€/kWh)</label><input id="t-punta" type="number" step="0.001">
+        <label>Precio llano (€/kWh)</label><input id="t-llano" type="number" step="0.001">
+        <label>Precio valle (€/kWh)</label><input id="t-valle" type="number" step="0.001">
+      </div>
+      <div>
+        <label>Horas punta (laborables)</label><input id="t-punta-periods" placeholder="10-14,18-22">
+        <label>Horas llano (laborables)</label><input id="t-llano-periods" placeholder="8-10,14-18,22-24">
+        <div class="checkline"><input id="t-weekend" type="checkbox"><label>Fin de semana = valle todo el día</label></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tariff-pvpc" style="display:none">
+    <label>Sensor PVPC de Home Assistant</label>
+    <input id="t-pvpc-sensor" placeholder="sensor.esios_pvpc">
+    <p class="help">Se usa el precio real hora a hora. Los tramos punta/llano/valle se calculan solos comparando el precio de cada hora con el resto del día (el tercio más barato = valle, el más caro = punta).</p>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Previsión solar <span class="hint">se suman todos los paneles declarados</span></h2>
+  <div id="pv-arrays-list"></div>
+  <details>
+    <summary style="cursor:pointer; font-size:0.85rem; color:var(--accent); margin-top:8px;">+ Añadir panel / array solar</summary>
+    <label>Nombre</label><input id="pv-name" placeholder="Tejado sur">
+    <label>Origen</label>
+    <select id="pv-mode" onchange="togglePvMode()">
+      <option value="entity">Sensor de Home Assistant</option>
+      <option value="forecast_solar_api">API de Forecast.Solar (directa)</option>
+    </select>
+    <div id="pv-entity-fields">
+      <label>Entidad de previsión</label><input id="pv-entity" placeholder="sensor.power_production_next_24hours">
+    </div>
+    <div id="pv-api-fields" class="grid2" style="display:none">
+      <div>
+        <label>API key (vacío = plan gratuito)</label><input id="pv-apikey">
+        <label>Latitud</label><input id="pv-lat" type="number" step="0.0001">
+        <label>Longitud</label><input id="pv-lon" type="number" step="0.0001">
+      </div>
+      <div>
+        <label>Inclinación (grados)</label><input id="pv-decl" type="number">
+        <label>Azimut (grados, 0=sur)</label><input id="pv-az" type="number">
+        <label>kWp instalados</label><input id="pv-kwp" type="number" step="0.1">
+      </div>
+    </div>
+    <div class="actions"><button onclick="addPvArray()">Añadir panel</button></div>
+  </details>
+
+  <label style="margin-top:16px">Sensor de generación solar instantánea (opcional, recomendado)</label>
+  <input id="pv-current" placeholder="sensor.solar">
+  <p class="help">Corrige la hora actual del plan con el dato real en vez de depender solo de la previsión (nubes, etc.). Las horas futuras siguen usando la previsión.</p>
+</div>
+
+<div class="card">
+  <h2>Consumo de la casa</h2>
+  <label>Sensor de consumo total (W)</label>
+  <input id="load-sensor" placeholder="sensor.consumo_instantaneo">
+  <p class="help warn"><strong>Importante:</strong> debe ser el consumo <strong>sin incluir</strong> la carga AC de las baterías (si tu sensor de red total SÍ incluye la carga de baterías, usa uno que la reste — si no, el sistema confundirá su propia carga con consumo de la casa y se descoordinará).</p>
+  <p class="help">La previsión se calcula como la media real de esa hora del día en los últimos N días — sin aprendizaje automático opaco, puedes verificarla tú mismo.</p>
+</div>
+
+<div class="card">
+  <h2>Seguridad y límites</h2>
+  <div class="grid2">
+    <div>
+      <label>Potencia contratada (W)</label><input id="g-contracted" type="number" placeholder="5500">
+      <p class="help">0 = sin límite. Evita que la carga de baterías + consumo de la casa disparen el ICP.</p>
+    </div>
+    <div>
+      <label>Días de histórico para consumo</label><input id="g-histdays" type="number">
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>General</h2>
+  <div class="grid2">
+    <div>
+      <label>Horizonte de planificación (horas)</label><input id="g-horizon" type="number">
+      <label>Intervalo entre decisiones (segundos)</label><input id="g-cycle" type="number">
+    </div>
+    <div>
+      <label>Refresco de previsión solar (segundos)</label><input id="g-pvrefresh" type="number">
+      <p class="help">Sepáralo del intervalo de decisión para no agotar la cuota gratuita de la API.</p>
+      <div class="checkline"><input id="g-dryrun" type="checkbox"><label>Modo simulación (no toca las baterías de verdad)</label></div>
+    </div>
+  </div>
+  <div class="actions"><button onclick="saveConfig()">Guardar configuración</button></div>
+</div>
+
+<div class="card">
+  <h2>Plan próximas horas</h2>
+  <div style="overflow-x:auto">
+    <table id="plan-table">
+      <thead><tr><th>Hora</th><th>Tramo</th><th>Precio</th><th>Sol</th><th>Consumo</th><th>Carga</th><th>Descarga</th><th>SOC</th><th>Motivo</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let cfg = null;
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+async function loadConfig() {
+  cfg = await (await fetch('api/config')).json();
+  renderBatteries();
+  renderPvArrays();
+
+  document.getElementById('t-mode').value = cfg.tariff.mode || 'fixed';
+  document.getElementById('t-punta').value = cfg.tariff.punta_price;
+  document.getElementById('t-llano').value = cfg.tariff.llano_price;
+  document.getElementById('t-valle').value = cfg.tariff.valle_price;
+  document.getElementById('t-punta-periods').value = cfg.tariff.punta_periods.map(p => p.join('-')).join(',');
+  document.getElementById('t-llano-periods').value = cfg.tariff.llano_periods.map(p => p.join('-')).join(',');
+  document.getElementById('t-weekend').checked = cfg.tariff.weekend_is_valle;
+  document.getElementById('t-pvpc-sensor').value = cfg.tariff.pvpc_sensor || '';
+  toggleTariffMode();
+
+  document.getElementById('pv-current').value = cfg.current_pv_sensor || '';
+  document.getElementById('load-sensor').value = cfg.load_sensor || '';
+  document.getElementById('g-contracted').value = cfg.general.contracted_power_w || 0;
+  document.getElementById('g-horizon').value = cfg.general.horizon_hours;
+  document.getElementById('g-cycle').value = cfg.general.cycle_seconds;
+  document.getElementById('g-pvrefresh').value = cfg.general.pv_refresh_seconds;
+  document.getElementById('g-histdays').value = cfg.general.history_days_for_load;
+  document.getElementById('g-dryrun').checked = cfg.general.dry_run;
+}
+
+function toggleTariffMode() {
+  const mode = document.getElementById('t-mode').value;
+  document.getElementById('tariff-fixed').style.display = mode === 'fixed' ? 'block' : 'none';
+  document.getElementById('tariff-pvpc').style.display = mode === 'pvpc_sensor' ? 'block' : 'none';
+}
+
+function togglePvMode() {
+  const mode = document.getElementById('pv-mode').value;
+  document.getElementById('pv-entity-fields').style.display = mode === 'entity' ? 'block' : 'none';
+  document.getElementById('pv-api-fields').style.display = mode === 'forecast_solar_api' ? 'grid' : 'none';
+}
+
+function renderBatteries() {
+  const el = document.getElementById('batteries-list');
+  if (!cfg.batteries.length) { el.innerHTML = '<p class="empty">Todavía no has añadido ninguna batería.</p>'; return; }
+  el.innerHTML = cfg.batteries.map(b => `
+    <div class="item-card">
+      <div>
+        <div class="item-name">${b.name} · ${b.capacity_wh} Wh</div>
+        <div class="meta">SOC ${b.soc_sensor} · carga ${b.charge_switch} · descarga ${b.discharge_switch}</div>
+      </div>
+      <button class="danger" onclick="deleteBattery('${b.id}')">Eliminar</button>
+    </div>`).join('');
+}
+
+function renderPvArrays() {
+  const el = document.getElementById('pv-arrays-list');
+  if (!cfg.pv_arrays.length) { el.innerHTML = '<p class="empty">Todavía no has añadido ningún panel/array solar.</p>'; return; }
+  el.innerHTML = cfg.pv_arrays.map(a => `
+    <div class="item-card">
+      <div>
+        <div class="item-name">${a.name || '(sin nombre)'}</div>
+        <div class="meta">${a.mode === 'entity' ? 'Sensor HA: ' + a.entity_id : `Forecast.Solar API (${a.kwp} kWp)`}</div>
+      </div>
+      <button class="danger" onclick="deletePvArray('${a.id}')">Eliminar</button>
+    </div>`).join('');
+}
+
+async function addBattery() {
+  const battery = {
+    name: document.getElementById('b-name').value,
+    capacity_wh: parseFloat(document.getElementById('b-capacity').value),
+    soc_sensor: document.getElementById('b-soc').value,
+    charge_switch: document.getElementById('b-charge-sw').value,
+    discharge_switch: document.getElementById('b-discharge-sw').value,
+    max_charge_w: parseFloat(document.getElementById('b-maxcharge').value) || 1200,
+    max_discharge_w: parseFloat(document.getElementById('b-maxdischarge').value) || 1200,
+    min_soc_pct: parseFloat(document.getElementById('b-minsoc').value) || 3,
+    max_soc_pct: parseFloat(document.getElementById('b-maxsoc').value) || 100,
+    charge_power_limit_entity: document.getElementById('b-charge-limit').value || null,
+    discharge_power_limit_entity: document.getElementById('b-discharge-limit').value || null,
+  };
+  if (!battery.name || !battery.soc_sensor || !battery.charge_switch || !battery.discharge_switch) {
+    toast('Nombre, sensor de SOC y los dos switches son obligatorios.'); return;
+  }
+  await fetch('api/batteries', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(battery) });
+  await loadConfig();
+  toast('Batería añadida.');
+}
+
+async function deleteBattery(id) {
+  await fetch('api/batteries/' + id, { method: 'DELETE' });
+  await loadConfig();
+}
+
+async function addPvArray() {
+  const array = {
+    name: document.getElementById('pv-name').value,
+    mode: document.getElementById('pv-mode').value,
+    entity_id: document.getElementById('pv-entity').value,
+    api_key: document.getElementById('pv-apikey').value,
+    lat: parseFloat(document.getElementById('pv-lat').value) || 0,
+    lon: parseFloat(document.getElementById('pv-lon').value) || 0,
+    declination: parseFloat(document.getElementById('pv-decl').value) || 30,
+    azimuth: parseFloat(document.getElementById('pv-az').value) || 0,
+    kwp: parseFloat(document.getElementById('pv-kwp').value) || 1,
+  };
+  await fetch('api/pv_arrays', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(array) });
+  await loadConfig();
+  toast('Panel añadido.');
+}
+
+async function deletePvArray(id) {
+  await fetch('api/pv_arrays/' + id, { method: 'DELETE' });
+  await loadConfig();
+}
+
+function parsePeriods(str) {
+  return str.split(',').map(s => s.trim()).filter(Boolean).map(s => s.split('-').map(n => parseInt(n, 10)));
+}
+
+async function saveConfig() {
+  cfg.tariff.mode = document.getElementById('t-mode').value;
+  cfg.tariff.punta_price = parseFloat(document.getElementById('t-punta').value);
+  cfg.tariff.llano_price = parseFloat(document.getElementById('t-llano').value);
+  cfg.tariff.valle_price = parseFloat(document.getElementById('t-valle').value);
+  cfg.tariff.punta_periods = parsePeriods(document.getElementById('t-punta-periods').value);
+  cfg.tariff.llano_periods = parsePeriods(document.getElementById('t-llano-periods').value);
+  cfg.tariff.weekend_is_valle = document.getElementById('t-weekend').checked;
+  cfg.tariff.pvpc_sensor = document.getElementById('t-pvpc-sensor').value;
+
+  cfg.current_pv_sensor = document.getElementById('pv-current').value;
+  cfg.load_sensor = document.getElementById('load-sensor').value;
+  cfg.general.contracted_power_w = parseFloat(document.getElementById('g-contracted').value) || 0;
+  cfg.general.horizon_hours = parseInt(document.getElementById('g-horizon').value, 10);
+  cfg.general.cycle_seconds = parseInt(document.getElementById('g-cycle').value, 10);
+  cfg.general.pv_refresh_seconds = parseInt(document.getElementById('g-pvrefresh').value, 10);
+  cfg.general.history_days_for_load = parseInt(document.getElementById('g-histdays').value, 10);
+  cfg.general.dry_run = document.getElementById('g-dryrun').checked;
+
+  await fetch('api/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(cfg) });
+  toast('Configuración guardada.');
+  refreshStatus();
+}
+
+async function runNow() {
+  document.getElementById('status').innerHTML = '<p class="empty">Ejecutando...</p>';
+  const status = await (await fetch('api/run_now', { method: 'POST' })).json();
+  renderStatus(status);
+}
+
+function renderStatus(status) {
+  const pill = document.getElementById('mode-pill');
+  const isDry = cfg && cfg.general.dry_run;
+  pill.textContent = isDry ? 'SIMULACIÓN' : 'EN VIVO';
+  pill.className = 'pill ' + (isDry ? 'pill-dry' : 'pill-live');
+
+  document.getElementById('last-run').textContent = status.last_run ? new Date(status.last_run).toLocaleString() : '';
+
+  const el = document.getElementById('status');
+  if (status.error) {
+    el.innerHTML = `<p style="color:var(--red)">${status.error}</p>`;
+  } else if (!status.last_run) {
+    el.innerHTML = '<p class="empty">Todavía no se ha ejecutado ningún ciclo.</p>';
+  } else {
+    let extra = '';
+    if (status.skipped_batteries && status.skipped_batteries.length) {
+      extra += `<p class="help warn">Omitidas este ciclo (sensor no disponible): ${status.skipped_batteries.join(', ')}</p>`;
+    }
+    if (status.pv_now_actual !== null && status.pv_now_actual !== undefined) {
+      extra += `<p class="help">Generación real ahora: ${Math.round(status.pv_now_actual)} W</p>`;
+    }
+    el.innerHTML = extra + `<div class="status-line">${(status.log_lines || []).join('\n')}</div>`;
+  }
+
+  const tbody = document.querySelector('#plan-table tbody');
+  tbody.innerHTML = (status.plan || []).slice(0, 24).map(hp => `
+    <tr>
+      <td>${new Date(hp.dt).toLocaleString('es-ES', {weekday:'short', hour:'2-digit', minute:'2-digit'})}</td>
+      <td><span class="tier tier-${hp.tier}">${hp.tier}</span></td>
+      <td>${hp.price.toFixed(3)}</td>
+      <td>${hp.pv_w} W</td>
+      <td>${hp.load_w} W</td>
+      <td>${hp.charge_w > 0 ? hp.charge_w + ' W' : '–'}</td>
+      <td>${hp.discharge_w > 0 ? hp.discharge_w + ' W' : '–'}</td>
+      <td>${hp.soc_pct}%</td>
+      <td class="meta">${hp.reason}</td>
+    </tr>`).join('');
+}
+
+async function refreshStatus() {
+  const status = await (await fetch('api/status')).json();
+  renderStatus(status);
+}
+
+(async () => {
+  await loadConfig();
+  await refreshStatus();
+  setInterval(refreshStatus, 15000);
+})();
+</script>
+</body>
+</html>

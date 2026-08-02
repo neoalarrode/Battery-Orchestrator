@@ -139,27 +139,31 @@ def hourly_average_forecast(entity_id: str, horizon_hours: int, days: int = 21, 
 load_forecast_from_history = hourly_average_forecast
 
 
-def true_load_forecast(grid_sensor: str, solar_sensor: str | None, battery_sensors: list[str],
+def true_load_forecast(base_consumption_sensor: str, solar_sensor: str | None,
+                        battery_discharge_sensors: list[str],
                         horizon_hours: int, days: int = 21) -> list[float]:
     """
-    Reconstruye el consumo REAL de la vivienda (independiente de si lo
-    cubre red, sol o bateria) sumando el historico de cada componente por
-    separado, hora a hora:
+    Reconstruye el consumo REAL de la vivienda sumando el historico de cada
+    componente por separado, hora a hora:
 
-        consumo = potencia_red (neta, +importa/-exporta)
+        consumo = consumo_base (red YA SIN la carga de baterias, p.ej.
+                                 "consumo_instantaneo")
                 + produccion_solar
-                + potencia_neta_baterias (+descarga/-carga)
+                + descarga_baterias (solo salida, sensores positivos tipo
+                  "..._load_from_battery"; NO hace falta el de carga: al
+                  restarse ya en el sensor base, los terminos de carga se
+                  cancelan matematicamente)
 
     No hace falta un sensor nuevo en HA: se calcula aqui mismo a partir de
     sensores que ya existen y ya tienen historico acumulado.
     """
-    total = hourly_average_forecast(grid_sensor, horizon_hours, days, default=0.0)
+    total = hourly_average_forecast(base_consumption_sensor, horizon_hours, days, default=0.0)
 
     if solar_sensor:
         solar = hourly_average_forecast(solar_sensor, horizon_hours, days, default=0.0)
         total = [total[i] + solar[i] for i in range(horizon_hours)]
 
-    for bs in battery_sensors:
+    for bs in battery_discharge_sensors:
         if not bs:
             continue
         batt = hourly_average_forecast(bs, horizon_hours, days, default=0.0)

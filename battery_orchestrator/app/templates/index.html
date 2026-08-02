@@ -236,7 +236,7 @@
   <div id="batteries-list"></div>
 
   <details id="add-battery-panel">
-    <summary class="add-toggle">+ Añadir batería</summary>
+    <summary class="add-toggle" id="add-battery-summary">+ Añadir batería</summary>
     <div class="grid2" style="margin-top:10px">
       <div>
         <label>Nombre</label><input id="b-name" placeholder="Ultra">
@@ -252,14 +252,14 @@
         <label>SOC máximo (%)</label><input id="b-maxsoc" type="number" value="100">
         <label>Entidad límite potencia carga (opcional)</label><input id="b-charge-limit" placeholder="number...charging_power_limit">
         <label>Entidad límite potencia descarga (opcional)</label><input id="b-discharge-limit" placeholder="number...discharging_power_limit">
-        <label>Sensor de potencia neta (opcional)</label><input id="b-power-sensor" placeholder="sensor.mi_bateria_battery_power">
-        <p class="help">Tiene que ser un sensor <strong>con signo</strong>: positivo cuando descarga, negativo cuando carga (típicamente se llama algo como <code>..._battery_power</code>). <strong>No uses</strong> un sensor que solo dé positivos como <code>..._load_from_battery</code> — al no distinguir carga de descarga, descuadraría el cálculo de consumo real. Si no tienes uno con signo, déjalo vacío.</p>
+        <label>Sensor de descarga (opcional)</label><input id="b-power-sensor" placeholder="sensor.mi_bateria_load_from_battery">
+        <p class="help">Potencia que la batería aporta a la casa ahora mismo (siempre positiva o cero, p.ej. <code>..._load_from_battery</code>). No hace falta el de carga — solo se usa para completar el cálculo de consumo real en la tarjeta "Consumo de la casa".</p>
       </div>
     </div>
     <p class="help" id="battery-form-error" style="display:none"></p>
     <div class="actions">
-      <button onclick="addBattery()">Guardar batería</button>
-      <button class="ghost" onclick="document.getElementById('add-battery-panel').open=false" type="button">Cancelar</button>
+      <button onclick="addBattery()" id="battery-form-submit-btn">Guardar batería</button>
+      <button class="ghost" onclick="cancelBatteryForm()" type="button">Cancelar</button>
     </div>
   </details>
 </div>
@@ -332,13 +332,9 @@
 <div class="card">
   <h2>Consumo de la casa</h2>
 
-  <label>Sensor de potencia de red (recomendado)</label>
-  <input id="grid-power-sensor" placeholder="sensor.shellypro3em..._total_active_power">
-  <p class="help">Potencia neta de red, con signo: positivo = importando, negativo = exportando. Con esto (+ la previsión solar + los sensores de potencia de batería que hayas puesto arriba) la app calcula ella misma el consumo real de la casa, sea cual sea la fuente que lo esté cubriendo en cada momento.</p>
-
-  <label style="margin-top:16px">Alternativa: sensor de consumo directo</label>
+  <label>Sensor de consumo de red</label>
   <input id="load-sensor" placeholder="sensor.consumo_instantaneo">
-  <p class="help">Solo se usa si el campo de arriba está vacío. <strong>Importante</strong> si lo usas: tiene que ser el consumo <strong>sin incluir</strong> la carga de las baterías, y ten en cuenta que si el sensor solo mide "lo que entra de red", marcará ~0 siempre que la batería esté cubriendo el consumo — mejor usa el sensor de potencia de red de arriba.</p>
+  <p class="help">Tiene que ser un sensor que <strong>ya reste la carga de las baterías</strong> (como tu <code>consumo_instantaneo</code>) — <strong>no</strong> el medidor de red en bruto (como <code>em3</code>), que sí la incluye. La app le suma automáticamente la producción solar y la descarga de baterías (los sensores que hayas indicado al dar de alta cada una) para reconstruir el consumo real completo, sea cual sea la fuente que lo esté cubriendo en cada momento.</p>
 
   <div class="actions"><button onclick="saveConfig()">Guardar</button></div>
   <p class="help">La previsión se calcula como la media real de esa hora del día en los últimos N días — sin aprendizaje automático opaco, puedes verificarla tú mismo.</p>
@@ -387,6 +383,7 @@
 
 <script>
 let cfg = null;
+let editingBatteryId = null;
 
 function toast(msg) {
   const t = document.getElementById('toast');
@@ -410,7 +407,6 @@ async function loadConfig() {
   toggleTariffMode();
 
   document.getElementById('pv-current').value = cfg.current_pv_sensor || '';
-  document.getElementById('grid-power-sensor').value = cfg.grid_power_sensor || '';
   document.getElementById('load-sensor').value = cfg.load_sensor || '';
   document.getElementById('g-contracted').value = cfg.general.contracted_power_w || 0;
   document.getElementById('g-horizon').value = cfg.general.horizon_hours;
@@ -452,8 +448,11 @@ function renderBatteries() {
         <div class="kv"><span>SOC min / max</span><code>${b.min_soc_pct}% / ${b.max_soc_pct}%</code></div>
         ${b.charge_power_limit_entity ? `<div class="kv"><span>Límite carga</span><code>${b.charge_power_limit_entity}</code></div>` : ''}
         ${b.discharge_power_limit_entity ? `<div class="kv"><span>Límite descarga</span><code>${b.discharge_power_limit_entity}</code></div>` : ''}
-        ${b.power_sensor ? `<div class="kv"><span>Sensor de potencia</span><code>${b.power_sensor}</code></div>` : '<p class="help">Sin sensor de potencia declarado — no participa en el cálculo de consumo real.</p>'}
-        <div class="actions"><button class="danger" onclick="deleteBattery('${b.id}')" type="button">Eliminar esta batería</button></div>
+        ${b.power_sensor ? `<div class="kv"><span>Sensor de descarga</span><code>${b.power_sensor}</code></div>` : '<p class="help">Sin sensor de descarga declarado — no participa en el cálculo de consumo real.</p>'}
+        <div class="actions">
+          <button class="secondary" onclick="editBattery('${b.id}')" type="button">Editar</button>
+          <button class="danger" onclick="deleteBattery('${b.id}')" type="button">Eliminar esta batería</button>
+        </div>
       </div>
     </details>`).join('');
 }
@@ -475,6 +474,49 @@ function showBatteryFormError(msg) {
   const el = document.getElementById('battery-form-error');
   if (!msg) { el.style.display = 'none'; el.textContent = ''; return; }
   el.style.display = 'block'; el.classList.add('warn'); el.textContent = msg;
+}
+
+function resetBatteryForm() {
+  ['b-name','b-capacity','b-soc','b-charge-sw','b-discharge-sw','b-charge-limit','b-discharge-limit','b-power-sensor']
+    .forEach(id => document.getElementById(id).value = '');
+  document.getElementById('b-maxcharge').value = 1200;
+  document.getElementById('b-maxdischarge').value = 1200;
+  document.getElementById('b-minsoc').value = 3;
+  document.getElementById('b-maxsoc').value = 100;
+  editingBatteryId = null;
+  document.getElementById('add-battery-summary').textContent = '+ Añadir batería';
+  document.getElementById('battery-form-submit-btn').textContent = 'Guardar batería';
+  showBatteryFormError('');
+}
+
+function cancelBatteryForm() {
+  resetBatteryForm();
+  document.getElementById('add-battery-panel').open = false;
+}
+
+function editBattery(id) {
+  const b = cfg.batteries.find(x => x.id === id);
+  if (!b) return;
+  document.getElementById('b-name').value = b.name || '';
+  document.getElementById('b-capacity').value = b.capacity_wh || '';
+  document.getElementById('b-soc').value = b.soc_sensor || '';
+  document.getElementById('b-charge-sw').value = b.charge_switch || '';
+  document.getElementById('b-discharge-sw').value = b.discharge_switch || '';
+  document.getElementById('b-maxcharge').value = b.max_charge_w ?? 1200;
+  document.getElementById('b-maxdischarge').value = b.max_discharge_w ?? 1200;
+  document.getElementById('b-minsoc').value = b.min_soc_pct ?? 3;
+  document.getElementById('b-maxsoc').value = b.max_soc_pct ?? 100;
+  document.getElementById('b-charge-limit').value = b.charge_power_limit_entity || '';
+  document.getElementById('b-discharge-limit').value = b.discharge_power_limit_entity || '';
+  document.getElementById('b-power-sensor').value = b.power_sensor || '';
+
+  editingBatteryId = id;
+  document.getElementById('add-battery-summary').textContent = `Editando "${b.name}"`;
+  document.getElementById('battery-form-submit-btn').textContent = 'Guardar cambios';
+  showBatteryFormError('');
+  const panel = document.getElementById('add-battery-panel');
+  panel.open = true;
+  panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 async function addBattery() {
@@ -499,8 +541,13 @@ async function addBattery() {
   if (!battery.capacity_wh || battery.capacity_wh <= 0) {
     showBatteryFormError('La capacidad (Wh) tiene que ser un número mayor que 0.'); return;
   }
+
+  const isEdit = !!editingBatteryId;
+  const url = isEdit ? 'api/batteries/' + editingBatteryId : 'api/batteries';
+  const method = isEdit ? 'PUT' : 'POST';
+
   try {
-    const res = await fetch('api/batteries', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(battery) });
+    const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(battery) });
     if (!res.ok) {
       const body = await res.text();
       showBatteryFormError(`Error del servidor (${res.status}): ${body || 'sin detalle'}`);
@@ -510,16 +557,10 @@ async function addBattery() {
     showBatteryFormError('No se pudo conectar con el servicio: ' + err.message);
     return;
   }
-  // limpiar el formulario y cerrar el desplegable de alta
-  ['b-name','b-capacity','b-soc','b-charge-sw','b-discharge-sw','b-charge-limit','b-discharge-limit','b-power-sensor']
-    .forEach(id => document.getElementById(id).value = '');
-  document.getElementById('b-maxcharge').value = 1200;
-  document.getElementById('b-maxdischarge').value = 1200;
-  document.getElementById('b-minsoc').value = 3;
-  document.getElementById('b-maxsoc').value = 100;
+  resetBatteryForm();
   document.getElementById('add-battery-panel').open = false;
   await loadConfig();
-  toast('Batería añadida.');
+  toast(isEdit ? 'Batería actualizada.' : 'Batería añadida.');
 }
 
 async function deleteBattery(id) {
@@ -584,7 +625,6 @@ async function saveConfig() {
   cfg.tariff.pvpc_sensor = document.getElementById('t-pvpc-sensor').value;
 
   cfg.current_pv_sensor = document.getElementById('pv-current').value;
-  cfg.grid_power_sensor = document.getElementById('grid-power-sensor').value;
   cfg.load_sensor = document.getElementById('load-sensor').value;
   cfg.general.contracted_power_w = parseFloat(document.getElementById('g-contracted').value) || 0;
   cfg.general.horizon_hours = parseInt(document.getElementById('g-horizon').value, 10);

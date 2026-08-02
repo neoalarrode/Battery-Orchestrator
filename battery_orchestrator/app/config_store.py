@@ -29,8 +29,7 @@ DEFAULT_CONFIG = {
     },
     "pv_arrays": [],
     "current_pv_sensor": "",  # produccion solar INSTANTANEA real (W), corrige la hora actual del plan
-    "grid_power_sensor": "",  # potencia neta de red (+importa/-exporta), para calcular el consumo real
-    "load_sensor": "",  # alternativa: un sensor que YA sea consumo real (si lo tienes, evita el calculo)
+    "load_sensor": "",  # consumo base YA SIN carga de baterias (p.ej. "consumo_instantaneo"); + solar + descarga de baterias = consumo real
     "general": {
         "horizon_hours": 30,
         "cycle_seconds": 60,

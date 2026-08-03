@@ -11,7 +11,9 @@ explicables y deterministas.
   PASADA B (hacia adelante): simula hora a hora. Carga siempre gratis con
   excedente solar. Carga desde red SOLO en horas valle y SOLO lo que falte
   para llegar a la reserva calculada en la pasada A (nunca de mas). Descarga
-  en horas punta (y llano si sobra) para cubrir el deficit previsto.
+  en horas punta (y llano si sobra) para cubrir el deficit previsto — y
+  tambien en valle, pero solo con lo que sobre por encima de esa reserva
+  (p.ej. tras un dia de mucho sol con buena previsión para el siguiente).
 
 El resultado es un plan hora a hora, mas la accion concreta a ejecutar YA
 en la hora actual.
@@ -240,6 +242,22 @@ def build_plan(
                 hp.reason = "descarga para cubrir consumo en llano"
             else:
                 hp.reason = "sin descargar en llano: reservado para punta posterior"
+
+        # 5) Descarga en VALLE con lo que sobre por encima de la reserva:
+        #    si ya hay mas SOC del que hace falta para cubrir toda la punta
+        #    y llano futuros (p.ej. tras un dia de mucho sol, con previsión
+        #    de que el dia siguiente tambien se cubra bien solo), no tiene
+        #    sentido comprar a red ese consumo — aunque valle ya sea barato,
+        #    es dinero de mas gastado en energia que ya tienes almacenada.
+        #    Ademas libera hueco para no desperdiciar el excedente solar de
+        #    mañana. Nunca toca la reserva: solo gasta lo que sobra de ella.
+        elif deficit_w[i] > 0 and tier == "valle":
+            available = max(0.0, soc - reserve_wh)
+            discharge = min(deficit_w[i], max_discharge_w, available)
+            if discharge > 0:
+                soc -= discharge
+                hp.discharge_w = discharge
+                hp.reason = "descarga en valle: reserva de punta/llano ya cubierta, evita comprar de mas"
 
         if not hp.reason:
             hp.reason = "sin accion (no compensa)"

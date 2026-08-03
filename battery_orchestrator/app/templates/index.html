@@ -450,13 +450,17 @@
         <label>kWp instalados</label><input id="pv-kwp" type="number" step="0.1">
       </div>
     </div>
+    <label>Sensor de generación instantánea de este panel/string (opcional, recomendado)</label>
+    <input id="pv-current-sensor" placeholder="sensor.tejado_sur_potencia">
+    <p class="help">Corrige la hora actual de ESTE panel con el dato real en vez de depender solo de la previsión (nubes, etc.) — no hace falta un sensor agregado en HA, cada panel lleva el suyo y la app los suma. Las horas futuras siguen usando la previsión.</p>
+    <label>Tipo de instalación de este panel/string</label>
+    <select id="pv-install-type" onchange="updatePvInstallTypeHelp()">
+      <option value="ac_coupled">Instalación de autoconsumo (AC) — necesita orden de carga por AC</option>
+      <option value="hybrid">Conectado directo a una batería con inversor integrado — se autoconsume solo</option>
+    </select>
+    <p class="help" id="pv-install-type-help"></p>
     <div class="actions"><button onclick="addPvArray()">Añadir panel</button></div>
   </details>
-
-  <label style="margin-top:16px">Sensor de generación solar instantánea (opcional, recomendado)</label>
-  <input id="pv-current" placeholder="sensor.solar">
-  <p class="help">Corrige la hora actual del plan con el dato real en vez de depender solo de la previsión (nubes, etc.). Las horas futuras siguen usando la previsión.</p>
-  <div class="actions"><button onclick="saveConfig()">Guardar</button></div>
 </div>
 
 <div class="card">
@@ -554,6 +558,7 @@ async function loadConfig() {
   cfg = await (await fetch('api/config')).json();
   renderBatteries();
   renderPvArrays();
+  updatePvInstallTypeHelp();
 
   document.getElementById('t-mode').value = cfg.tariff.mode || 'fixed';
   document.getElementById('t-punta').value = cfg.tariff.punta_price;
@@ -565,7 +570,6 @@ async function loadConfig() {
   document.getElementById('t-pvpc-sensor').value = cfg.tariff.pvpc_sensor || '';
   toggleTariffMode();
 
-  document.getElementById('pv-current').value = cfg.current_pv_sensor || '';
   document.getElementById('load-sensor').value = cfg.load_sensor || '';
   document.getElementById('g-contracted').value = cfg.general.contracted_power_w || 0;
   document.getElementById('g-horizon').value = cfg.general.horizon_hours;
@@ -641,9 +645,21 @@ function renderPvArrays() {
       <div>
         <div class="item-name">${a.name || '(sin nombre)'}</div>
         <div class="meta">${a.mode === 'entity' ? 'Sensor HA: ' + a.entity_id : `Forecast.Solar API (${a.kwp} kWp)`}</div>
+        <div class="meta">${a.current_sensor ? 'Instantáneo: ' + a.current_sensor : 'Sin sensor instantáneo (solo previsión)'}</div>
+        <div class="meta">${a.installation_type === 'hybrid' ? 'Conectado directo a batería (inversor integrado)' : 'Autoconsumo (AC)'}</div>
       </div>
       <button class="danger" onclick="deletePvArray('${a.id}')">Eliminar</button>
     </div>`).join('');
+}
+
+const PV_INSTALL_TYPE_HELP = {
+  ac_coupled: 'Este panel/string es parte de una instalación de autoconsumo aparte — para aprovechar su excedente, la app tiene que activar el modo carga de la batería y fijar la potencia por AC.',
+  hybrid: 'Este panel/string está conectado directamente a una batería con inversor integrado. No hace falta que la app active ningún modo de carga para aprovechar su excedente — la batería ya lo absorbe sola al regular su propia salida. La app descuenta automáticamente esta potencia de lo que manda pedir por AC al resto.',
+};
+
+function updatePvInstallTypeHelp() {
+  const type = document.getElementById('pv-install-type').value;
+  document.getElementById('pv-install-type-help').textContent = PV_INSTALL_TYPE_HELP[type] || '';
 }
 
 function showBatteryFormError(msg) {
@@ -761,6 +777,8 @@ async function addPvArray() {
     declination: parseFloat(document.getElementById('pv-decl').value) || 30,
     azimuth: parseFloat(document.getElementById('pv-az').value) || 0,
     kwp: parseFloat(document.getElementById('pv-kwp').value) || 1,
+    current_sensor: document.getElementById('pv-current-sensor').value.trim() || null,
+    installation_type: document.getElementById('pv-install-type').value,
   };
   if (array.mode === 'entity' && !array.entity_id) {
     toast('Indica la entidad de previsión, o cambia a modo API.'); return;
@@ -800,7 +818,6 @@ async function saveConfig() {
   cfg.tariff.weekend_is_valle = document.getElementById('t-weekend').checked;
   cfg.tariff.pvpc_sensor = document.getElementById('t-pvpc-sensor').value;
 
-  cfg.current_pv_sensor = document.getElementById('pv-current').value;
   cfg.load_sensor = document.getElementById('load-sensor').value;
   cfg.general.contracted_power_w = parseFloat(document.getElementById('g-contracted').value) || 0;
   cfg.general.horizon_hours = parseInt(document.getElementById('g-horizon').value, 10);

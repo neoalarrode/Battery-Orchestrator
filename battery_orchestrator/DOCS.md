@@ -7,6 +7,7 @@
 <p align="center">
   <a href="#qué-hace">Qué hace</a> ·
   <a href="#primeros-pasos">Primeros pasos</a> ·
+  <a href="#tipo-de-instalación-por-panelstring">Tipo de instalación</a> ·
   <a href="#las-pestañas">Las pestañas</a> ·
   <a href="#salud-de-batería-cómo-se-calcula">Salud de batería</a> ·
   <a href="#ahorro-y-alertas-de-consumo">Ahorro y alertas</a> ·
@@ -34,6 +35,7 @@ Cada ciclo (configurable, por defecto cada 60s):
    - Cargar en valle lo justo para cubrir la punta más próxima (se salta en modo "Autoconsumo solar").
    - Si con eso no basta (la previsión de punta futura supera lo que cabría cargar en valle), cargar también en llano — "carga de emergencia" — en vez de arriesgarse a quedarse corto (también se salta en "Autoconsumo solar").
    - Descargar en punta primero; en llano solo con el excedente que sobre una vez reservado lo necesario para toda la punta futura del día.
+   - Descargar también en valle, pero solo con el excedente que sobre por encima de esa misma reserva — típico tras un día de mucho sol con buena previsión para el siguiente: en vez de comprar de red por la noche (aunque sea barato) o dejar la batería llena sin más, se gasta lo que sobra y se libera hueco para no desperdiciar el sol de mañana. Nunca toca la reserva.
 5. Reparte la potencia de carga entre tus baterías proporcional a su capacidad real declarada (una batería llena recibe 0W, el resto se reparte lo que sobra). La descarga NO se reparte — cada batería se autogestiona — pero sí se fija el límite de potencia de descarga de cada una: el máximo que declaraste, salvo que esté llena y siga habiendo excedente solar, en cuyo caso se pone a 0W para que no se autodescargue sin necesidad.
 6. Aplica la decisión a Home Assistant (o solo la registra, en modo simulación) y actualiza el histórico del día y las observaciones de salud de cada batería.
 
@@ -47,13 +49,22 @@ texto plano.
 2. **Empieza en modo simulación** (activado por defecto en "General" → pestaña "Configuración"): en la pestaña "Estado actual" verás exactamente lo que HARÍA, sin tocar nada real.
 3. En "Configuración → Baterías", da de alta cada una: nombre, capacidad real en Wh, el sensor de su SOC (%), el switch de carga y el de descarga, la potencia máxima de carga/descarga y el SOC mínimo/máximo que quieras respetar. Si tu batería expone entidades `number` para limitar la potencia de carga/descarga, decláralas también (opcional pero recomendado — si no las declaras, la app solo enciende/apaga el switch sin poder repartir potencia con precisión). El "sensor de descarga" (opcional) es un sensor de potencia que solo salga positivo cuando la batería está aportando energía a la casa (p. ej. `..._load_from_battery`); se usa para el cálculo de consumo real y para estimar la salud.
 4. Configura la tarifa en "Configuración → Tarifa eléctrica": fija (introduce tus precios punta/llano/valle y horarios) o PVPC (indica tu sensor de HA — los tramos se calculan solos por terciles de precio del día).
-5. Añade tus paneles solares en "Configuración → Previsión solar": por sensor de HA que ya publique previsión, o directamente por la API de Forecast.Solar (necesitas lat/lon/inclinación/azimut/kWp de tu instalación; la API key es opcional, vacío = plan gratuito). Si tienes un sensor de generación solar instantánea, decláralo también — corrige la hora actual del plan con el dato real en vez de depender solo de la previsión.
+5. Añade tus paneles solares en "Configuración → Previsión solar": por sensor de HA que ya publique previsión, o directamente por la API de Forecast.Solar (necesitas lat/lon/inclinación/azimut/kWp de tu instalación; la API key es opcional, vacío = plan gratuito). Si tienes un sensor de generación instantánea de ESE panel/string, decláralo en el mismo formulario — corrige la hora actual de ese panel con el dato real en vez de depender solo de la previsión. Si tienes varios strings/tejados, cada uno con su propio sensor, no hace falta crear ningún sensor agregado en Home Assistant: declara cada uno por separado y la app los suma sola, tanto la previsión como la generación real. Indica también el **tipo de instalación** de cada panel (ver más abajo).
 6. Consumo real de la casa, en "Configuración → Consumo de la casa": indica un sensor que **ya reste la carga AC de las baterías** (por ejemplo un "consumo instantáneo" de tu instalación) — **no** un medidor de red en bruto que sí la incluya. La app le suma sola, hora a hora, la producción solar y la descarga de cada batería (los sensores del paso 3) para reconstruir el consumo real completo, sea cual sea la fuente que lo esté cubriendo en cada momento. No hace falta ningún sensor con signo ni de carga: los términos de carga se cancelan matemáticamente al partir de un sensor que ya los resta.
 7. Si tienes potencia contratada, indícala en "Configuración → Seguridad y límites" para que nunca la supere al cargar desde red (la carga con excedente solar no cuenta, no tira de la red).
 8. Pulsa "Ejecutar ciclo ahora" en "Estado actual" y revisa el plan del día y la gráfica de SOC en la pestaña "Previsión".
 9. Elige tu modo de prioridad en "Configuración → Prioridad" si el comportamiento por defecto ("Ahorro") no es el que quieres — ver [Prioridad](#prioridad-ahorro-autoconsumo-o-longevidad).
 10. Cuando confíes en las decisiones, desactiva el modo simulación.
 11. Descarga una copia de tu configuración desde "Configuración → Copia de seguridad" — útil si algún día reinstalas el add-on.
+
+## Tipo de instalación por panel/string
+
+El tipo de instalación se declara en cada **panel/array solar**, no en la batería — porque una misma instalación puede tener paneles de los dos tipos a la vez (p. ej. un string conectado directo a una batería y otro alimentando una instalación de autoconsumo aparte). Cada panel es uno de dos tipos:
+
+- **Instalación de autoconsumo (AC)** — este panel/string NO está conectado directamente a ninguna batería. Para que una batería aproveche su excedente, la app tiene que activar explícitamente el modo carga y fijar la potencia por AC — es el comportamiento de siempre.
+- **Conectado directo a batería (inversor integrado)** — este panel/string va cableado directamente a una batería con inversor híbrido/integrado. En este caso NO hace falta que la app active ningún modo de carga: la batería ya absorbe ese excedente ella sola, al regular su propia salida se queda con lo que sobra. La app descuenta automáticamente esa potencia de lo que manda pedir por AC al resto de baterías (para no duplicar), y solo registra una estimación para el histórico y la salud — no manda ninguna orden real por esa parte. Para cargar desde red (valle o emergencia en llano) y para descargar, la app sigue mandando la orden explícita en cualquier caso, sea cual sea el tipo del panel.
+
+Si te equivocas de tipo no pasa nada grave: marcar un panel de autoconsumo como "conectado a batería" hace que la app descuente de más al pedir carga por AC (las baterías cargarán algo menos rápido de lo que podrían); marcar un panel realmente conectado a batería como "autoconsumo" hace que la app pida más potencia por AC de la que hace falta (inofensivo, la batería ya estaba recibiendo esa energía por su cuenta). Revisa el log de "Estado actual" tras el cambio para confirmar que hace lo que esperas.
 
 ## Las pestañas
 
@@ -109,6 +120,10 @@ En "Configuración → Prioridad" eliges cómo decide el planificador entre tres
 - **Ahorro** (por defecto) — el comportamiento de siempre: carga con excedente solar, y también desde red en valle (o en llano de emergencia si hace falta) lo justo para cubrir la próxima punta.
 - **Autoconsumo solar** — la batería SOLO carga con excedente solar, nunca desde red aunque esté barata. Menos ahorro potencial en días con poco sol, pero cero ciclos de carga "artificiales" pagados.
 - **Longevidad de batería** — igual que "Ahorro", pero el objetivo de carga nunca supera el 90% del SOC máximo real configurado, para reducir el desgaste de mantener la batería siempre llena.
+
+Además, con "Ahorro" o "Longevidad" seleccionado (no aplica con "Autoconsumo solar", que nunca carga desde red), hay un interruptor aparte:
+
+- **Carga sostenida** — en vez de cargar siempre a máxima potencia, la carga deliberada desde red (valle y la de emergencia en llano) se reparte a una potencia sostenida a lo largo de las horas que quedan hasta la primera vez que la batería vaya a hacer falta de verdad (la próxima hora, sea llano o punta, con consumo previsto por encima del solar — en valle nunca se descarga, así que no cuenta), con un margen de seguridad del 20% por si la previsión falla un poco. Cargar despacio y sostenido genera menos calor y estrés que ráfagas a máxima potencia. Si el tiempo se echa encima (por ejemplo, entra en la carga de emergencia en llano con la punta ya cerca), el mismo cálculo da una potencia alta por sí solo — no hay una rama de "pánico" aparte, es el mismo número con menos horas para repartir. La carga con excedente solar no se ve afectada: es oportunista y gratis, no tiene sentido ir más despacio y desperdiciar sol.
 
 ## Notas de seguridad
 

@@ -9,6 +9,14 @@ Cada array puede ser:
     Forecast.Solar. La URL base es fija (no es un secreto), la clave de
     API y los parametros de la instalacion los da el usuario.
 
+Y cada array declara ademas su "installation_type": "ac_coupled" (parte de
+una instalacion de autoconsumo normal, necesita que la app mande una orden
+de carga por AC para que una bateria aproveche su excedente) o "hybrid"
+(paneles conectados directamente a una bateria con inversor integrado, que
+absorbe su excedente sola sin ninguna orden). Es una propiedad de cada
+panel/string, no de la bateria: una misma instalacion puede tener paneles
+de los dos tipos a la vez.
+
 La llamada a la API se cachea (por array) para no agotar la cuota gratuita
 de peticiones/hora, independientemente de cada cuanto se ejecute el ciclo
 de decision.
@@ -100,13 +108,47 @@ def get_array_forecast(array: dict, horizon_hours: int, refresh_seconds: int) ->
     return ha_client.pv_forecast_from_entity(entity_id, horizon_hours)
 
 
-def get_pv_forecast_total(pv_arrays: list[dict], horizon_hours: int, refresh_seconds: int = 1800) -> list[float]:
-    """Suma la previsión de todos los arrays declarados."""
+def get_pv_forecast_total(
+    pv_arrays: list[dict], horizon_hours: int, refresh_seconds: int = 1800
+) -> tuple[list[float], float | None, float]:
+    """
+    Suma la previsión de todos los arrays declarados, y corrige la hora
+    ACTUAL (indice 0) con la generación real medida en cada array que
+    tenga su propio sensor de generación instantánea declarado
+    ("current_sensor") — asi puedes declarar varios strings/tejados sin
+    tener que crear un sensor agregado aparte en Home Assistant: cada uno
+    lleva su propio dato real, y aqui se suman igual que la previsión.
+
+    Devuelve (forecast_w, pv_now_actual_w, hybrid_now_w):
+      - forecast_w: la lista horaria total.
+      - pv_now_actual_w: la generación real total ahora mismo — None si
+        ningun array declara sensor instantáneo (para que el llamante
+        sepa que no hay dato real).
+      - hybrid_now_w: cuanto de la hora actual viene de arrays marcados
+        como "hybrid" (paneles conectados directamente a una bateria con
+        inversor integrado) — esa energia ya se esta absorbiendo sola,
+        sin que la app tenga que mandar ninguna orden de carga por AC, asi
+        que el llamante debe descontarla de lo que decida mandar por AC.
+    """
     if not pv_arrays:
-        return [0.0] * horizon_hours
+        return [0.0] * horizon_hours, None, 0.0
+
     total = [0.0] * horizon_hours
+    any_live = False
+    hybrid_now = 0.0
+
     for array in pv_arrays:
         series = get_array_forecast(array, horizon_hours, refresh_seconds)
+        current_sensor = array.get("current_sensor")
+        if current_sensor and horizon_hours > 0:
+            live_value = ha_client.get_numeric_state(current_sensor, default=None)
+            if live_value is not None:
+                series = [live_value] + list(series[1:])
+                any_live = True
         for i in range(horizon_hours):
             total[i] += series[i] if i < len(series) else 0.0
-    return total
+        if horizon_hours > 0 and array.get("installation_type") == "hybrid" and series:
+            hybrid_now += series[0]
+
+    pv_now_actual = total[0] if any_live and horizon_hours > 0 else None
+    return total, pv_now_actual, hybrid_now

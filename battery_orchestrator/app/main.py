@@ -76,33 +76,27 @@ def run_cycle():
     now = datetime.now()
     prices_tiers = tariff_source.get_prices_tiers(cfg["tariff"], now, horizon)
 
-    pv_forecast = pv_source.get_pv_forecast_total(
+    # Previsión solar: se suman todos los arrays declarados, y la hora
+    # ACTUAL (indice 0) se corrige con la generación real medida en cada
+    # array que tenga su propio sensor instantáneo declarado — asi no hace
+    # falta un sensor agregado en HA para tener varios strings/tejados.
+    pv_forecast, pv_now_actual, hybrid_pv_now_w = pv_source.get_pv_forecast_total(
         cfg["pv_arrays"], horizon, refresh_seconds=cfg["general"]["pv_refresh_seconds"]
     )
 
-    # Correccion en tiempo real: para la hora ACTUAL (indice 0) usamos la
-    # produccion solar real medida ahora mismo en vez de la previsión, si
-    # hay un sensor configurado. Las horas futuras siguen siendo previsión
-    # (todavia no existe un "dato real" de algo que no ha pasado).
-    current_pv_sensor = cfg.get("current_pv_sensor")
-    pv_now_actual = None
-    if current_pv_sensor:
-        pv_now_actual = ha_client.get_numeric_state(current_pv_sensor, default=None)
-        if pv_now_actual is not None and pv_forecast:
-            pv_forecast[0] = pv_now_actual
-
-    # Consumo real = consumo base (ya sin carga de baterias) + solar + descarga
-    # de baterias. Si no hay ningun sensor de baterias declarado, es
-    # simplemente el consumo base (funciona igual, solo menos preciso en
-    # las horas en que la bateria cubre gran parte del consumo).
+    # Consumo real = consumo base (ya sin carga de baterias) + solar (de
+    # cada array con sensor instantáneo) + descarga de baterias. Si no hay
+    # ningun sensor de baterias/solar declarado, es simplemente el consumo
+    # base (funciona igual, solo menos preciso en las horas en que la
+    # bateria o el sol cubren gran parte del consumo).
     load_sensor = cfg.get("load_sensor")
     history_days = cfg["general"]["history_days_for_load"]
 
     if load_sensor:
         battery_discharge_sensors = [b.get("power_sensor") for b in batteries_cfg if b.get("power_sensor")]
-        solar_sensor_for_load = cfg.get("current_pv_sensor") or None
+        solar_sensors_for_load = [a.get("current_sensor") for a in cfg["pv_arrays"] if a.get("current_sensor")]
         load_forecast = ha_client.true_load_forecast(
-            load_sensor, solar_sensor_for_load, battery_discharge_sensors, horizon, days=history_days
+            load_sensor, solar_sensors_for_load, battery_discharge_sensors, horizon, days=history_days
         )
     else:
         load_forecast = [300.0] * horizon
@@ -171,8 +165,14 @@ def run_cycle():
 
     now_hp = plan[0]
     pv_surplus_now = max(0.0, now_hp.pv_w - now_hp.load_w)
+    # Lo que ya se esta autoconsumiendo directo (paneles "hybrid" conectados
+    # a una bateria con inversor integrado) no hace falta volver a mandarlo
+    # por AC — se descuenta de la carga que SI hay que ordenar por AC.
+    ac_charge_w = now_hp.charge_w
+    if now_hp.charge_source == "solar":
+        ac_charge_w = max(0.0, now_hp.charge_w - hybrid_pv_now_w)
     distribution = battery_exec.plan_distribution(
-        batteries, now_hp.charge_w, now_hp.discharge_w, pv_surplus_w=pv_surplus_now
+        batteries, ac_charge_w, now_hp.discharge_w, pv_surplus_w=pv_surplus_now
     )
     dry_run = bool(cfg["general"]["dry_run"])
     log_lines = battery_exec.execute(batteries, distribution, dry_run=dry_run)

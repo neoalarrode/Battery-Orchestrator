@@ -28,7 +28,6 @@ DEFAULT_CONFIG = {
         "pvpc_sensor": "",
     },
     "pv_arrays": [],
-    "current_pv_sensor": "",  # produccion solar INSTANTANEA real (W), corrige la hora actual del plan
     "load_sensor": "",  # consumo base YA SIN carga de baterias (p.ej. "consumo_instantaneo"); + solar + descarga de baterias = consumo real
     "general": {
         "horizon_hours": 30,
@@ -52,6 +51,8 @@ DEFAULT_PV_ARRAY = {
     "declination": 30,
     "azimuth": 0,
     "kwp": 1.0,
+    "current_sensor": "",  # generacion INSTANTANEA real (W) de este array/string, corrige la hora actual del plan
+    "installation_type": "ac_coupled",  # "ac_coupled" (necesita orden de carga por AC) | "hybrid" (conectado directo a una bateria, se autoconsume solo)
 }
 
 
@@ -65,7 +66,31 @@ def load_config() -> dict:
         # completar claves que falten (por si se actualiza el esquema)
         merged = json.loads(json.dumps(DEFAULT_CONFIG))
         _deep_merge(merged, cfg)
+        if _migrate_legacy_pv_sensor(merged):
+            save_config(merged)
         return merged
+
+
+def _migrate_legacy_pv_sensor(cfg: dict) -> bool:
+    """
+    Versiones anteriores tenian un unico "current_pv_sensor" global para
+    toda la instalacion. Ahora cada array de "pv_arrays" lleva el suyo
+    propio ("current_sensor"), para poder declarar varios strings/tejados
+    sin tener que crear un sensor agregado en Home Assistant. Si solo hay
+    un array declarado (el caso mas comun), se traslada solo. Con varios
+    arrays no hay forma de adivinar a cual pertenecia, asi que se deja el
+    campo viejo tal cual para que se reasigne a mano desde la interfaz.
+    """
+    legacy_sensor = cfg.get("current_pv_sensor")
+    if not legacy_sensor:
+        cfg.pop("current_pv_sensor", None)
+        return False
+    arrays = cfg.get("pv_arrays") or []
+    if len(arrays) == 1 and not arrays[0].get("current_sensor"):
+        arrays[0]["current_sensor"] = legacy_sensor
+        del cfg["current_pv_sensor"]
+        return True
+    return False
 
 
 def save_config(cfg: dict) -> None:

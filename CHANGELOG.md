@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0
+- Nuevo: interfaz bilingüe español/inglés — se autodetecta el idioma del navegador, y hay un desplegable con banderita en la esquina superior derecha para elegirlo a mano (Auto/Español/English). El idioma elegido se guarda como el de esta instalación (junto al resto de la configuración), así que no hace falta volver a seleccionarlo al entrar desde otro dispositivo o navegador.
+- Nuevo: README y DOCS traducidos al inglés (`README.en.md`, `DOCS.en.md`), con enlaces cruzados entre ambos idiomas en la cabecera de cada documento.
+- Nuevo: los paneles/arrays solares ahora se pueden editar, no solo añadir/eliminar (igual que las baterías).
+- Arreglo: la tarjeta "Seguridad y límites" no tenía botón de guardado — los cambios de potencia contratada o días de histórico no se guardaban hasta pulsar el de otra tarjeta.
+
+## 0.5.6
+- Arreglo: si Home Assistant tardaba en responder (timeout puntual del Supervisor) al mandar la orden a UNA batería, el ciclo entero se abortaba con una excepción sin haber llegado a avisar al resto de baterías esa pasada. Ahora cada batería se manda por separado: un fallo puntual en una queda registrado como aviso en su propia línea del log, y no impide que se les mande la orden a las demás ni que el ciclo termine con normalidad (histórico, ahorro, estado, etc.).
+
 ## 0.5.5
 - Arreglo: con un horizonte de previsión que llegaba a la punta del día siguiente, el motor sumaba la punta de HOY y la de MAÑANA como si fuera una sola reserva a cubrir ya mismo — sin contar con que el valle de esta noche vuelve a recargar la batería antes de que llegue la punta de mañana. Esto forzaba cargas de emergencia en llano (más caras que valle) y bloqueaba descargas en llano que en realidad no hacían falta, aunque sobrara batería al final del día. Ahora la cuenta de "punta que queda por cubrir" se corta en la próxima hora valle, ya que esa hora es en sí misma una nueva oportunidad de recarga barata.
 

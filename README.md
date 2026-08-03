@@ -15,6 +15,10 @@
   <img alt="Sin cajas negras" src="https://img.shields.io/badge/sin%20cajas%20negras-eae8f7?style=flat-square&labelColor=0b0a16">
 </p>
 
+<p align="center">
+  🇪🇸 Español · <a href="README.en.md">🇬🇧 Read in English</a>
+</p>
+
 ---
 
 <p align="center">

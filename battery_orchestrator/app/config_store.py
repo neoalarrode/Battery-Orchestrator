@@ -38,6 +38,7 @@ DEFAULT_CONFIG = {
         "contracted_power_w": 0,
         "priority_mode": "ahorro",  # "ahorro" | "autoconsumo" | "longevidad"
         "paced_charging": False,  # repartir la carga desde red en el tiempo disponible en vez de ir siempre al maximo (solo aplica con "ahorro" o "longevidad")
+        "language": "auto",  # "auto" (detecta el idioma del navegador) | "es" | "en" — se guarda como el idioma por defecto de esta instalacion
     },
 }
 

@@ -5,6 +5,10 @@
 <h1 align="center">Battery Orchestrator — documentación</h1>
 
 <p align="center">
+  🇪🇸 Español · <a href="DOCS.en.md">🇬🇧 Read in English</a>
+</p>
+
+<p align="center">
   <a href="#qué-hace">Qué hace</a> ·
   <a href="#primeros-pasos">Primeros pasos</a> ·
   <a href="#tipo-de-instalación-por-panelstring">Tipo de instalación</a> ·

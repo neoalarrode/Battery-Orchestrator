@@ -138,7 +138,15 @@ def plan_distribution(batteries: list[Battery], charge_w: float, discharge_w: fl
 
 
 def execute(batteries: list[Battery], distribution: dict, dry_run: bool = True) -> list[str]:
-    """Aplica la distribucion a HA. En dry_run solo devuelve lo que HARIA."""
+    """
+    Aplica la distribucion a HA. En dry_run solo devuelve lo que HARIA.
+
+    Cada bateria se manda por separado, envuelta en su propio try/except:
+    un timeout o fallo puntual hablando con HA para UNA bateria no debe
+    impedir que se les mande la orden al resto, ni tumbar el ciclo entero
+    (la proxima pasada, 60s despues, ya lo reintenta solo). El aviso queda
+    en el log de esa bateria en vez de desaparecer en una excepcion.
+    """
     log_lines = []
     action = distribution["action"]
     by_id = {b.id: b for b in batteries}
@@ -155,30 +163,36 @@ def execute(batteries: list[Battery], distribution: dict, dry_run: bool = True) 
 
         if action == "charge" and entry["enabled"]:
             line = f"[{b.name}] CARGAR a {power:.0f} W ({entry['note']}, SOC {soc_txt})"
-            if not dry_run:
+            def apply():
                 ha_client.turn_off(b.discharge_switch)
                 ha_client.turn_on(b.charge_switch)
                 if b.charge_power_limit_entity:
                     ha_client.set_number(b.charge_power_limit_entity, power)
         elif action == "discharge" and entry["enabled"]:
             line = f"[{b.name}] DESCARGA activada, limite {power:.0f} W ({entry['note']}, SOC {soc_txt})"
-            if not dry_run:
+            def apply():
                 ha_client.turn_off(b.charge_switch)
                 ha_client.turn_on(b.discharge_switch)
                 if b.discharge_power_limit_entity:
                     ha_client.set_number(b.discharge_power_limit_entity, power)
         elif action == "discharge" and not entry["enabled"]:
             line = f"[{b.name}] descarga BLOQUEADA a 0W ({entry['note']}, SOC {soc_txt})"
-            if not dry_run:
+            def apply():
                 if b.discharge_power_limit_entity:
                     ha_client.set_number(b.discharge_power_limit_entity, 0)
                 else:
                     ha_client.turn_off(b.discharge_switch)
         else:
             line = f"[{b.name}] sin accion (SOC {soc_txt})"
-            if not dry_run:
+            def apply():
                 ha_client.turn_off(b.charge_switch)
                 ha_client.turn_off(b.discharge_switch)
+
+        if not dry_run:
+            try:
+                apply()
+            except Exception as e:
+                line += f" — AVISO: no se pudo aplicar en Home Assistant ({e})"
 
         log_lines.append(("[SIMULACION] " if dry_run else "") + line)
 

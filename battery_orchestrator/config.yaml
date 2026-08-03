@@ -1,5 +1,5 @@
 name: "Battery Orchestrator"
-version: "0.5.5"
+version: "0.6.0"
 slug: "battery_orchestrator"
 description: "Carga y descarga adaptativa de baterias por precio, sol y consumo real, sin cajas negras"
 url: "https://github.com/neoalarrode/EF-HA-Orchestrator"

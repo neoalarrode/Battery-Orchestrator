@@ -70,7 +70,7 @@
 
   .topbar {
     display: flex; align-items: flex-start; justify-content: space-between;
-    margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid var(--border);
+    margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid var(--border); gap: 12px; flex-wrap: wrap;
   }
   .topbar h1 {
     font-family: var(--font-display); font-size: 1.6rem; font-weight: 700; margin: 0;
@@ -88,6 +88,13 @@
     font-size: .68rem; font-weight: 600; color: var(--accent-2); margin: 0 0 6px;
   }
   .subtitle { color: var(--muted); font-size: 0.92rem; margin-top: 6px; max-width: 52ch; }
+
+  .topbar-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .lang-select {
+    width: auto; padding: 6px 10px; font-size: 0.78rem; font-family: var(--font-mono);
+    border-radius: 20px; background: var(--bg-alt); border: 1px solid var(--border); color: var(--text);
+    cursor: pointer;
+  }
 
   .card {
     background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
@@ -324,55 +331,59 @@
 
 <div class="topbar">
   <div>
-    <p class="eyebrow">Gestión energética del hogar</p>
+    <p class="eyebrow" data-i18n="topbar_eyebrow">Gestión energética del hogar</p>
     <h1><span class="brand-mark" aria-hidden="true">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="currentColor"/>
       </svg>
     </span>Battery Orchestrator</h1>
-    <div class="subtitle">Carga y descarga adaptativa por precio, sol y consumo real — sin cajas negras.</div>
+    <div class="subtitle" data-i18n="topbar_subtitle">Carga y descarga adaptativa por precio, sol y consumo real — sin cajas negras.</div>
   </div>
-  <span id="mode-pill" class="pill"></span>
+  <div class="topbar-right">
+    <select class="lang-select" id="lang-select" onchange="onLangChange()" aria-label="Idioma / Language"></select>
+    <span id="mode-pill" class="pill"></span>
+  </div>
 </div>
 
 <nav class="tabs" role="tablist">
-  <button class="tab-btn active" data-tab="inicio" onclick="switchTab('inicio')" type="button">Estado actual</button>
-  <button class="tab-btn" data-tab="prevision" onclick="switchTab('prevision')" type="button">Previsión</button>
-  <button class="tab-btn" data-tab="salud" onclick="switchTab('salud')" type="button">Salud de batería</button>
-  <button class="tab-btn" data-tab="config" onclick="switchTab('config')" type="button">Configuración</button>
+  <button class="tab-btn active" data-tab="inicio" data-i18n="tab_estado" onclick="switchTab('inicio')" type="button">Estado actual</button>
+  <button class="tab-btn" data-tab="prevision" data-i18n="tab_prevision" onclick="switchTab('prevision')" type="button">Previsión</button>
+  <button class="tab-btn" data-tab="salud" data-i18n="tab_salud" onclick="switchTab('salud')" type="button">Salud de batería</button>
+  <button class="tab-btn" data-tab="config" data-i18n="tab_config" onclick="switchTab('config')" type="button">Configuración</button>
 </nav>
 
 <div class="tab-panel active" data-tab="inicio">
 
 <div class="card">
-  <h2>Estado actual <span class="hint" id="last-run"></span><span id="health-pill" class="pill"></span></h2>
+  <h2><span data-i18n="card_estado_title">Estado actual</span> <span class="hint" id="last-run"></span><span id="health-pill" class="pill"></span></h2>
   <div id="stat-grid" class="stat-grid" style="margin-bottom:16px"></div>
   <div id="status"></div>
   <div class="actions">
-    <button onclick="runNow()">Ejecutar ciclo ahora</button>
+    <button onclick="runNow()" data-i18n="btn_run_now">Ejecutar ciclo ahora</button>
   </div>
 </div>
 
 <div id="anomaly-box"></div>
 
 <div class="card">
-  <h2>Flujo de energía ahora mismo <span class="hint" id="autoconsumo-hint"></span></h2>
+  <h2><span data-i18n="card_flow_title">Flujo de energía ahora mismo</span> <span class="hint" id="autoconsumo-hint"></span></h2>
+  <p class="help" data-i18n="card_flow_sub">De dónde sale la potencia solar y a dónde va, de un vistazo — sin sumar los números sueltos de las otras tarjetas.</p>
   <div id="energy-flow"></div>
 </div>
 
 <div class="row-2">
   <div class="card">
-    <h2>Margen de potencia contratada</h2>
+    <h2 data-i18n="card_power_title">Margen de potencia contratada</h2>
     <div id="power-meter"></div>
   </div>
   <div class="card">
-    <h2>Baterías</h2>
+    <h2 data-i18n="card_batteries_home_title">Baterías</h2>
     <div id="battery-breakdown"></div>
   </div>
 </div>
 
 <div class="card">
-  <h2>Próxima punta</h2>
+  <h2 data-i18n="card_next_punta_title">Próxima punta</h2>
   <div id="next-punta"></div>
 </div>
 
@@ -381,24 +392,35 @@
 <div class="tab-panel" data-tab="prevision">
 
 <div class="card">
-  <h2>SOC previsto <span class="hint">nivel agregado de baterías a lo largo del día</span></h2>
+  <h2><span data-i18n="card_soc_forecast_title">SOC previsto</span> <span class="hint" data-i18n="card_soc_forecast_hint">nivel agregado de baterías a lo largo del día</span></h2>
   <div class="chart-wrap">
     <div id="soc-chart"></div>
     <div class="chart-tooltip" id="chart-tooltip"></div>
   </div>
   <div class="chart-legend">
-    <span><span class="dot" style="background:var(--accent)"></span>SOC (%)</span>
-    <span><span class="dot" style="background:var(--green)"></span>Valle</span>
-    <span><span class="dot" style="background:var(--amber)"></span>Llano</span>
-    <span><span class="dot" style="background:var(--red)"></span>Punta</span>
+    <span><span class="dot" style="background:var(--accent)"></span><span data-i18n="legend_soc">SOC (%)</span></span>
+    <span><span class="dot" style="background:var(--green)"></span><span data-i18n="legend_valle">Valle</span></span>
+    <span><span class="dot" style="background:var(--amber)"></span><span data-i18n="legend_llano">Llano</span></span>
+    <span><span class="dot" style="background:var(--red)"></span><span data-i18n="legend_punta">Punta</span></span>
   </div>
 </div>
 
 <div class="card">
-  <h2>Plan del día <span class="hint">de 00:00 a 00:00 — lo ya ocurrido hoy + lo previsto</span></h2>
+  <h2><span data-i18n="card_plan_title">Plan del día</span> <span class="hint" data-i18n="card_plan_hint">de 00:00 a 00:00 — lo ya ocurrido hoy + lo previsto</span></h2>
   <div style="overflow-x:auto">
     <table id="plan-table">
-      <thead><tr><th></th><th>Hora</th><th>Tramo</th><th>Precio</th><th>Sol</th><th>Consumo</th><th>Carga</th><th>Descarga</th><th>SOC</th><th>Motivo</th></tr></thead>
+      <thead><tr>
+        <th></th>
+        <th data-i18n="th_hora">Hora</th>
+        <th data-i18n="th_tramo">Tramo</th>
+        <th data-i18n="th_precio">Precio</th>
+        <th data-i18n="th_sol">Sol</th>
+        <th data-i18n="th_consumo">Consumo</th>
+        <th data-i18n="th_carga">Carga</th>
+        <th data-i18n="th_descarga">Descarga</th>
+        <th data-i18n="th_soc">SOC</th>
+        <th data-i18n="th_motivo">Motivo</th>
+      </tr></thead>
       <tbody></tbody>
     </table>
   </div>
@@ -409,8 +431,8 @@
 <div class="tab-panel" data-tab="salud">
 
 <div class="card">
-  <h2>Salud de batería <span class="hint">capacidad real estimada vs. declarada</span></h2>
-  <p class="help">Cada vez que una batería carga o descarga un tramo grande de SOC, la app mide cuánta energía ha hecho falta para ese movimiento y de ahí calcula cuánta energía cabe realmente hoy — <code>capacidad real = energía movida / (Δ SOC % / 100)</code>. La salud es esa capacidad real dividida por la que declaraste al darla de alta. Es una estimación (mediana de las últimas observaciones fiables), no una medición del BMS.</p>
+  <h2><span data-i18n="card_salud_title">Salud de batería</span> <span class="hint" data-i18n="card_salud_hint">capacidad real estimada vs. declarada</span></h2>
+  <p class="help" data-i18n-html="salud_help">Cada vez que una batería carga o descarga un tramo grande de SOC, la app mide cuánta energía ha hecho falta para ese movimiento y de ahí calcula cuánta energía cabe realmente hoy — <code>capacidad real = energía movida / (Δ SOC % / 100)</code>. La salud es esa capacidad real dividida por la que declaraste al darla de alta. Es una estimación (mediana de las últimas observaciones fiables), no una medición del BMS.</p>
   <div id="health-list"></div>
 </div>
 
@@ -419,171 +441,176 @@
 <div class="tab-panel" data-tab="config">
 
 <div class="card">
-  <h2>Baterías <span class="hint" id="battery-count"></span></h2>
+  <h2><span data-i18n="card_baterias_title">Baterías</span> <span class="hint" id="battery-count"></span></h2>
   <div id="batteries-list"></div>
 
   <details id="add-battery-panel">
-    <summary class="add-toggle" id="add-battery-summary">+ Añadir batería</summary>
+    <summary class="add-toggle" id="add-battery-summary" data-i18n="add_battery_toggle">+ Añadir batería</summary>
     <div class="grid2" style="margin-top:10px">
       <div>
-        <label>Nombre</label><input id="b-name" placeholder="Ultra">
-        <label>Capacidad (Wh)</label><input id="b-capacity" type="number" placeholder="6000">
-        <label>Sensor SOC (%)</label><input id="b-soc" placeholder="sensor.mi_bateria_nivel">
-        <label>Switch de carga</label><input id="b-charge-sw" placeholder="switch.mi_bateria_charging_task">
-        <label>Switch de descarga</label><input id="b-discharge-sw" placeholder="switch.mi_bateria_discharging_task">
+        <label data-i18n="label_name">Nombre</label><input id="b-name" placeholder="Ultra">
+        <label data-i18n="label_capacity">Capacidad (Wh)</label><input id="b-capacity" type="number" placeholder="6000">
+        <label data-i18n="label_soc_sensor">Sensor SOC (%)</label><input id="b-soc" placeholder="sensor.mi_bateria_nivel">
+        <label data-i18n="label_charge_switch">Switch de carga</label><input id="b-charge-sw" placeholder="switch.mi_bateria_charging_task">
+        <label data-i18n="label_discharge_switch">Switch de descarga</label><input id="b-discharge-sw" placeholder="switch.mi_bateria_discharging_task">
       </div>
       <div>
-        <label>Potencia máx. carga (W)</label><input id="b-maxcharge" type="number" value="1200">
-        <label>Potencia máx. descarga (W)</label><input id="b-maxdischarge" type="number" value="1200">
-        <label>SOC mínimo (%)</label><input id="b-minsoc" type="number" value="3">
-        <label>SOC máximo (%)</label><input id="b-maxsoc" type="number" value="100">
-        <label>Entidad límite potencia carga (opcional)</label><input id="b-charge-limit" placeholder="number...charging_power_limit">
-        <label>Entidad límite potencia descarga (opcional)</label><input id="b-discharge-limit" placeholder="number...discharging_power_limit">
-        <label>Sensor de descarga (opcional)</label><input id="b-power-sensor" placeholder="sensor.mi_bateria_load_from_battery">
-        <p class="help">Potencia que la batería aporta a la casa ahora mismo (siempre positiva o cero, p.ej. <code>..._load_from_battery</code>). No hace falta el de carga — solo se usa para completar el cálculo de consumo real en la tarjeta "Consumo de la casa".</p>
+        <label data-i18n="label_max_charge">Potencia máx. carga (W)</label><input id="b-maxcharge" type="number" value="1200">
+        <label data-i18n="label_max_discharge">Potencia máx. descarga (W)</label><input id="b-maxdischarge" type="number" value="1200">
+        <label data-i18n="label_min_soc">SOC mínimo (%)</label><input id="b-minsoc" type="number" value="3">
+        <label data-i18n="label_max_soc">SOC máximo (%)</label><input id="b-maxsoc" type="number" value="100">
+        <label data-i18n="label_charge_limit_entity">Entidad límite potencia carga (opcional)</label><input id="b-charge-limit" placeholder="number...charging_power_limit">
+        <label data-i18n="label_discharge_limit_entity">Entidad límite potencia descarga (opcional)</label><input id="b-discharge-limit" placeholder="number...discharging_power_limit">
+        <label data-i18n="label_discharge_sensor">Sensor de descarga (opcional)</label><input id="b-power-sensor" placeholder="sensor.mi_bateria_load_from_battery">
+        <p class="help" data-i18n-html="help_discharge_sensor">Potencia que la batería aporta a la casa ahora mismo (siempre positiva o cero, p.ej. <code>..._load_from_battery</code>). No hace falta el de carga — solo se usa para completar el cálculo de consumo real en la tarjeta "Consumo de la casa".</p>
       </div>
     </div>
     <p class="help" id="battery-form-error" style="display:none"></p>
     <div class="actions">
-      <button onclick="addBattery()" id="battery-form-submit-btn">Guardar batería</button>
-      <button class="ghost" onclick="cancelBatteryForm()" type="button">Cancelar</button>
+      <button onclick="addBattery()" id="battery-form-submit-btn" data-i18n="btn_save_battery">Guardar batería</button>
+      <button class="ghost" onclick="cancelBatteryForm()" type="button" data-i18n="btn_cancel">Cancelar</button>
     </div>
   </details>
 </div>
 
 <div class="card">
-  <h2>Tarifa eléctrica</h2>
-  <label>Modo</label>
+  <h2 data-i18n="card_tariff_title">Tarifa eléctrica</h2>
+  <label data-i18n="label_mode">Modo</label>
   <select id="t-mode" onchange="toggleTariffMode()">
-    <option value="fixed">Precios fijos (punta / llano / valle)</option>
-    <option value="pvpc_sensor">PVPC dinámico (sensor de Home Assistant)</option>
+    <option value="fixed" data-i18n="opt_fixed">Precios fijos (punta / llano / valle)</option>
+    <option value="pvpc_sensor" data-i18n="opt_pvpc">PVPC dinámico (sensor de Home Assistant)</option>
   </select>
 
   <div id="tariff-fixed">
     <div class="grid2">
       <div>
-        <label>Precio punta (€/kWh)</label><input id="t-punta" type="number" step="0.001">
-        <label>Precio llano (€/kWh)</label><input id="t-llano" type="number" step="0.001">
-        <label>Precio valle (€/kWh)</label><input id="t-valle" type="number" step="0.001">
+        <label data-i18n="label_price_punta">Precio punta (€/kWh)</label><input id="t-punta" type="number" step="0.001">
+        <label data-i18n="label_price_llano">Precio llano (€/kWh)</label><input id="t-llano" type="number" step="0.001">
+        <label data-i18n="label_price_valle">Precio valle (€/kWh)</label><input id="t-valle" type="number" step="0.001">
       </div>
       <div>
-        <label>Horas punta (laborables)</label><input id="t-punta-periods" placeholder="10-14,18-22">
-        <label>Horas llano (laborables)</label><input id="t-llano-periods" placeholder="8-10,14-18,22-24">
-        <div class="checkline"><input id="t-weekend" type="checkbox"><label>Fin de semana = valle todo el día</label></div>
+        <label data-i18n="label_hours_punta">Horas punta (laborables)</label><input id="t-punta-periods" placeholder="10-14,18-22">
+        <label data-i18n="label_hours_llano">Horas llano (laborables)</label><input id="t-llano-periods" placeholder="8-10,14-18,22-24">
+        <div class="checkline"><input id="t-weekend" type="checkbox"><label data-i18n="label_weekend_valle">Fin de semana = valle todo el día</label></div>
       </div>
     </div>
   </div>
 
   <div id="tariff-pvpc" style="display:none">
-    <label>Sensor PVPC de Home Assistant</label>
+    <label data-i18n="label_pvpc_sensor">Sensor PVPC de Home Assistant</label>
     <input id="t-pvpc-sensor" placeholder="sensor.esios_pvpc">
-    <p class="help">Se usa el precio real hora a hora. Los tramos punta/llano/valle se calculan solos comparando el precio de cada hora con el resto del día (el tercio más barato = valle, el más caro = punta).</p>
+    <p class="help" data-i18n="help_pvpc">Se usa el precio real hora a hora. Los tramos punta/llano/valle se calculan solos comparando el precio de cada hora con el resto del día (el tercio más barato = valle, el más caro = punta).</p>
   </div>
 </div>
 
 <div class="card">
-  <h2>Previsión solar <span class="hint">se suman todos los paneles declarados</span></h2>
+  <h2><span data-i18n="card_solar_title">Previsión solar</span> <span class="hint" data-i18n="card_solar_hint">se suman todos los paneles declarados</span></h2>
   <div id="pv-arrays-list"></div>
-  <details>
-    <summary style="cursor:pointer; font-size:0.85rem; color:var(--accent); margin-top:8px;">+ Añadir panel / array solar</summary>
-    <label>Nombre</label><input id="pv-name" placeholder="Tejado sur">
-    <label>Origen</label>
+  <details id="add-pv-panel">
+    <summary class="add-toggle" id="add-pv-summary" data-i18n="add_pv_toggle">+ Añadir panel / array solar</summary>
+    <label data-i18n="label_name">Nombre</label><input id="pv-name" placeholder="Tejado sur">
+    <label data-i18n="label_origin">Origen</label>
     <select id="pv-mode" onchange="togglePvMode()">
-      <option value="entity">Sensor de Home Assistant</option>
-      <option value="forecast_solar_api">API de Forecast.Solar (directa)</option>
+      <option value="entity" data-i18n="opt_entity">Sensor de Home Assistant</option>
+      <option value="forecast_solar_api" data-i18n="opt_forecast_api">API de Forecast.Solar (directa)</option>
     </select>
     <div id="pv-entity-fields">
-      <label>Entidad de previsión</label><input id="pv-entity" placeholder="sensor.power_production_next_24hours">
+      <label data-i18n="label_forecast_entity">Entidad de previsión</label><input id="pv-entity" placeholder="sensor.power_production_next_24hours">
     </div>
     <div id="pv-api-fields" class="grid2" style="display:none">
       <div>
-        <label>API key (vacío = plan gratuito)</label><input id="pv-apikey">
-        <label>Latitud</label><input id="pv-lat" type="number" step="0.0001">
-        <label>Longitud</label><input id="pv-lon" type="number" step="0.0001">
+        <label data-i18n="label_api_key">API key (vacío = plan gratuito)</label><input id="pv-apikey">
+        <label data-i18n="label_lat">Latitud</label><input id="pv-lat" type="number" step="0.0001">
+        <label data-i18n="label_lon">Longitud</label><input id="pv-lon" type="number" step="0.0001">
       </div>
       <div>
-        <label>Inclinación (grados)</label><input id="pv-decl" type="number">
-        <label>Azimut (grados, 0=sur)</label><input id="pv-az" type="number">
-        <label>kWp instalados</label><input id="pv-kwp" type="number" step="0.1">
+        <label data-i18n="label_declination">Inclinación (grados)</label><input id="pv-decl" type="number">
+        <label data-i18n="label_azimuth">Azimut (grados, 0=sur)</label><input id="pv-az" type="number">
+        <label data-i18n="label_kwp">kWp instalados</label><input id="pv-kwp" type="number" step="0.1">
       </div>
     </div>
-    <label>Sensor de generación instantánea de este panel/string (opcional, recomendado)</label>
+    <label data-i18n="label_current_sensor_pv">Sensor de generación instantánea de este panel/string (opcional, recomendado)</label>
     <input id="pv-current-sensor" placeholder="sensor.tejado_sur_potencia">
-    <p class="help">Corrige la hora actual de ESTE panel con el dato real en vez de depender solo de la previsión (nubes, etc.) — no hace falta un sensor agregado en HA, cada panel lleva el suyo y la app los suma. Las horas futuras siguen usando la previsión.</p>
-    <label>Tipo de instalación de este panel/string</label>
+    <p class="help" data-i18n="help_current_sensor_pv">Corrige la hora actual de ESTE panel con el dato real en vez de depender solo de la previsión (nubes, etc.) — no hace falta un sensor agregado en HA, cada panel lleva el suyo y la app los suma. Las horas futuras siguen usando la previsión.</p>
+    <label data-i18n="label_install_type">Tipo de instalación de este panel/string</label>
     <select id="pv-install-type" onchange="updatePvInstallTypeHelp()">
-      <option value="ac_coupled">Instalación de autoconsumo (AC) — necesita orden de carga por AC</option>
-      <option value="hybrid">Conectado directo a una batería con inversor integrado — se autoconsume solo</option>
+      <option value="ac_coupled" data-i18n="opt_ac_coupled">Instalación de autoconsumo (AC) — necesita orden de carga por AC</option>
+      <option value="hybrid" data-i18n="opt_hybrid">Conectado directo a una batería con inversor integrado — se autoconsume solo</option>
     </select>
     <p class="help" id="pv-install-type-help"></p>
-    <div class="actions"><button onclick="addPvArray()">Añadir panel</button></div>
+    <p class="help" id="pv-form-error" style="display:none"></p>
+    <div class="actions">
+      <button onclick="addPvArray()" id="pv-form-submit-btn" data-i18n="btn_add_panel">Añadir panel</button>
+      <button class="ghost" onclick="cancelPvArrayForm()" type="button" data-i18n="btn_cancel">Cancelar</button>
+    </div>
   </details>
 </div>
 
 <div class="card">
-  <h2>Consumo de la casa</h2>
+  <h2 data-i18n="card_consumption_title">Consumo de la casa</h2>
 
-  <label>Sensor de consumo de red</label>
+  <label data-i18n="label_load_sensor">Sensor de consumo de red</label>
   <input id="load-sensor" placeholder="sensor.consumo_instantaneo">
-  <p class="help">Tiene que ser un sensor que <strong>ya reste la carga de las baterías</strong> (como tu <code>consumo_instantaneo</code>) — <strong>no</strong> el medidor de red en bruto (como <code>em3</code>), que sí la incluye. La app le suma automáticamente la producción solar y la descarga de baterías (los sensores que hayas indicado al dar de alta cada una) para reconstruir el consumo real completo, sea cual sea la fuente que lo esté cubriendo en cada momento.</p>
+  <p class="help" data-i18n-html="help_load_sensor">Tiene que ser un sensor que <strong>ya reste la carga de las baterías</strong> (como tu <code>consumo_instantaneo</code>) — <strong>no</strong> el medidor de red en bruto (como <code>em3</code>), que sí la incluye. La app le suma automáticamente la producción solar y la descarga de baterías (los sensores que hayas indicado al dar de alta cada una) para reconstruir el consumo real completo, sea cual sea la fuente que lo esté cubriendo en cada momento.</p>
 
-  <div class="actions"><button onclick="saveConfig()">Guardar</button></div>
-  <p class="help">La previsión se calcula como la media real de esa hora del día en los últimos N días — sin aprendizaje automático opaco, puedes verificarla tú mismo.</p>
+  <div class="actions"><button onclick="saveConfig()" data-i18n="btn_save">Guardar</button></div>
+  <p class="help" data-i18n="help_forecast_note">La previsión se calcula como la media real de esa hora del día en los últimos N días — sin aprendizaje automático opaco, puedes verificarla tú mismo.</p>
 </div>
 
 <div class="card">
-  <h2>Seguridad y límites</h2>
+  <h2 data-i18n="card_security_title">Seguridad y límites</h2>
   <div class="grid2">
     <div>
-      <label>Potencia contratada (W)</label><input id="g-contracted" type="number" placeholder="5500">
-      <p class="help">0 = sin límite. Evita que la carga de baterías + consumo de la casa disparen el ICP.</p>
+      <label data-i18n="label_contracted_power">Potencia contratada (W)</label><input id="g-contracted" type="number" placeholder="5500">
+      <p class="help" data-i18n="help_contracted_power">0 = sin límite. Evita que la carga de baterías + consumo de la casa disparen el ICP.</p>
     </div>
     <div>
-      <label>Días de histórico para consumo</label><input id="g-histdays" type="number">
-      <p class="help">Home Assistant por defecto solo guarda 10 días (ajustable con <code>recorder: purge_keep_days</code> en tu configuración). Si pides más de lo que tienes, la app reintenta sola con menos días.</p>
+      <label data-i18n="label_history_days">Días de histórico para consumo</label><input id="g-histdays" type="number">
+      <p class="help" data-i18n-html="help_history_days">Home Assistant por defecto solo guarda 10 días (ajustable con <code>recorder: purge_keep_days</code> en tu configuración). Si pides más de lo que tienes, la app reintenta sola con menos días.</p>
     </div>
   </div>
+  <div class="actions"><button onclick="saveConfig()" data-i18n="btn_save">Guardar</button></div>
 </div>
 
 <div class="card">
-  <h2>Prioridad</h2>
-  <label>Cómo decide el planificador</label>
+  <h2 data-i18n="card_priority_title">Prioridad</h2>
+  <label data-i18n="label_priority_mode">Cómo decide el planificador</label>
   <select id="g-priority" onchange="updatePriorityHelp()">
-    <option value="ahorro">Ahorro (recomendado) — carga con sol y también desde red en valle si hace falta</option>
-    <option value="autoconsumo">Autoconsumo solar — solo carga con excedente solar, nunca desde red</option>
-    <option value="longevidad">Longevidad de batería — como ahorro, pero sin superar el 90% de SOC</option>
+    <option value="ahorro" data-i18n="opt_priority_ahorro">Ahorro (recomendado) — carga con sol y también desde red en valle si hace falta</option>
+    <option value="autoconsumo" data-i18n="opt_priority_autoconsumo">Autoconsumo solar — solo carga con excedente solar, nunca desde red</option>
+    <option value="longevidad" data-i18n="opt_priority_longevidad">Longevidad de batería — como ahorro, pero sin superar el 90% de SOC</option>
   </select>
   <p class="help" id="priority-help"></p>
   <div class="checkline" id="paced-charging-row">
     <input id="g-paced" type="checkbox">
-    <label>Carga sostenida — reparte la carga desde red en el tiempo disponible en vez de ir siempre al máximo</label>
+    <label data-i18n="label_paced_charging">Carga sostenida — reparte la carga desde red en el tiempo disponible en vez de ir siempre al máximo</label>
   </div>
-  <p class="help" id="paced-charging-help">Menos calor y estrés en la batería: en vez de cargar a tope y luego parar, reparte la potencia a lo largo de las horas que quedan hasta que vaya a hacer falta descargar. Si el tiempo se echa encima, sube sola hasta el máximo — no te va a dejar sin cubrir la punta por ir despacio.</p>
-  <div class="actions"><button onclick="saveConfig()">Guardar</button></div>
+  <p class="help" id="paced-charging-help" data-i18n="help_paced_charging">Menos calor y estrés en la batería: en vez de cargar a tope y luego parar, reparte la potencia a lo largo de las horas que quedan hasta que vaya a hacer falta descargar. Si el tiempo se echa encima, sube sola hasta el máximo — no te va a dejar sin cubrir la punta por ir despacio.</p>
+  <div class="actions"><button onclick="saveConfig()" data-i18n="btn_save">Guardar</button></div>
 </div>
 
 <div class="card">
-  <h2>General</h2>
+  <h2 data-i18n="card_general_title">General</h2>
   <div class="grid2">
     <div>
-      <label>Horizonte de planificación (horas)</label><input id="g-horizon" type="number">
-      <label>Intervalo entre decisiones (segundos)</label><input id="g-cycle" type="number">
+      <label data-i18n="label_horizon">Horizonte de planificación (horas)</label><input id="g-horizon" type="number">
+      <label data-i18n="label_cycle">Intervalo entre decisiones (segundos)</label><input id="g-cycle" type="number">
     </div>
     <div>
-      <label>Refresco de previsión solar (segundos)</label><input id="g-pvrefresh" type="number">
-      <p class="help">Sepáralo del intervalo de decisión para no agotar la cuota gratuita de la API.</p>
-      <div class="checkline"><input id="g-dryrun" type="checkbox"><label>Modo simulación (no toca las baterías de verdad)</label></div>
+      <label data-i18n="label_pv_refresh">Refresco de previsión solar (segundos)</label><input id="g-pvrefresh" type="number">
+      <p class="help" data-i18n="help_pv_refresh">Sepáralo del intervalo de decisión para no agotar la cuota gratuita de la API.</p>
+      <div class="checkline"><input id="g-dryrun" type="checkbox"><label data-i18n="label_dry_run">Modo simulación (no toca las baterías de verdad)</label></div>
     </div>
   </div>
-  <div class="actions"><button onclick="saveConfig()">Guardar configuración</button></div>
+  <div class="actions"><button onclick="saveConfig()" data-i18n="btn_save_config">Guardar configuración</button></div>
 </div>
 
 <div class="card">
-  <h2>Copia de seguridad</h2>
-  <p class="help">Descarga toda tu configuración (baterías, tarifa, solar, consumo) en un archivo, o restáurala si reinstalas el add-on.</p>
+  <h2 data-i18n="card_backup_title">Copia de seguridad</h2>
+  <p class="help" data-i18n="help_backup">Descarga toda tu configuración (baterías, tarifa, solar, consumo) en un archivo, o restáurala si reinstalas el add-on.</p>
   <div class="actions">
-    <button class="secondary" onclick="exportConfig()" type="button">Descargar configuración</button>
-    <button class="secondary" onclick="document.getElementById('import-config-file').click()" type="button">Restaurar desde archivo</button>
+    <button class="secondary" onclick="exportConfig()" type="button" data-i18n="btn_download_config">Descargar configuración</button>
+    <button class="secondary" onclick="document.getElementById('import-config-file').click()" type="button" data-i18n="btn_restore_config">Restaurar desde archivo</button>
     <input type="file" id="import-config-file" accept="application/json" style="display:none" onchange="importConfigFile(this)">
   </div>
 </div>
@@ -593,8 +620,459 @@
 <div class="toast" id="toast"></div>
 
 <script>
+/* ============================================================
+   i18n — Español / English. Idioma por defecto de la instalacion
+   guardado en cfg.general.language ("auto"|"es"|"en"); "auto"
+   detecta el idioma del navegador cada vez, sin cajas negras: el
+   diccionario esta aqui mismo, no hay servicio de traduccion externo.
+   ============================================================ */
+const I18N = {
+es: {
+  topbar_eyebrow: "Gestión energética del hogar",
+  topbar_subtitle: "Carga y descarga adaptativa por precio, sol y consumo real — sin cajas negras.",
+  tab_estado: "Estado actual", tab_prevision: "Previsión", tab_salud: "Salud de batería", tab_config: "Configuración",
+  lang_auto: "🌐 Auto", lang_es: "🇪🇸 Español", lang_en: "🇬🇧 English",
+
+  card_estado_title: "Estado actual", btn_run_now: "Ejecutar ciclo ahora",
+  card_flow_title: "Flujo de energía ahora mismo",
+  card_flow_sub: "De dónde sale la potencia solar y a dónde va, de un vistazo — sin sumar los números sueltos de las otras tarjetas.",
+  flow_casa: "Casa", flow_bateria: "Batería", flow_red: "Red",
+  flow_autoconsumo_import: " — importando de red", flow_autoconsumo_none: " — nada importado de red",
+  autoconsumo_suffix: "% autoconsumo",
+
+  card_power_title: "Margen de potencia contratada",
+  power_meter_config_hint: 'Configura tu potencia contratada en "Configuración → Seguridad y límites" para ver este medidor.',
+  power_in_use: "{w} W en uso", power_limit: "límite {w} W",
+
+  card_batteries_home_title: "Baterías",
+  card_next_punta_title: "Próxima punta",
+  punta_now: "Estás en punta ahora mismo", punta_in_1h: "En 1 hora", punta_in_nh: "En {n} horas",
+  punta_reserve_current: "Reserva actual", punta_soc_now: "SOC ahora", punta_reserve_target: "Objetivo de reserva",
+  punta_explain: '"Reserva actual" es cuánto de lo que el planificador cree necesario para cubrir toda la punta que queda por delante ya tienes acumulado — el mismo número que usa para decidir si cargar en llano de emergencia.',
+  punta_none: "No hay ninguna hora punta en el horizonte de previsión configurado.",
+
+  card_soc_forecast_title: "SOC previsto", card_soc_forecast_hint: "nivel agregado de baterías a lo largo del día",
+  legend_soc: "SOC (%)", legend_valle: "Valle", legend_llano: "Llano", legend_punta: "Punta",
+  card_plan_title: "Plan del día", card_plan_hint: "de 00:00 a 00:00 — lo ya ocurrido hoy + lo previsto",
+  th_hora: "Hora", th_tramo: "Tramo", th_precio: "Precio", th_sol: "Sol", th_consumo: "Consumo",
+  th_carga: "Carga", th_descarga: "Descarga", th_soc: "SOC", th_motivo: "Motivo",
+  already_happened: "Ya ocurrió",
+
+  card_salud_title: "Salud de batería", card_salud_hint: "capacidad real estimada vs. declarada",
+  salud_help: 'Cada vez que una batería carga o descarga un tramo grande de SOC, la app mide cuánta energía ha hecho falta para ese movimiento y de ahí calcula cuánta energía cabe realmente hoy — <code>capacidad real = energía movida / (Δ SOC % / 100)</code>. La salud es esa capacidad real dividida por la que declaraste al darla de alta. Es una estimación (mediana de las últimas observaciones fiables), no una medición del BMS.',
+  salud_estimada: "Salud estimada", salud_declarada: "Capacidad declarada", salud_real: "Capacidad real estimada",
+  salud_no_data: "Todavía no hay suficientes cargas/descargas grandes (≥8% de SOC de un tirón) para estimar la capacidad real. En cuanto se observe una, aparecerá aquí.",
+  salud_based_on_one: "Basado en 1 observación reciente.", salud_based_on_n: "Basado en {n} observaciones recientes.",
+  cycles_line: "{cycles} ciclos equivalentes · {charged} kWh cargados · {discharged} kWh descargados",
+  cycles_line_since: " · desde {date}",
+
+  card_baterias_title: "Baterías", add_battery_toggle: "+ Añadir batería",
+  label_name: "Nombre", label_capacity: "Capacidad (Wh)", label_soc_sensor: "Sensor SOC (%)",
+  label_charge_switch: "Switch de carga", label_discharge_switch: "Switch de descarga",
+  label_max_charge: "Potencia máx. carga (W)", label_max_discharge: "Potencia máx. descarga (W)",
+  label_min_soc: "SOC mínimo (%)", label_max_soc: "SOC máximo (%)",
+  label_charge_limit_entity: "Entidad límite potencia carga (opcional)",
+  label_discharge_limit_entity: "Entidad límite potencia descarga (opcional)",
+  label_discharge_sensor: "Sensor de descarga (opcional)",
+  help_discharge_sensor: 'Potencia que la batería aporta a la casa ahora mismo (siempre positiva o cero, p.ej. <code>..._load_from_battery</code>). No hace falta el de carga — solo se usa para completar el cálculo de consumo real en la tarjeta "Consumo de la casa".',
+  btn_save_battery: "Guardar batería", btn_cancel: "Cancelar", btn_edit: "Editar", btn_delete_battery: "Eliminar esta batería",
+  btn_save_changes: "Guardar cambios", editing_battery: 'Editando "{name}"',
+  count_declared_one: "1 declarada", count_declared_n: "{n} declaradas",
+  empty_no_batteries: "Todavía no has añadido ninguna batería.",
+  error_battery_required: "Nombre, sensor de SOC y los dos switches son obligatorios.",
+  error_capacity_positive: "La capacidad (Wh) tiene que ser un número mayor que 0.",
+  error_server: "Error del servidor ({status}): {detail}", error_no_detail: "sin detalle",
+  error_connect: "No se pudo conectar con el servicio: {msg}",
+  toast_battery_updated: "Batería actualizada.", toast_battery_added: "Batería añadida.",
+  toast_battery_deleted: "Batería eliminada.", toast_could_not_delete: "No se pudo eliminar (error {status}).",
+
+  kv_soc: "SOC", kv_charge_switch: "Switch de carga", kv_discharge_switch: "Switch de descarga",
+  kv_max_charge: "Potencia máx. carga", kv_max_discharge: "Potencia máx. descarga", kv_min_max_soc: "SOC min / max",
+  kv_charge_limit: "Límite carga", kv_discharge_limit: "Límite descarga", kv_discharge_sensor: "Sensor de descarga",
+  no_discharge_sensor_note: "Sin sensor de descarga declarado — no participa en el cálculo de consumo real.",
+
+  card_tariff_title: "Tarifa eléctrica", label_mode: "Modo",
+  opt_fixed: "Precios fijos (punta / llano / valle)", opt_pvpc: "PVPC dinámico (sensor de Home Assistant)",
+  label_price_punta: "Precio punta (€/kWh)", label_price_llano: "Precio llano (€/kWh)", label_price_valle: "Precio valle (€/kWh)",
+  label_hours_punta: "Horas punta (laborables)", label_hours_llano: "Horas llano (laborables)",
+  label_weekend_valle: "Fin de semana = valle todo el día",
+  label_pvpc_sensor: "Sensor PVPC de Home Assistant",
+  help_pvpc: "Se usa el precio real hora a hora. Los tramos punta/llano/valle se calculan solos comparando el precio de cada hora con el resto del día (el tercio más barato = valle, el más caro = punta).",
+
+  card_solar_title: "Previsión solar", card_solar_hint: "se suman todos los paneles declarados",
+  add_pv_toggle: "+ Añadir panel / array solar", label_origin: "Origen",
+  opt_entity: "Sensor de Home Assistant", opt_forecast_api: "API de Forecast.Solar (directa)",
+  label_forecast_entity: "Entidad de previsión",
+  label_api_key: "API key (vacío = plan gratuito)", label_lat: "Latitud", label_lon: "Longitud",
+  label_declination: "Inclinación (grados)", label_azimuth: "Azimut (grados, 0=sur)", label_kwp: "kWp instalados",
+  label_current_sensor_pv: "Sensor de generación instantánea de este panel/string (opcional, recomendado)",
+  help_current_sensor_pv: "Corrige la hora actual de ESTE panel con el dato real en vez de depender solo de la previsión (nubes, etc.) — no hace falta un sensor agregado en HA, cada panel lleva el suyo y la app los suma. Las horas futuras siguen usando la previsión.",
+  label_install_type: "Tipo de instalación de este panel/string",
+  opt_ac_coupled: "Instalación de autoconsumo (AC) — necesita orden de carga por AC",
+  opt_hybrid: "Conectado directo a una batería con inversor integrado — se autoconsume solo",
+  install_help_ac: "Este panel/string es parte de una instalación de autoconsumo aparte — para aprovechar su excedente, la app tiene que activar el modo carga de la batería y fijar la potencia por AC.",
+  install_help_hybrid: "Este panel/string está conectado directamente a una batería con inversor integrado. No hace falta que la app active ningún modo de carga para aprovechar su excedente — la batería ya lo absorbe sola al regular su propia salida. La app descuenta automáticamente esta potencia de lo que manda pedir por AC al resto.",
+  btn_add_panel: "Añadir panel", btn_save_panel_changes: "Guardar cambios", editing_panel: 'Editando "{name}"',
+  empty_no_panels: "Todavía no has añadido ningún panel/array solar.",
+  error_pv_entity_required: "Indica la entidad de previsión, o cambia a modo API.",
+  pv_meta_sensor: "Sensor HA: {entity}", pv_meta_api: "Forecast.Solar API ({kwp} kWp)",
+  pv_meta_instant: "Instantáneo: {sensor}", pv_meta_no_instant: "Sin sensor instantáneo (solo previsión)",
+  pv_meta_ac: "Autoconsumo (AC)", pv_meta_hybrid: "Conectado directo a batería (inversor integrado)",
+  toast_panel_added: "Panel añadido.", toast_panel_updated: "Panel actualizado.", toast_panel_deleted: "Panel eliminado.",
+  toast_could_not_delete_panel: "No se pudo eliminar (error {status}).",
+  toast_server_error_add_panel: "Error del servidor ({status}) al añadir el panel.",
+
+  card_consumption_title: "Consumo de la casa", label_load_sensor: "Sensor de consumo de red",
+  help_load_sensor: 'Tiene que ser un sensor que <strong>ya reste la carga de las baterías</strong> (como tu <code>consumo_instantaneo</code>) — <strong>no</strong> el medidor de red en bruto (como <code>em3</code>), que sí la incluye. La app le suma automáticamente la producción solar y la descarga de baterías (los sensores que hayas indicado al dar de alta cada una) para reconstruir el consumo real completo, sea cual sea la fuente que lo esté cubriendo en cada momento.',
+  btn_save: "Guardar",
+  help_forecast_note: "La previsión se calcula como la media real de esa hora del día en los últimos N días — sin aprendizaje automático opaco, puedes verificarla tú mismo.",
+
+  card_security_title: "Seguridad y límites", label_contracted_power: "Potencia contratada (W)",
+  help_contracted_power: "0 = sin límite. Evita que la carga de baterías + consumo de la casa disparen el ICP.",
+  label_history_days: "Días de histórico para consumo",
+  help_history_days: "Home Assistant por defecto solo guarda 10 días (ajustable con <code>recorder: purge_keep_days</code> en tu configuración). Si pides más de lo que tienes, la app reintenta sola con menos días.",
+
+  card_priority_title: "Prioridad", label_priority_mode: "Cómo decide el planificador",
+  opt_priority_ahorro: "Ahorro (recomendado) — carga con sol y también desde red en valle si hace falta",
+  opt_priority_autoconsumo: "Autoconsumo solar — solo carga con excedente solar, nunca desde red",
+  opt_priority_longevidad: "Longevidad de batería — como ahorro, pero sin superar el 90% de SOC",
+  priority_help_ahorro: 'Carga con excedente solar siempre, y además desde red en horas valle (o llano si no queda otra) lo justo para cubrir la próxima punta. Es el equilibrio recomendado entre ahorro y uso de la batería.',
+  priority_help_autoconsumo: 'La batería solo carga con excedente solar. Nunca compra energía de red para cargarla, ni siquiera en valle — menos ahorro potencial, pero cero ciclos "artificiales" pagados.',
+  priority_help_longevidad: 'Igual que "ahorro", pero el objetivo de carga nunca supera el 90% del SOC máximo real, para reducir el desgaste de mantener la batería siempre llena.',
+  label_paced_charging: "Carga sostenida — reparte la carga desde red en el tiempo disponible en vez de ir siempre al máximo",
+  help_paced_charging: "Menos calor y estrés en la batería: en vez de cargar a tope y luego parar, reparte la potencia a lo largo de las horas que quedan hasta que vaya a hacer falta descargar. Si el tiempo se echa encima, sube sola hasta el máximo — no te va a dejar sin cubrir la punta por ir despacio.",
+
+  card_general_title: "General", label_horizon: "Horizonte de planificación (horas)",
+  label_cycle: "Intervalo entre decisiones (segundos)", label_pv_refresh: "Refresco de previsión solar (segundos)",
+  help_pv_refresh: "Sepáralo del intervalo de decisión para no agotar la cuota gratuita de la API.",
+  label_dry_run: "Modo simulación (no toca las baterías de verdad)", btn_save_config: "Guardar configuración",
+
+  card_backup_title: "Copia de seguridad",
+  help_backup: "Descarga toda tu configuración (baterías, tarifa, solar, consumo) en un archivo, o restáurala si reinstalas el add-on.",
+  btn_download_config: "Descargar configuración", btn_restore_config: "Restaurar desde archivo",
+  toast_import_invalid: "El archivo no es un JSON válido: {msg}", toast_import_error: "Error al importar: {detail}",
+  toast_config_restored: "Configuración restaurada.", toast_config_saved: "Configuración guardada.",
+  toast_server_error_save: "Error del servidor ({status}) al guardar.",
+
+  status_never_run: "Todavía no se ha ejecutado ningún ciclo.",
+  status_skipped: "Omitidas este ciclo (sensor no disponible): {list}",
+  status_generation_now: "Generación real ahora: {w} W",
+  status_running: "Ejecutando...", status_cycle_error: "El ciclo terminó con error, revisa el estado.",
+  status_load_error: "No se pudo cargar la configuración ({msg}). Recarga la página; si persiste, revisa que el add-on esté en ejecución.",
+
+  mode_sim: "SIMULACIÓN", mode_live: "EN VIVO", health_ok: "SALUDABLE", health_anomaly: "ANÓMALO",
+
+  anomaly_title: "Consumo anómalo detectado", anomaly_since: "Desde", anomaly_live_now: "Consumo real ahora",
+  anomaly_expected: "Esperado para esta hora", anomaly_diff: "Diferencia",
+  anomaly_explain: 'Se avisa cuando el consumo real supera la previsión histórica en más de un 60% Y al menos 400W de diferencia, sostenido varios ciclos seguidos (para no disparar con un pico de un instante). Revisa si se ha quedado algo encendido. La alerta se retira sola cuando el consumo vuelve a lo esperado.',
+
+  battery_status_charging: "cargando {w}W", battery_status_discharge: "descarga ≤{w}W",
+  battery_status_idle: "sin acción", battery_status_no_data: "sin datos",
+
+  stat_soc: "SOC agregado", stat_tier: "Tramo actual", stat_price: "Precio", stat_solar: "Solar", stat_consumption: "Consumo",
+  stat_charging: "Cargando", stat_discharging: "Descargando", stat_idle: "En reposo",
+  stat_savings_today: "Ahorro hoy", stat_savings_total: "Ahorro total",
+  stat_changes_to: "Cambia a", stat_vs_avg: "Vs. media {days}d",
+  stat_vs_avg_sub: "{today} kWh hoy · media {avg} kWh",
+  sparkline_last_hours: "últimas 6h",
+
+  chart_no_data: "Todavía no hay datos suficientes para dibujar la gráfica.",
+  chart_already_happened: " (ya ocurrió)",
+  chart_tier_label: "Tramo", chart_charge_label: "Carga", chart_discharge_label: "Descarga", chart_no_activity: "Sin actividad",
+
+  status_no_cycle_data: "Todavía no hay datos del ciclo.",
+  power_health_loading: "Cargando...",
+},
+en: {
+  topbar_eyebrow: "Home energy management",
+  topbar_subtitle: "Adaptive battery charge/discharge by price, sun and real consumption — no black boxes.",
+  tab_estado: "Current status", tab_prevision: "Forecast", tab_salud: "Battery health", tab_config: "Settings",
+  lang_auto: "🌐 Auto", lang_es: "🇪🇸 Español", lang_en: "🇬🇧 English",
+
+  card_estado_title: "Current status", btn_run_now: "Run cycle now",
+  card_flow_title: "Energy flow right now",
+  card_flow_sub: "Where solar power comes from and where it goes, at a glance — no need to add up the other tiles.",
+  flow_casa: "Home", flow_bateria: "Battery", flow_red: "Grid",
+  flow_autoconsumo_import: " — importing from grid", flow_autoconsumo_none: " — nothing imported from grid",
+  autoconsumo_suffix: "% self-consumption",
+
+  card_power_title: "Contracted power margin",
+  power_meter_config_hint: 'Set your contracted power in "Settings → Safety & limits" to see this meter.',
+  power_in_use: "{w} W in use", power_limit: "limit {w} W",
+
+  card_batteries_home_title: "Batteries",
+  card_next_punta_title: "Next peak period",
+  punta_now: "You're in peak pricing right now", punta_in_1h: "In 1 hour", punta_in_nh: "In {n} hours",
+  punta_reserve_current: "Current reserve", punta_soc_now: "SOC now", punta_reserve_target: "Reserve target",
+  punta_explain: '"Current reserve" is how much of what the planner thinks is needed to cover all the remaining peak hours you already have banked — the same number it uses to decide whether to charge in mid-peak as an emergency.',
+  punta_none: "There's no peak-price hour in the configured forecast horizon.",
+
+  card_soc_forecast_title: "Forecast SOC", card_soc_forecast_hint: "aggregate battery level through the day",
+  legend_soc: "SOC (%)", legend_valle: "Off-peak", legend_llano: "Mid-peak", legend_punta: "Peak",
+  card_plan_title: "Day plan", card_plan_hint: "00:00 to 00:00 — what already happened today + what's forecast",
+  th_hora: "Time", th_tramo: "Tier", th_precio: "Price", th_sol: "Sun", th_consumo: "Load",
+  th_carga: "Charge", th_descarga: "Discharge", th_soc: "SOC", th_motivo: "Reason",
+  already_happened: "Already happened",
+
+  card_salud_title: "Battery health", card_salud_hint: "estimated real capacity vs. declared",
+  salud_help: 'Every time a battery charges or discharges a large chunk of SOC, the app measures how much energy that took and from it works out how much energy it actually holds today — <code>real capacity = energy moved / (Δ SOC % / 100)</code>. Health is that real capacity divided by what you declared when you added it. It\'s an estimate (median of the latest reliable observations), not a BMS measurement.',
+  salud_estimada: "Estimated health", salud_declarada: "Declared capacity", salud_real: "Estimated real capacity",
+  salud_no_data: "There aren't enough large charges/discharges yet (≥8% of SOC in one go) to estimate real capacity. It'll show up here as soon as one is observed.",
+  salud_based_on_one: "Based on 1 recent observation.", salud_based_on_n: "Based on {n} recent observations.",
+  cycles_line: "{cycles} equivalent cycles · {charged} kWh charged · {discharged} kWh discharged",
+  cycles_line_since: " · since {date}",
+
+  card_baterias_title: "Batteries", add_battery_toggle: "+ Add battery",
+  label_name: "Name", label_capacity: "Capacity (Wh)", label_soc_sensor: "SOC sensor (%)",
+  label_charge_switch: "Charge switch", label_discharge_switch: "Discharge switch",
+  label_max_charge: "Max. charge power (W)", label_max_discharge: "Max. discharge power (W)",
+  label_min_soc: "Min. SOC (%)", label_max_soc: "Max. SOC (%)",
+  label_charge_limit_entity: "Charge power limit entity (optional)",
+  label_discharge_limit_entity: "Discharge power limit entity (optional)",
+  label_discharge_sensor: "Discharge sensor (optional)",
+  help_discharge_sensor: 'Power the battery is currently delivering to the house (always positive or zero, e.g. <code>..._load_from_battery</code>). No need for the charge one — this is only used to complete the real-consumption calculation in the "Home consumption" card.',
+  btn_save_battery: "Save battery", btn_cancel: "Cancel", btn_edit: "Edit", btn_delete_battery: "Delete this battery",
+  btn_save_changes: "Save changes", editing_battery: 'Editing "{name}"',
+  count_declared_one: "1 declared", count_declared_n: "{n} declared",
+  empty_no_batteries: "You haven't added any battery yet.",
+  error_battery_required: "Name, SOC sensor and both switches are required.",
+  error_capacity_positive: "Capacity (Wh) has to be a number greater than 0.",
+  error_server: "Server error ({status}): {detail}", error_no_detail: "no detail",
+  error_connect: "Could not connect to the service: {msg}",
+  toast_battery_updated: "Battery updated.", toast_battery_added: "Battery added.",
+  toast_battery_deleted: "Battery deleted.", toast_could_not_delete: "Could not delete (error {status}).",
+
+  kv_soc: "SOC", kv_charge_switch: "Charge switch", kv_discharge_switch: "Discharge switch",
+  kv_max_charge: "Max. charge power", kv_max_discharge: "Max. discharge power", kv_min_max_soc: "Min / max SOC",
+  kv_charge_limit: "Charge limit", kv_discharge_limit: "Discharge limit", kv_discharge_sensor: "Discharge sensor",
+  no_discharge_sensor_note: "No discharge sensor declared — it won't be counted in the real-consumption calculation.",
+
+  card_tariff_title: "Electricity tariff", label_mode: "Mode",
+  opt_fixed: "Fixed prices (peak / mid-peak / off-peak)", opt_pvpc: "Dynamic PVPC (Home Assistant sensor)",
+  label_price_punta: "Peak price (€/kWh)", label_price_llano: "Mid-peak price (€/kWh)", label_price_valle: "Off-peak price (€/kWh)",
+  label_hours_punta: "Peak hours (weekdays)", label_hours_llano: "Mid-peak hours (weekdays)",
+  label_weekend_valle: "Weekend = off-peak all day",
+  label_pvpc_sensor: "Home Assistant PVPC sensor",
+  help_pvpc: "The real hour-by-hour price is used. Peak/mid-peak/off-peak tiers are worked out automatically by comparing each hour's price against the rest of the day (cheapest third = off-peak, priciest = peak).",
+
+  card_solar_title: "Solar forecast", card_solar_hint: "all declared panels are added together",
+  add_pv_toggle: "+ Add solar panel / array", label_origin: "Source",
+  opt_entity: "Home Assistant sensor", opt_forecast_api: "Forecast.Solar API (direct)",
+  label_forecast_entity: "Forecast entity",
+  label_api_key: "API key (empty = free plan)", label_lat: "Latitude", label_lon: "Longitude",
+  label_declination: "Tilt (degrees)", label_azimuth: "Azimuth (degrees, 0=south)", label_kwp: "Installed kWp",
+  label_current_sensor_pv: "Instantaneous generation sensor for this panel/string (optional, recommended)",
+  help_current_sensor_pv: "Corrects the current hour for THIS panel with the real reading instead of relying only on the forecast (clouds, etc.) — no aggregated sensor needed in HA, each panel carries its own and the app sums them. Future hours still use the forecast.",
+  label_install_type: "Installation type for this panel/string",
+  opt_ac_coupled: "Self-consumption (AC) installation — needs an AC charge command",
+  opt_hybrid: "Directly connected to a battery with an integrated inverter — self-consumes on its own",
+  install_help_ac: "This panel/string is part of a separate self-consumption installation — to make use of its surplus, the app has to turn on the battery's charge mode and set the AC power.",
+  install_help_hybrid: "This panel/string is wired directly into a battery with an integrated inverter. The app doesn't need to turn on any charge mode to use its surplus — the battery already absorbs it on its own while regulating its own output. The app automatically subtracts this power from what it requests over AC for the rest.",
+  btn_add_panel: "Add panel", btn_save_panel_changes: "Save changes", editing_panel: 'Editing "{name}"',
+  empty_no_panels: "You haven't added any solar panel/array yet.",
+  error_pv_entity_required: "Enter the forecast entity, or switch to API mode.",
+  pv_meta_sensor: "HA sensor: {entity}", pv_meta_api: "Forecast.Solar API ({kwp} kWp)",
+  pv_meta_instant: "Instantaneous: {sensor}", pv_meta_no_instant: "No instantaneous sensor (forecast only)",
+  pv_meta_ac: "Self-consumption (AC)", pv_meta_hybrid: "Directly connected to battery (integrated inverter)",
+  toast_panel_added: "Panel added.", toast_panel_updated: "Panel updated.", toast_panel_deleted: "Panel deleted.",
+  toast_could_not_delete_panel: "Could not delete (error {status}).",
+  toast_server_error_add_panel: "Server error ({status}) adding the panel.",
+
+  card_consumption_title: "Home consumption", label_load_sensor: "Grid consumption sensor",
+  help_load_sensor: 'It has to be a sensor that <strong>already subtracts battery charging</strong> (like your instantaneous-consumption sensor) — <strong>not</strong> a raw grid meter, which does include it. The app automatically adds solar production and battery discharge (the sensors you declared for each battery) to reconstruct full real consumption, whatever is covering it at each moment.',
+  btn_save: "Save",
+  help_forecast_note: "The forecast is calculated as the real average for that hour of day over the last N days — no opaque machine learning, you can verify it yourself.",
+
+  card_security_title: "Safety & limits", label_contracted_power: "Contracted power (W)",
+  help_contracted_power: "0 = no limit. Keeps battery charging + home consumption from tripping your main breaker.",
+  label_history_days: "History days for consumption",
+  help_history_days: "Home Assistant only keeps 10 days by default (adjustable with <code>recorder: purge_keep_days</code> in your configuration). If you ask for more than you have, the app retries on its own with fewer days.",
+
+  card_priority_title: "Priority", label_priority_mode: "How the planner decides",
+  opt_priority_ahorro: "Savings (recommended) — charges with sun and also from the grid off-peak if needed",
+  opt_priority_autoconsumo: "Solar self-consumption — only charges with solar surplus, never from the grid",
+  opt_priority_longevidad: "Battery longevity — like savings, but never exceeds 90% SOC",
+  priority_help_ahorro: 'Always charges with solar surplus, and also from the grid during off-peak hours (or mid-peak if there\'s no other option) just enough to cover the next peak period. The recommended balance between savings and battery use.',
+  priority_help_autoconsumo: 'The battery only charges with solar surplus. It never buys grid energy to charge it, not even off-peak — less potential savings, but zero "artificial" paid cycles.',
+  priority_help_longevidad: 'Same as "savings", but the charge target never exceeds 90% of the real max SOC, to reduce the wear of always keeping the battery full.',
+  label_paced_charging: "Sustained charging — spreads grid charging over the available time instead of always going full power",
+  help_paced_charging: "Less heat and stress on the battery: instead of charging flat-out and then stopping, it spreads the power over the hours left until discharging will be needed. If time runs short, it ramps up on its own to full power — it won't leave the peak period uncovered by going slow.",
+
+  card_general_title: "General", label_horizon: "Planning horizon (hours)",
+  label_cycle: "Interval between decisions (seconds)", label_pv_refresh: "Solar forecast refresh (seconds)",
+  help_pv_refresh: "Keep it separate from the decision interval so you don't burn through the API's free quota.",
+  label_dry_run: "Simulation mode (doesn't touch the real batteries)", btn_save_config: "Save configuration",
+
+  card_backup_title: "Backup",
+  help_backup: "Download your whole configuration (batteries, tariff, solar, consumption) as a file, or restore it if you reinstall the add-on.",
+  btn_download_config: "Download configuration", btn_restore_config: "Restore from file",
+  toast_import_invalid: "The file isn't valid JSON: {msg}", toast_import_error: "Error importing: {detail}",
+  toast_config_restored: "Configuration restored.", toast_config_saved: "Configuration saved.",
+  toast_server_error_save: "Server error ({status}) saving.",
+
+  status_never_run: "No cycle has run yet.",
+  status_skipped: "Skipped this cycle (sensor unavailable): {list}",
+  status_generation_now: "Real generation now: {w} W",
+  status_running: "Running...", status_cycle_error: "The cycle finished with an error, check the status.",
+  status_load_error: "Couldn't load the configuration ({msg}). Reload the page; if it persists, check that the add-on is running.",
+
+  mode_sim: "SIMULATION", mode_live: "LIVE", health_ok: "HEALTHY", health_anomaly: "ANOMALY",
+
+  anomaly_title: "Anomalous consumption detected", anomaly_since: "Since", anomaly_live_now: "Real consumption now",
+  anomaly_expected: "Expected for this hour", anomaly_diff: "Difference",
+  anomaly_explain: "This warns when real consumption exceeds the historical forecast by more than 60% AND at least 400W of difference, sustained for several cycles in a row (so a one-off spike doesn't trigger it). Check if something was left on. The alert clears itself once consumption returns to what's expected.",
+
+  battery_status_charging: "charging {w}W", battery_status_discharge: "discharge ≤{w}W",
+  battery_status_idle: "no action", battery_status_no_data: "no data",
+
+  stat_soc: "Aggregate SOC", stat_tier: "Current tier", stat_price: "Price", stat_solar: "Solar", stat_consumption: "Load",
+  stat_charging: "Charging", stat_discharging: "Discharging", stat_idle: "Idle",
+  stat_savings_today: "Savings today", stat_savings_total: "Total savings",
+  stat_changes_to: "Changes to", stat_vs_avg: "Vs. {days}d avg",
+  stat_vs_avg_sub: "{today} kWh today · avg {avg} kWh",
+  sparkline_last_hours: "last 6h",
+
+  chart_no_data: "There isn't enough data yet to draw the chart.",
+  chart_already_happened: " (already happened)",
+  chart_tier_label: "Tier", chart_charge_label: "Charge", chart_discharge_label: "Discharge", chart_no_activity: "No activity",
+
+  status_no_cycle_data: "There's no cycle data yet.",
+  power_health_loading: "Loading...",
+},
+};
+
+/* Traduccion de las cadenas que genera el backend en español (razones del
+   planificador, notas de reparto, lineas de log): son una lista finita y
+   conocida de plantillas (ver scheduler.py/battery_exec.py), asi que se
+   traducen aqui con patrones — no hace falta duplicar el motor en dos
+   idiomas ni tocar el backend. Si aparece un texto que no encaja en
+   ningun patron, se deja tal cual en español antes que inventar nada.
+ */
+const TIER_WORDS = { es: { punta: 'punta', llano: 'llano', valle: 'valle' },
+                      en: { punta: 'peak', llano: 'mid-peak', valle: 'off-peak' } };
+
+function translateTier(tier) {
+  return (TIER_WORDS[currentLang] || TIER_WORDS.es)[tier] || tier;
+}
+
+const REASON_PATTERNS_EN = [
+  [/^carga con excedente solar$/, () => 'charging with solar surplus'],
+  [/^carga sostenida en valle \(objetivo reserva ([\d.,]+) kWh\)$/, (m) => `sustained charging off-peak (reserve target ${m[1]} kWh)`],
+  [/^carga en valle \(objetivo reserva ([\d.,]+) kWh\)$/, (m) => `charging off-peak (reserve target ${m[1]} kWh)`],
+  [/^carga sostenida en llano \(no llegaba a cubrir la punta que queda\)$/, () => "sustained mid-peak charging (wasn't going to cover the remaining peak period)"],
+  [/^carga en llano \(no llegaba a cubrir la punta que queda\)$/, () => "mid-peak charging (wasn't going to cover the remaining peak period)"],
+  [/^sin carga: al limite de potencia contratada$/, () => 'no charging: at the contracted power limit'],
+  [/^descarga para cubrir consumo en punta$/, () => 'discharging to cover peak-hour consumption'],
+  [/^descarga para cubrir consumo en llano$/, () => 'discharging to cover mid-peak consumption'],
+  [/^sin descargar en llano: reservado para punta posterior$/, () => 'not discharging in mid-peak: reserved for a later peak period'],
+  [/^sin descargar en llano: sin margen \(al minimo\)$/, () => 'not discharging in mid-peak: no margin (at the minimum)'],
+  [/^descarga en valle: reserva de punta\/llano ya cubierta, evita comprar de mas$/, () => 'discharging off-peak: peak/mid-peak reserve already covered, avoids buying more than needed'],
+  [/^sin accion \(no compensa\)$/, () => "no action (not worth it)"],
+];
+
+function translateReason(esText) {
+  if (currentLang !== 'en' || !esText) return esText;
+  for (const [re, fn] of REASON_PATTERNS_EN) {
+    const m = esText.match(re);
+    if (m) return fn(m);
+  }
+  return esText;
+}
+
+const NOTE_MAP_EN = {
+  'reparto por capacidad': 'shared by capacity',
+  'limite al maximo declarado': 'limit at the declared maximum',
+  'sin margen (al minimo)': 'no margin (at the minimum)',
+  'bloqueada: llena y con excedente solar (evitar autodescarga)': 'blocked: full and solar surplus available (avoiding self-discharge)',
+  'sensor de SOC no disponible, se omite este ciclo': 'SOC sensor unavailable, skipped this cycle',
+  'sin accion': 'no action',
+};
+
+function translateNote(esText) {
+  if (currentLang !== 'en' || !esText) return esText;
+  return NOTE_MAP_EN[esText] || esText;
+}
+
+const LOG_LINE_PATTERNS_EN = [
+  [/^\[(.+?)\] CARGAR a ([\d.]+) W \((.+?), SOC ([\d.]+%|N\/D)\)$/, (m) => `[${m[1]}] CHARGE at ${m[2]} W (${translateNote(m[3])}, SOC ${m[4]})`],
+  [/^\[(.+?)\] DESCARGA activada, limite ([\d.]+) W \((.+?), SOC ([\d.]+%|N\/D)\)$/, (m) => `[${m[1]}] DISCHARGE enabled, limit ${m[2]} W (${translateNote(m[3])}, SOC ${m[4]})`],
+  [/^\[(.+?)\] descarga BLOQUEADA a 0W \((.+?), SOC ([\d.]+%|N\/D)\)$/, (m) => `[${m[1]}] discharge BLOCKED at 0W (${translateNote(m[2])}, SOC ${m[3]})`],
+  [/^\[(.+?)\] sin accion \(SOC ([\d.]+%|N\/D)\)$/, (m) => `[${m[1]}] no action (SOC ${m[2]})`],
+  [/^\[(.+?)\] OMITIDA — (.+)$/, (m) => `[${m[1]}] SKIPPED — ${translateNote(m[2])}`],
+];
+
+function translateLogLine(esLine) {
+  if (currentLang !== 'en' || !esLine) return esLine;
+  let line = esLine;
+  let suffix = '';
+  const avisoMatch = line.match(/^(.*) — AVISO: no se pudo aplicar en Home Assistant \((.+)\)$/);
+  if (avisoMatch) { line = avisoMatch[1]; suffix = ` — WARNING: could not apply in Home Assistant (${avisoMatch[2]})`; }
+  const simPrefix = line.startsWith('[SIMULACION] ');
+  if (simPrefix) line = line.slice('[SIMULACION] '.length);
+  for (const [re, fn] of LOG_LINE_PATTERNS_EN) {
+    const m = line.match(re);
+    if (m) return (simPrefix ? '[SIMULATION] ' : '') + fn(m) + suffix;
+  }
+  return esLine;
+}
+
+let currentLang = 'es';
+
+function detectBrowserLang() {
+  return (navigator.language || 'es').toLowerCase().startsWith('en') ? 'en' : 'es';
+}
+
+function t(key, vars) {
+  let s = (I18N[currentLang] || I18N.es)[key];
+  if (s === undefined) s = I18N.es[key] || key;
+  if (vars) for (const k in vars) s = s.split('{' + k + '}').join(vars[k]);
+  return s;
+}
+
+function applyStaticI18n() {
+  document.documentElement.lang = currentLang;
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-html]').forEach(el => { el.innerHTML = t(el.dataset.i18nHtml); });
+  const sel = document.getElementById('lang-select');
+  if (sel) {
+    sel.innerHTML = `
+      <option value="auto">${t('lang_auto')}</option>
+      <option value="es">${t('lang_es')}</option>
+      <option value="en">${t('lang_en')}</option>`;
+    sel.value = (cfg && cfg.general && cfg.general.language) || 'auto';
+  }
+}
+
+async function onLangChange() {
+  const chosen = document.getElementById('lang-select').value;
+  currentLang = chosen === 'auto' ? detectBrowserLang() : chosen;
+  // cfg.general.language se fija ANTES de applyStaticI18n(), porque esta
+  // reconstruye el <select> y fija su valor leyendo justo ese campo.
+  if (cfg) cfg.general.language = chosen;
+  applyStaticI18n();
+  updatePriorityHelp();
+  updatePvInstallTypeHelp();
+  renderBatteries();
+  renderPvArrays();
+  if (lastStatus) renderStatus(lastStatus);
+  const socChartPanel = document.querySelector('.tab-panel[data-tab="prevision"]');
+  if (socChartPanel && socChartPanel.classList.contains('active') && lastStatus) renderSocChart(lastStatus.plan || []);
+  if (document.querySelector('.tab-panel[data-tab="salud"]').classList.contains('active')) loadBatteryHealth();
+  // Se guarda como idioma por defecto de ESTA instalacion (no solo de este
+  // navegador), para que no haga falta volver a elegirlo cada vez que se
+  // entra desde otro sitio.
+  if (cfg) {
+    try {
+      await fetch('api/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(cfg) });
+    } catch (err) { /* si falla el guardado, el idioma sigue aplicado en esta sesion igualmente */ }
+  }
+}
+
+/* ============================================================ */
+
 let cfg = null;
 let editingBatteryId = null;
+let editingPvArrayId = null;
 let lastStatus = null;
 let lastSavings = null;
 
@@ -606,13 +1084,18 @@ function switchTab(name) {
 }
 
 function toast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2200);
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2200);
 }
 
 async function loadConfig() {
   cfg = await (await fetch('api/config')).json();
+
+  const savedLang = cfg.general.language || 'auto';
+  currentLang = savedLang === 'auto' ? detectBrowserLang() : savedLang;
+  applyStaticI18n();
+
   renderBatteries();
   renderPvArrays();
   updatePvInstallTypeHelp();
@@ -645,15 +1128,10 @@ function toggleTariffMode() {
   document.getElementById('tariff-pvpc').style.display = mode === 'pvpc_sensor' ? 'block' : 'none';
 }
 
-const PRIORITY_HELP = {
-  ahorro: 'Carga con excedente solar siempre, y además desde red en horas valle (o llano si no queda otra) lo justo para cubrir la próxima punta. Es el equilibrio recomendado entre ahorro y uso de la batería.',
-  autoconsumo: 'La batería solo carga con excedente solar. Nunca compra energía de red para cargarla, ni siquiera en valle — menos ahorro potencial, pero cero ciclos "artificiales" pagados.',
-  longevidad: 'Igual que "ahorro", pero el objetivo de carga nunca supera el 90% del SOC máximo real, para reducir el desgaste de mantener la batería siempre llena.',
-};
-
 function updatePriorityHelp() {
   const mode = document.getElementById('g-priority').value;
-  document.getElementById('priority-help').textContent = PRIORITY_HELP[mode] || '';
+  const helpKey = { ahorro: 'priority_help_ahorro', autoconsumo: 'priority_help_autoconsumo', longevidad: 'priority_help_longevidad' }[mode];
+  document.getElementById('priority-help').textContent = helpKey ? t(helpKey) : '';
   const pacedAvailable = mode !== 'autoconsumo';
   document.getElementById('paced-charging-row').style.display = pacedAvailable ? 'flex' : 'none';
   document.getElementById('paced-charging-help').style.display = pacedAvailable ? 'block' : 'none';
@@ -668,8 +1146,8 @@ function togglePvMode() {
 function renderBatteries() {
   const el = document.getElementById('batteries-list');
   const count = document.getElementById('battery-count');
-  count.textContent = cfg.batteries.length ? `${cfg.batteries.length} declarada${cfg.batteries.length > 1 ? 's' : ''}` : '';
-  if (!cfg.batteries.length) { el.innerHTML = '<p class="empty">Todavía no has añadido ninguna batería.</p>'; return; }
+  count.textContent = !cfg.batteries.length ? '' : cfg.batteries.length === 1 ? t('count_declared_one') : t('count_declared_n', { n: cfg.batteries.length });
+  if (!cfg.batteries.length) { el.innerHTML = `<p class="empty">${t('empty_no_batteries')}</p>`; return; }
   el.innerHTML = cfg.batteries.map(b => `
     <details class="item-card item-details">
       <summary>
@@ -677,18 +1155,18 @@ function renderBatteries() {
         <span class="meta">${b.capacity_wh} Wh</span>
       </summary>
       <div class="item-body">
-        <div class="kv"><span>SOC</span><code>${b.soc_sensor}</code></div>
-        <div class="kv"><span>Switch de carga</span><code>${b.charge_switch}</code></div>
-        <div class="kv"><span>Switch de descarga</span><code>${b.discharge_switch}</code></div>
-        <div class="kv"><span>Potencia máx. carga</span><code>${b.max_charge_w} W</code></div>
-        <div class="kv"><span>Potencia máx. descarga</span><code>${b.max_discharge_w} W</code></div>
-        <div class="kv"><span>SOC min / max</span><code>${b.min_soc_pct}% / ${b.max_soc_pct}%</code></div>
-        ${b.charge_power_limit_entity ? `<div class="kv"><span>Límite carga</span><code>${b.charge_power_limit_entity}</code></div>` : ''}
-        ${b.discharge_power_limit_entity ? `<div class="kv"><span>Límite descarga</span><code>${b.discharge_power_limit_entity}</code></div>` : ''}
-        ${b.power_sensor ? `<div class="kv"><span>Sensor de descarga</span><code>${b.power_sensor}</code></div>` : '<p class="help">Sin sensor de descarga declarado — no participa en el cálculo de consumo real.</p>'}
+        <div class="kv"><span>${t('kv_soc')}</span><code>${b.soc_sensor}</code></div>
+        <div class="kv"><span>${t('kv_charge_switch')}</span><code>${b.charge_switch}</code></div>
+        <div class="kv"><span>${t('kv_discharge_switch')}</span><code>${b.discharge_switch}</code></div>
+        <div class="kv"><span>${t('kv_max_charge')}</span><code>${b.max_charge_w} W</code></div>
+        <div class="kv"><span>${t('kv_max_discharge')}</span><code>${b.max_discharge_w} W</code></div>
+        <div class="kv"><span>${t('kv_min_max_soc')}</span><code>${b.min_soc_pct}% / ${b.max_soc_pct}%</code></div>
+        ${b.charge_power_limit_entity ? `<div class="kv"><span>${t('kv_charge_limit')}</span><code>${b.charge_power_limit_entity}</code></div>` : ''}
+        ${b.discharge_power_limit_entity ? `<div class="kv"><span>${t('kv_discharge_limit')}</span><code>${b.discharge_power_limit_entity}</code></div>` : ''}
+        ${b.power_sensor ? `<div class="kv"><span>${t('kv_discharge_sensor')}</span><code>${b.power_sensor}</code></div>` : `<p class="help">${t('no_discharge_sensor_note')}</p>`}
         <div class="actions">
-          <button class="secondary" onclick="editBattery('${b.id}')" type="button">Editar</button>
-          <button class="danger" onclick="deleteBattery('${b.id}')" type="button">Eliminar esta batería</button>
+          <button class="secondary" onclick="editBattery('${b.id}')" type="button">${t('btn_edit')}</button>
+          <button class="danger" onclick="deleteBattery('${b.id}')" type="button">${t('btn_delete_battery')}</button>
         </div>
       </div>
     </details>`).join('');
@@ -696,31 +1174,35 @@ function renderBatteries() {
 
 function renderPvArrays() {
   const el = document.getElementById('pv-arrays-list');
-  if (!cfg.pv_arrays.length) { el.innerHTML = '<p class="empty">Todavía no has añadido ningún panel/array solar.</p>'; return; }
+  if (!cfg.pv_arrays.length) { el.innerHTML = `<p class="empty">${t('empty_no_panels')}</p>`; return; }
   el.innerHTML = cfg.pv_arrays.map(a => `
     <div class="item-card">
       <div>
-        <div class="item-name">${a.name || '(sin nombre)'}</div>
-        <div class="meta">${a.mode === 'entity' ? 'Sensor HA: ' + a.entity_id : `Forecast.Solar API (${a.kwp} kWp)`}</div>
-        <div class="meta">${a.current_sensor ? 'Instantáneo: ' + a.current_sensor : 'Sin sensor instantáneo (solo previsión)'}</div>
-        <div class="meta">${a.installation_type === 'hybrid' ? 'Conectado directo a batería (inversor integrado)' : 'Autoconsumo (AC)'}</div>
+        <div class="item-name">${a.name || '(?)'}</div>
+        <div class="meta">${a.mode === 'entity' ? t('pv_meta_sensor', { entity: a.entity_id }) : t('pv_meta_api', { kwp: a.kwp })}</div>
+        <div class="meta">${a.current_sensor ? t('pv_meta_instant', { sensor: a.current_sensor }) : t('pv_meta_no_instant')}</div>
+        <div class="meta">${a.installation_type === 'hybrid' ? t('pv_meta_hybrid') : t('pv_meta_ac')}</div>
       </div>
-      <button class="danger" onclick="deletePvArray('${a.id}')">Eliminar</button>
+      <div class="actions" style="margin-top:0">
+        <button class="secondary" onclick="editPvArray('${a.id}')" type="button">${t('btn_edit')}</button>
+        <button class="danger" onclick="deletePvArray('${a.id}')" type="button">${t('btn_delete_battery').split(' ').slice(0,1).join(' ') === 'Delete' ? 'Delete' : 'Eliminar'}</button>
+      </div>
     </div>`).join('');
 }
 
-const PV_INSTALL_TYPE_HELP = {
-  ac_coupled: 'Este panel/string es parte de una instalación de autoconsumo aparte — para aprovechar su excedente, la app tiene que activar el modo carga de la batería y fijar la potencia por AC.',
-  hybrid: 'Este panel/string está conectado directamente a una batería con inversor integrado. No hace falta que la app active ningún modo de carga para aprovechar su excedente — la batería ya lo absorbe sola al regular su propia salida. La app descuenta automáticamente esta potencia de lo que manda pedir por AC al resto.',
-};
-
 function updatePvInstallTypeHelp() {
   const type = document.getElementById('pv-install-type').value;
-  document.getElementById('pv-install-type-help').textContent = PV_INSTALL_TYPE_HELP[type] || '';
+  document.getElementById('pv-install-type-help').textContent = type === 'hybrid' ? t('install_help_hybrid') : t('install_help_ac');
 }
 
 function showBatteryFormError(msg) {
   const el = document.getElementById('battery-form-error');
+  if (!msg) { el.style.display = 'none'; el.textContent = ''; return; }
+  el.style.display = 'block'; el.classList.add('warn'); el.textContent = msg;
+}
+
+function showPvFormError(msg) {
+  const el = document.getElementById('pv-form-error');
   if (!msg) { el.style.display = 'none'; el.textContent = ''; return; }
   el.style.display = 'block'; el.classList.add('warn'); el.textContent = msg;
 }
@@ -733,8 +1215,8 @@ function resetBatteryForm() {
   document.getElementById('b-minsoc').value = 3;
   document.getElementById('b-maxsoc').value = 100;
   editingBatteryId = null;
-  document.getElementById('add-battery-summary').textContent = '+ Añadir batería';
-  document.getElementById('battery-form-submit-btn').textContent = 'Guardar batería';
+  document.getElementById('add-battery-summary').textContent = t('add_battery_toggle');
+  document.getElementById('battery-form-submit-btn').textContent = t('btn_save_battery');
   showBatteryFormError('');
 }
 
@@ -760,8 +1242,8 @@ function editBattery(id) {
   document.getElementById('b-power-sensor').value = b.power_sensor || '';
 
   editingBatteryId = id;
-  document.getElementById('add-battery-summary').textContent = `Editando "${b.name}"`;
-  document.getElementById('battery-form-submit-btn').textContent = 'Guardar cambios';
+  document.getElementById('add-battery-summary').textContent = t('editing_battery', { name: b.name });
+  document.getElementById('battery-form-submit-btn').textContent = t('btn_save_changes');
   showBatteryFormError('');
   const panel = document.getElementById('add-battery-panel');
   panel.open = true;
@@ -785,10 +1267,10 @@ async function addBattery() {
     power_sensor: document.getElementById('b-power-sensor').value.trim() || null,
   };
   if (!battery.name || !battery.soc_sensor || !battery.charge_switch || !battery.discharge_switch) {
-    showBatteryFormError('Nombre, sensor de SOC y los dos switches son obligatorios.'); return;
+    showBatteryFormError(t('error_battery_required')); return;
   }
   if (!battery.capacity_wh || battery.capacity_wh <= 0) {
-    showBatteryFormError('La capacidad (Wh) tiene que ser un número mayor que 0.'); return;
+    showBatteryFormError(t('error_capacity_positive')); return;
   }
 
   const isEdit = !!editingBatteryId;
@@ -799,31 +1281,80 @@ async function addBattery() {
     const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(battery) });
     if (!res.ok) {
       const body = await res.text();
-      showBatteryFormError(`Error del servidor (${res.status}): ${body || 'sin detalle'}`);
+      showBatteryFormError(t('error_server', { status: res.status, detail: body || t('error_no_detail') }));
       return;
     }
   } catch (err) {
-    showBatteryFormError('No se pudo conectar con el servicio: ' + err.message);
+    showBatteryFormError(t('error_connect', { msg: err.message }));
     return;
   }
   resetBatteryForm();
   document.getElementById('add-battery-panel').open = false;
   await loadConfig();
-  toast(isEdit ? 'Batería actualizada.' : 'Batería añadida.');
+  toast(isEdit ? t('toast_battery_updated') : t('toast_battery_added'));
 }
 
 async function deleteBattery(id) {
   try {
     const res = await fetch('api/batteries/' + id, { method: 'DELETE' });
-    if (!res.ok) { toast('No se pudo eliminar (error ' + res.status + ').'); return; }
+    if (!res.ok) { toast(t('toast_could_not_delete', { status: res.status })); return; }
   } catch (err) {
-    toast('No se pudo conectar con el servicio: ' + err.message); return;
+    toast(t('error_connect', { msg: err.message })); return;
   }
   await loadConfig();
-  toast('Batería eliminada.');
+  toast(t('toast_battery_deleted'));
+}
+
+function resetPvArrayForm() {
+  ['pv-name','pv-entity','pv-apikey','pv-current-sensor'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('pv-mode').value = 'entity';
+  document.getElementById('pv-lat').value = '';
+  document.getElementById('pv-lon').value = '';
+  document.getElementById('pv-decl').value = '';
+  document.getElementById('pv-az').value = '';
+  document.getElementById('pv-kwp').value = '';
+  document.getElementById('pv-install-type').value = 'ac_coupled';
+  togglePvMode();
+  updatePvInstallTypeHelp();
+  editingPvArrayId = null;
+  document.getElementById('add-pv-summary').textContent = t('add_pv_toggle');
+  document.getElementById('pv-form-submit-btn').textContent = t('btn_add_panel');
+  showPvFormError('');
+}
+
+function cancelPvArrayForm() {
+  resetPvArrayForm();
+  document.getElementById('add-pv-panel').open = false;
+}
+
+function editPvArray(id) {
+  const a = cfg.pv_arrays.find(x => x.id === id);
+  if (!a) return;
+  document.getElementById('pv-name').value = a.name || '';
+  document.getElementById('pv-mode').value = a.mode || 'entity';
+  document.getElementById('pv-entity').value = a.entity_id || '';
+  document.getElementById('pv-apikey').value = a.api_key || '';
+  document.getElementById('pv-lat').value = a.lat ?? '';
+  document.getElementById('pv-lon').value = a.lon ?? '';
+  document.getElementById('pv-decl').value = a.declination ?? '';
+  document.getElementById('pv-az').value = a.azimuth ?? '';
+  document.getElementById('pv-kwp').value = a.kwp ?? '';
+  document.getElementById('pv-current-sensor').value = a.current_sensor || '';
+  document.getElementById('pv-install-type').value = a.installation_type || 'ac_coupled';
+  togglePvMode();
+  updatePvInstallTypeHelp();
+
+  editingPvArrayId = id;
+  document.getElementById('add-pv-summary').textContent = t('editing_panel', { name: a.name || '' });
+  document.getElementById('pv-form-submit-btn').textContent = t('btn_save_panel_changes');
+  showPvFormError('');
+  const panel = document.getElementById('add-pv-panel');
+  panel.open = true;
+  panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 async function addPvArray() {
+  showPvFormError('');
   const array = {
     name: document.getElementById('pv-name').value.trim(),
     mode: document.getElementById('pv-mode').value,
@@ -838,27 +1369,34 @@ async function addPvArray() {
     installation_type: document.getElementById('pv-install-type').value,
   };
   if (array.mode === 'entity' && !array.entity_id) {
-    toast('Indica la entidad de previsión, o cambia a modo API.'); return;
+    showPvFormError(t('error_pv_entity_required')); return;
   }
+
+  const isEdit = !!editingPvArrayId;
+  const url = isEdit ? 'api/pv_arrays/' + editingPvArrayId : 'api/pv_arrays';
+  const method = isEdit ? 'PUT' : 'POST';
+
   try {
-    const res = await fetch('api/pv_arrays', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(array) });
-    if (!res.ok) { toast('Error del servidor (' + res.status + ') al añadir el panel.'); return; }
+    const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(array) });
+    if (!res.ok) { showPvFormError(t('toast_server_error_add_panel', { status: res.status })); return; }
   } catch (err) {
-    toast('No se pudo conectar con el servicio: ' + err.message); return;
+    showPvFormError(t('error_connect', { msg: err.message })); return;
   }
+  resetPvArrayForm();
+  document.getElementById('add-pv-panel').open = false;
   await loadConfig();
-  toast('Panel añadido.');
+  toast(isEdit ? t('toast_panel_updated') : t('toast_panel_added'));
 }
 
 async function deletePvArray(id) {
   try {
     const res = await fetch('api/pv_arrays/' + id, { method: 'DELETE' });
-    if (!res.ok) { toast('No se pudo eliminar (error ' + res.status + ').'); return; }
+    if (!res.ok) { toast(t('toast_could_not_delete_panel', { status: res.status })); return; }
   } catch (err) {
-    toast('No se pudo conectar con el servicio: ' + err.message); return;
+    toast(t('error_connect', { msg: err.message })); return;
   }
   await loadConfig();
-  toast('Panel eliminado.');
+  toast(t('toast_panel_deleted'));
 }
 
 function parsePeriods(str) {
@@ -887,11 +1425,11 @@ async function saveConfig() {
 
   try {
     const res = await fetch('api/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(cfg) });
-    if (!res.ok) { toast('Error del servidor (' + res.status + ') al guardar.'); return; }
+    if (!res.ok) { toast(t('toast_server_error_save', { status: res.status })); return; }
   } catch (err) {
-    toast('No se pudo conectar con el servicio: ' + err.message); return;
+    toast(t('error_connect', { msg: err.message })); return;
   }
-  toast('Configuración guardada.');
+  toast(t('toast_config_saved'));
   refreshStatus();
 }
 
@@ -906,7 +1444,7 @@ async function importConfigFile(input) {
   try {
     parsed = JSON.parse(await file.text());
   } catch (err) {
-    toast('El archivo no es un JSON válido: ' + err.message);
+    toast(t('toast_import_invalid', { msg: err.message }));
     input.value = '';
     return;
   }
@@ -914,29 +1452,29 @@ async function importConfigFile(input) {
     const res = await fetch('api/config/import', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(parsed) });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      toast('Error al importar: ' + (body.error || res.status));
+      toast(t('toast_import_error', { detail: body.error || res.status }));
       input.value = '';
       return;
     }
   } catch (err) {
-    toast('No se pudo conectar con el servicio: ' + err.message);
+    toast(t('error_connect', { msg: err.message }));
     input.value = '';
     return;
   }
   input.value = '';
   await loadConfig();
-  toast('Configuración restaurada.');
+  toast(t('toast_config_restored'));
 }
 
 async function runNow() {
-  document.getElementById('status').innerHTML = '<p class="empty">Ejecutando...</p>';
+  document.getElementById('status').innerHTML = `<p class="empty">${t('status_running')}</p>`;
   try {
     const res = await fetch('api/run_now', { method: 'POST' });
     const status = await res.json();
     renderStatus(status);
-    if (!res.ok) toast('El ciclo terminó con error, revisa el estado.');
+    if (!res.ok) toast(t('status_cycle_error'));
   } catch (err) {
-    document.getElementById('status').innerHTML = `<p style="color:var(--red)">No se pudo conectar con el servicio: ${err.message}</p>`;
+    document.getElementById('status').innerHTML = `<p style="color:var(--red)">${t('error_connect', { msg: err.message })}</p>`;
   }
 }
 
@@ -944,7 +1482,7 @@ function renderStatus(status) {
   lastStatus = status;
   const pill = document.getElementById('mode-pill');
   const isDry = cfg && cfg.general.dry_run;
-  pill.textContent = isDry ? 'SIMULACIÓN' : 'EN VIVO';
+  pill.textContent = isDry ? t('mode_sim') : t('mode_live');
   pill.className = 'pill ' + (isDry ? 'pill-dry' : 'pill-live');
 
   document.getElementById('last-run').textContent = status.last_run ? new Date(status.last_run).toLocaleString() : '';
@@ -955,17 +1493,18 @@ function renderStatus(status) {
     el.innerHTML = `<p style="color:var(--red)">${status.error}</p>`;
     statGrid.innerHTML = '';
   } else if (!status.last_run) {
-    el.innerHTML = '<p class="empty">Todavía no se ha ejecutado ningún ciclo.</p>';
+    el.innerHTML = `<p class="empty">${t('status_never_run')}</p>`;
     statGrid.innerHTML = '';
   } else {
     let extra = '';
     if (status.skipped_batteries && status.skipped_batteries.length) {
-      extra += `<p class="help warn">Omitidas este ciclo (sensor no disponible): ${status.skipped_batteries.join(', ')}</p>`;
+      extra += `<p class="help warn">${t('status_skipped', { list: status.skipped_batteries.join(', ') })}</p>`;
     }
     if (status.pv_now_actual !== null && status.pv_now_actual !== undefined) {
-      extra += `<p class="help">Generación real ahora: ${Math.round(status.pv_now_actual)} W</p>`;
+      extra += `<p class="help">${t('status_generation_now', { w: Math.round(status.pv_now_actual) })}</p>`;
     }
-    el.innerHTML = extra + `<div class="status-line">${(status.log_lines || []).join('\n')}</div>`;
+    const logLines = (status.log_lines || []).map(translateLogLine).join('\n');
+    el.innerHTML = extra + `<div class="status-line">${logLines}</div>`;
     statGrid.innerHTML = renderStatTiles(status, lastSavings);
   }
 
@@ -976,19 +1515,20 @@ function renderStatus(status) {
   renderPowerMeter(status.energy_flow);
   renderBatteryBreakdown(status.distribution);
 
+  const dateLocale = currentLang === 'en' ? 'en-GB' : 'es-ES';
   const tbody = document.querySelector('#plan-table tbody');
   tbody.innerHTML = (status.plan || []).map(hp => `
     <tr class="${hp.historical ? 'row-historical' : 'row-future'}">
-      <td>${hp.historical ? '<span class="row-badge" title="Ya ocurrió">✓</span>' : ''}</td>
-      <td>${new Date(hp.dt).toLocaleString('es-ES', {weekday:'short', hour:'2-digit', minute:'2-digit'})}</td>
-      <td><span class="tier tier-${hp.tier}">${hp.tier}</span></td>
+      <td>${hp.historical ? `<span class="row-badge" title="${t('already_happened')}">✓</span>` : ''}</td>
+      <td>${new Date(hp.dt).toLocaleString(dateLocale, {weekday:'short', hour:'2-digit', minute:'2-digit'})}</td>
+      <td><span class="tier tier-${hp.tier}">${translateTier(hp.tier)}</span></td>
       <td>${hp.price.toFixed(3)}</td>
       <td>${hp.pv_w} W</td>
       <td>${hp.load_w} W</td>
       <td>${hp.charge_w > 0 ? hp.charge_w + ' W' : '–'}</td>
       <td>${hp.discharge_w > 0 ? hp.discharge_w + ' W' : '–'}</td>
       <td>${hp.soc_pct}%</td>
-      <td class="meta">${hp.reason}</td>
+      <td class="meta">${translateReason(hp.reason)}</td>
     </tr>`).join('');
 
   const socChartPanel = document.querySelector('.tab-panel[data-tab="prevision"]');
@@ -999,48 +1539,48 @@ function renderStatTiles(status, savings) {
   const now = (status.plan || []).find(hp => !hp.historical) || (status.plan || [])[0];
   if (!now) return '';
   const dist = status.distribution || {};
-  const actionLabel = dist.action === 'charge' ? 'Cargando' : dist.action === 'discharge' ? 'Descargando' : 'En reposo';
+  const actionLabel = dist.action === 'charge' ? t('stat_charging') : dist.action === 'discharge' ? t('stat_discharging') : t('stat_idle');
   const netW = dist.action === 'charge' ? now.charge_w : dist.action === 'discharge' ? -now.discharge_w : 0;
   const socNow = status.current_soc_pct !== null && status.current_soc_pct !== undefined ? status.current_soc_pct : now.soc_pct;
   const tiles = [
-    { label: 'SOC agregado', value: socNow + '%', accent: true, extraHtml: renderSocSparkline(status) },
-    { label: 'Tramo actual', value: `<span class="tier tier-${now.tier}">${now.tier}</span>`, raw: true },
-    { label: 'Precio', value: now.price.toFixed(3) + ' €/kWh' },
-    { label: 'Solar', value: now.pv_w + ' W' },
-    { label: 'Consumo', value: now.load_w + ' W' },
+    { label: t('stat_soc'), value: socNow + '%', accent: true, extraHtml: renderSocSparkline(status) },
+    { label: t('stat_tier'), value: `<span class="tier tier-${now.tier}">${translateTier(now.tier)}</span>`, raw: true },
+    { label: t('stat_price'), value: now.price.toFixed(3) + ' €/kWh' },
+    { label: t('stat_solar'), value: now.pv_w + ' W' },
+    { label: t('stat_consumption'), value: now.load_w + ' W' },
     { label: actionLabel, value: (netW === 0 ? '0' : (netW > 0 ? '+' : '') + netW) + ' W', accent: netW !== 0 },
   ];
   if (savings) {
     tiles.push(
-      { label: 'Ahorro hoy', value: fmtEur(savings.today_savings_eur), accent: savings.today_savings_eur > 0 },
-      { label: 'Ahorro total', value: fmtEur(savings.total_savings_eur), accent: savings.total_savings_eur > 0 },
+      { label: t('stat_savings_today'), value: fmtEur(savings.today_savings_eur), accent: savings.today_savings_eur > 0 },
+      { label: t('stat_savings_total'), value: fmtEur(savings.total_savings_eur), accent: savings.total_savings_eur > 0 },
     );
   }
   if (status.next_tariff_change) {
     const ntc = status.next_tariff_change;
-    const label = ntc.hours_until <= 0 ? 'ahora' : ntc.hours_until === 1 ? '1 hora' : `${ntc.hours_until} horas`;
+    const label = ntc.hours_until <= 0 ? t('punta_now').split(' ')[0] : ntc.hours_until === 1 ? t('punta_in_1h') : t('punta_in_nh', { n: ntc.hours_until });
     tiles.push({
-      label: 'Cambia a', value: label,
-      subHtml: `a <span class="tier tier-${ntc.tier}" style="font-size:.62rem">${ntc.tier}</span>`,
+      label: t('stat_changes_to'), value: label,
+      subHtml: `<span class="tier tier-${ntc.tier}" style="font-size:.62rem">${translateTier(ntc.tier)}</span>`,
     });
   }
   if (status.consumption_comparison) {
     const cc = status.consumption_comparison;
     const good = cc.delta_pct <= 0;
     tiles.push({
-      label: `Vs. media ${cc.days_compared}d`,
+      label: t('stat_vs_avg', { days: cc.days_compared }),
       value: (cc.delta_pct > 0 ? '+' : '') + cc.delta_pct + '%',
       colorVar: good ? '--green' : '--red',
-      sub: `${cc.today_kwh} kWh hoy · media ${cc.avg_kwh} kWh`,
+      sub: t('stat_vs_avg_sub', { today: cc.today_kwh, avg: cc.avg_kwh }),
     });
   }
-  return tiles.map(t => `
+  return tiles.map(tile => `
     <div class="stat-tile">
-      <div class="stat-label">${t.label}</div>
-      <div class="stat-value ${t.accent ? 'accent' : ''}" ${t.colorVar ? `style="color:var(${t.colorVar})"` : ''}>${t.value}</div>
-      ${t.extraHtml || ''}
-      ${t.sub ? `<div class="stat-sub">${t.sub}</div>` : ''}
-      ${t.subHtml ? `<div class="stat-sub">${t.subHtml}</div>` : ''}
+      <div class="stat-label">${tile.label}</div>
+      <div class="stat-value ${tile.accent ? 'accent' : ''}" ${tile.colorVar ? `style="color:var(${tile.colorVar})"` : ''}>${tile.value}</div>
+      ${tile.extraHtml || ''}
+      ${tile.sub ? `<div class="stat-sub">${tile.sub}</div>` : ''}
+      ${tile.subHtml ? `<div class="stat-sub">${tile.subHtml}</div>` : ''}
     </div>`).join('');
 }
 
@@ -1062,7 +1602,8 @@ function renderSocSparkline(status) {
   return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" class="sparkline" preserveAspectRatio="none" aria-hidden="true">
     <polyline points="${pts.join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline>
     <circle cx="${lx}" cy="${ly}" r="2.4" fill="var(--accent)"></circle>
-  </svg>`;
+  </svg>
+  <div class="stat-sub">${t('sparkline_last_hours')}</div>`;
 }
 
 function fmtEur(v) {
@@ -1082,53 +1623,55 @@ function renderHealthPill(anomaly) {
   const pill = document.getElementById('health-pill');
   if (!anomaly) { pill.textContent = ''; pill.className = 'pill'; return; }
   const isAnomaly = anomaly.status === 'anomaly';
-  pill.textContent = isAnomaly ? 'ANÓMALO' : 'SALUDABLE';
+  pill.textContent = isAnomaly ? t('health_anomaly') : t('health_ok');
   pill.className = 'pill ' + (isAnomaly ? 'pill-anomaly' : 'pill-ok');
 }
 
 function renderAnomalyBox(anomaly) {
   const host = document.getElementById('anomaly-box');
   if (!anomaly || anomaly.status !== 'anomaly') { host.innerHTML = ''; return; }
-  const since = anomaly.since ? new Date(anomaly.since).toLocaleString('es-ES') : '—';
+  const dateLocale = currentLang === 'en' ? 'en-GB' : 'es-ES';
+  const since = anomaly.since ? new Date(anomaly.since).toLocaleString(dateLocale) : '—';
   const delta = anomaly.live_load_w - anomaly.expected_load_w;
   const deltaPct = anomaly.expected_load_w ? Math.round(100 * delta / anomaly.expected_load_w) : 0;
   host.innerHTML = `
     <div class="anomaly-box">
-      <h3>Consumo anómalo detectado</h3>
-      <div class="kv"><span>Desde</span><code>${since}</code></div>
-      <div class="kv"><span>Consumo real ahora</span><code>${anomaly.live_load_w} W</code></div>
-      <div class="kv"><span>Esperado para esta hora</span><code>${anomaly.expected_load_w} W</code></div>
-      <div class="kv"><span>Diferencia</span><code>+${delta} W (+${deltaPct}%)</code></div>
-      <p class="help" style="margin-top:10px">Se avisa cuando el consumo real supera la previsión histórica en más de un 60% Y al menos 400W de diferencia, sostenido varios ciclos seguidos (para no disparar con un pico de un instante). Revisa si se ha quedado algo encendido. La alerta se retira sola cuando el consumo vuelve a lo esperado.</p>
+      <h3>${t('anomaly_title')}</h3>
+      <div class="kv"><span>${t('anomaly_since')}</span><code>${since}</code></div>
+      <div class="kv"><span>${t('anomaly_live_now')}</span><code>${anomaly.live_load_w} W</code></div>
+      <div class="kv"><span>${t('anomaly_expected')}</span><code>${anomaly.expected_load_w} W</code></div>
+      <div class="kv"><span>${t('anomaly_diff')}</span><code>+${delta} W (+${deltaPct}%)</code></div>
+      <p class="help" style="margin-top:10px">${t('anomaly_explain')}</p>
     </div>`;
 }
 
 function renderNextPunta(nextPunta) {
   const host = document.getElementById('next-punta');
-  if (!nextPunta) { host.innerHTML = '<p class="empty">No hay ninguna hora punta en el horizonte de previsión configurado.</p>'; return; }
-  const label = nextPunta.hours_until === 0 ? 'Estás en punta ahora mismo'
-    : nextPunta.hours_until === 1 ? 'En 1 hora' : `En ${nextPunta.hours_until} horas`;
-  const dt = new Date(nextPunta.dt).toLocaleString('es-ES', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+  if (!nextPunta) { host.innerHTML = `<p class="empty">${t('punta_none')}</p>`; return; }
+  const label = nextPunta.hours_until === 0 ? t('punta_now')
+    : nextPunta.hours_until === 1 ? t('punta_in_1h') : t('punta_in_nh', { n: nextPunta.hours_until });
+  const dateLocale = currentLang === 'en' ? 'en-GB' : 'es-ES';
+  const dt = new Date(nextPunta.dt).toLocaleString(dateLocale, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
   const pct = Math.min(100, nextPunta.reserve_pct);
   const colorVar = pct >= 95 ? '--green' : pct >= 60 ? '--amber' : '--red';
   host.innerHTML = `
     <div class="punta-countdown">${label}</div>
     <p class="help" style="margin-top:2px">${dt}</p>
     <div class="stat-grid" style="margin-top:14px">
-      <div class="stat-tile"><div class="stat-label">Reserva actual</div><div class="stat-value" style="color:var(${colorVar})">${nextPunta.reserve_pct}%</div></div>
-      <div class="stat-tile"><div class="stat-label">SOC ahora</div><div class="stat-value">${(nextPunta.current_soc_wh/1000).toFixed(1)} kWh</div></div>
-      <div class="stat-tile"><div class="stat-label">Objetivo de reserva</div><div class="stat-value">${(nextPunta.reserve_target_wh/1000).toFixed(1)} kWh</div></div>
+      <div class="stat-tile"><div class="stat-label">${t('punta_reserve_current')}</div><div class="stat-value" style="color:var(${colorVar})">${nextPunta.reserve_pct}%</div></div>
+      <div class="stat-tile"><div class="stat-label">${t('punta_soc_now')}</div><div class="stat-value">${(nextPunta.current_soc_wh/1000).toFixed(1)} kWh</div></div>
+      <div class="stat-tile"><div class="stat-label">${t('punta_reserve_target')}</div><div class="stat-value">${(nextPunta.reserve_target_wh/1000).toFixed(1)} kWh</div></div>
     </div>
     <div class="health-bar-track" style="margin-top:12px"><div class="health-bar-fill" style="width:${pct}%;background:var(${colorVar})"></div></div>
-    <p class="help">"Reserva actual" es cuánto de lo que el planificador cree necesario para cubrir toda la punta que queda por delante ya tienes acumulado — el mismo número que usa para decidir si cargar en llano de emergencia.</p>`;
+    <p class="help">${t('punta_explain')}</p>`;
 }
 
 function renderEnergyFlow(flow) {
   const host = document.getElementById('energy-flow');
   const hint = document.getElementById('autoconsumo-hint');
-  if (!flow) { host.innerHTML = '<p class="empty">Todavía no hay datos del ciclo.</p>'; hint.textContent = ''; return; }
+  if (!flow) { host.innerHTML = `<p class="empty">${t('status_no_cycle_data')}</p>`; hint.textContent = ''; return; }
 
-  hint.textContent = `${flow.autoconsumo_pct}% autoconsumo`;
+  hint.textContent = `${flow.autoconsumo_pct}${t('autoconsumo_suffix')}`;
 
   const total = flow.solar_w || 0;
   const casaSeg = total > 0 ? Math.min(100, 100 * flow.solar_to_casa_w / total) : 0;
@@ -1138,35 +1681,35 @@ function renderEnergyFlow(flow) {
 
   host.innerHTML = `
     <div class="flow-source-head">
-      <span class="flow-source-name">Solar</span>
+      <span class="flow-source-name">${t('stat_solar')}</span>
       <span class="flow-source-value">${total} W</span>
     </div>
-    <div class="flow-bar-track" role="img" aria-label="De ${total}W de solar, ${flow.solar_to_casa_w}W van a la casa y ${flow.solar_to_batt_w}W a la batería.">
+    <div class="flow-bar-track" role="img" aria-label="${total}W, ${flow.solar_to_casa_w}W / ${flow.solar_to_batt_w}W">
       <div class="flow-bar-seg" style="width:${casaSeg}%; background:var(--muted)"></div>
       <div class="flow-bar-seg" style="width:${battSeg}%; background:var(--accent)"></div>
     </div>
     <div class="flow-endpoints">
       <div class="flow-endpoint">
         <span class="dot" style="background:var(--muted)"></span>
-        <span><div class="flow-endpoint-label">Casa</div><div class="flow-endpoint-value">${flow.load_w} W</div></span>
+        <span><div class="flow-endpoint-label">${t('flow_casa')}</div><div class="flow-endpoint-value">${flow.load_w} W</div></span>
       </div>
       <div class="flow-endpoint">
         <span class="dot" style="background:var(--accent)"></span>
-        <span><div class="flow-endpoint-label">Batería</div><div class="flow-endpoint-value">${battLabel}</div></span>
+        <span><div class="flow-endpoint-label">${t('flow_bateria')}</div><div class="flow-endpoint-value">${battLabel}</div></span>
       </div>
       <div class="flow-endpoint">
         <span class="dot" style="background:${flow.grid_w > 0 ? 'var(--amber)' : 'var(--border)'}"></span>
-        <span><div class="flow-endpoint-label">Red</div><div class="flow-endpoint-value">${flow.grid_w} W</div></span>
+        <span><div class="flow-endpoint-label">${t('flow_red')}</div><div class="flow-endpoint-value">${flow.grid_w} W</div></span>
       </div>
     </div>
-    <span class="autoconsumo-chip ${flow.autoconsumo_pct < 100 ? 'low' : ''}"><span class="dot"></span>${flow.autoconsumo_pct}% autoconsumo${flow.grid_w > 0 ? ' — importando de red' : ' — nada importado de red'}</span>`;
+    <span class="autoconsumo-chip ${flow.autoconsumo_pct < 100 ? 'low' : ''}"><span class="dot"></span>${flow.autoconsumo_pct}${t('autoconsumo_suffix')}${flow.grid_w > 0 ? t('flow_autoconsumo_import') : t('flow_autoconsumo_none')}</span>`;
 }
 
 function renderPowerMeter(flow) {
   const host = document.getElementById('power-meter');
   const limit = cfg && cfg.general ? Number(cfg.general.contracted_power_w) || 0 : 0;
   if (!limit) {
-    host.innerHTML = '<p class="empty">Configura tu potencia contratada en "Configuración → Seguridad y límites" para ver este medidor.</p>';
+    host.innerHTML = `<p class="empty">${t('power_meter_config_hint')}</p>`;
     return;
   }
   const inUse = flow ? flow.grid_w : 0;
@@ -1174,20 +1717,20 @@ function renderPowerMeter(flow) {
   const colorVar = pct >= 90 ? '--red' : pct >= 70 ? '--amber' : '--accent';
   host.innerHTML = `
     <div class="meter-track"><div class="meter-fill" style="width:${pct}%; background:var(${colorVar})"></div></div>
-    <div class="meter-labels"><span>${inUse} W en uso</span><span>límite ${limit} W</span></div>`;
+    <div class="meter-labels"><span>${t('power_in_use', { w: inUse })}</span><span>${t('power_limit', { w: limit })}</span></div>`;
 }
 
 function renderBatteryBreakdown(distribution) {
   const host = document.getElementById('battery-breakdown');
   const entries = distribution && distribution.per_battery ? distribution.per_battery : [];
-  if (!entries.length) { host.innerHTML = '<p class="empty">Todavía no hay datos del ciclo.</p>'; return; }
+  if (!entries.length) { host.innerHTML = `<p class="empty">${t('status_no_cycle_data')}</p>`; return; }
   const action = distribution.action;
   const rows = entries.map(e => {
     if (e.soc_pct === null || e.soc_pct === undefined) {
-      return `<div class="battery-mini"><div class="bm-name">${e.name}</div><span class="bm-status idle">sin datos</span></div>`;
+      return `<div class="battery-mini"><div class="bm-name">${e.name}</div><span class="bm-status idle">${t('battery_status_no_data')}</span></div>`;
     }
     const statusClass = action === 'charge' && e.enabled ? 'charge' : action === 'discharge' && e.enabled ? 'discharge' : 'idle';
-    const statusText = statusClass === 'charge' ? `cargando ${e.power_w}W` : statusClass === 'discharge' ? `descarga ≤${e.power_w}W` : 'sin acción';
+    const statusText = statusClass === 'charge' ? t('battery_status_charging', { w: e.power_w }) : statusClass === 'discharge' ? t('battery_status_discharge', { w: e.power_w }) : t('battery_status_idle');
     const barColor = statusClass === 'discharge' ? 'var(--amber)' : 'var(--accent)';
     return `
     <div class="battery-mini">
@@ -1207,7 +1750,7 @@ function tierColorVar(tier) {
 function renderSocChart(plan) {
   const host = document.getElementById('soc-chart');
   if (!host) return;
-  if (!plan.length) { host.innerHTML = '<p class="empty">Todavía no hay datos suficientes para dibujar la gráfica.</p>'; return; }
+  if (!plan.length) { host.innerHTML = `<p class="empty">${t('chart_no_data')}</p>`; return; }
 
   const w = Math.max(host.clientWidth || 640, 280);
   const h = 220;
@@ -1240,7 +1783,7 @@ function renderSocChart(plan) {
   const points = plan.map((hp, i) => `<circle class="soc-pt" data-i="${i}" cx="${xAt(i).toFixed(1)}" cy="${yAt(hp.soc_pct).toFixed(1)}" r="9" fill="transparent"></circle>`).join('');
 
   host.innerHTML = `
-    <svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" role="img" aria-label="Evolución del SOC de las baterías a lo largo del día">
+    <svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" role="img" aria-label="SOC">
       ${bands}
       ${gridLines}
       ${nowLine}
@@ -1248,6 +1791,7 @@ function renderSocChart(plan) {
       ${points}
     </svg>`;
 
+  const dateLocale = currentLang === 'en' ? 'en-GB' : 'es-ES';
   const tooltip = document.getElementById('chart-tooltip');
   host.querySelectorAll('.soc-pt').forEach(pt => {
     pt.addEventListener('mouseenter', (ev) => {
@@ -1256,8 +1800,9 @@ function renderSocChart(plan) {
       const rect = host.getBoundingClientRect();
       const cx = parseFloat(pt.getAttribute('cx')) / w * rect.width;
       const cy = parseFloat(pt.getAttribute('cy')) / h * rect.height;
-      tooltip.innerHTML = `<div class="tt-title">${new Date(hp.dt).toLocaleString('es-ES', {weekday:'short', hour:'2-digit', minute:'2-digit'})}${hp.historical ? ' (ya ocurrió)' : ''}</div>
-        SOC: ${hp.soc_pct}%<br>Tramo: ${hp.tier}<br>${hp.charge_w > 0 ? 'Carga: ' + hp.charge_w + ' W' : hp.discharge_w > 0 ? 'Descarga: ' + hp.discharge_w + ' W' : 'Sin actividad'}`;
+      const activity = hp.charge_w > 0 ? `${t('chart_charge_label')}: ${hp.charge_w} W` : hp.discharge_w > 0 ? `${t('chart_discharge_label')}: ${hp.discharge_w} W` : t('chart_no_activity');
+      tooltip.innerHTML = `<div class="tt-title">${new Date(hp.dt).toLocaleString(dateLocale, {weekday:'short', hour:'2-digit', minute:'2-digit'})}${hp.historical ? t('chart_already_happened') : ''}</div>
+        SOC: ${hp.soc_pct}%<br>${t('chart_tier_label')}: ${translateTier(hp.tier)}<br>${activity}`;
       tooltip.style.left = cx + 'px';
       tooltip.style.top = cy + 'px';
       tooltip.classList.add('show');
@@ -1268,24 +1813,25 @@ function renderSocChart(plan) {
 
 async function loadBatteryHealth() {
   const host = document.getElementById('health-list');
-  host.innerHTML = '<p class="empty">Cargando...</p>';
+  host.innerHTML = `<p class="empty">${t('power_health_loading')}</p>`;
   let data;
   try {
     data = await (await fetch('api/battery_health')).json();
   } catch (err) {
-    host.innerHTML = `<p style="color:var(--red)">No se pudo conectar con el servicio: ${err.message}</p>`;
+    host.innerHTML = `<p style="color:var(--red)">${t('error_connect', { msg: err.message })}</p>`;
     return;
   }
-  if (!data.length) { host.innerHTML = '<p class="empty">Todavía no has añadido ninguna batería.</p>'; return; }
+  if (!data.length) { host.innerHTML = `<p class="empty">${t('empty_no_batteries')}</p>`; return; }
+  const dateLocale = currentLang === 'en' ? 'en-GB' : 'es-ES';
   host.innerHTML = data.map(h => {
-    const since = h.since ? new Date(h.since).toLocaleDateString('es-ES') : null;
-    const cyclesLine = `${h.equivalent_cycles || 0} ciclos equivalentes · ${h.charged_kwh || 0} kWh cargados · ${h.discharged_kwh || 0} kWh descargados${since ? ' · desde ' + since : ''}`;
+    const since = h.since ? new Date(h.since).toLocaleDateString(dateLocale) : null;
+    const cyclesLine = t('cycles_line', { cycles: h.equivalent_cycles || 0, charged: h.charged_kwh || 0, discharged: h.discharged_kwh || 0 }) + (since ? t('cycles_line_since', { date: since }) : '');
 
     if (h.health_pct === null || h.health_pct === undefined) {
       return `
       <div class="health-card">
         <span class="item-name">${h.name}</span>
-        <p class="help">Todavía no hay suficientes cargas/descargas grandes (≥8% de SOC de un tirón) para estimar la capacidad real. En cuanto se observe una, aparecerá aquí.</p>
+        <p class="help">${t('salud_no_data')}</p>
         <p class="help">${cyclesLine}</p>
       </div>`;
     }
@@ -1295,12 +1841,12 @@ async function loadBatteryHealth() {
     <div class="health-card">
       <span class="item-name">${h.name}</span>
       <div class="stat-grid">
-        <div class="stat-tile"><div class="stat-label">Salud estimada</div><div class="stat-value" style="color:var(${colorVar})">${h.health_pct}%</div></div>
-        <div class="stat-tile"><div class="stat-label">Capacidad declarada</div><div class="stat-value">${(h.declared_capacity_wh/1000).toFixed(1)} kWh</div></div>
-        <div class="stat-tile"><div class="stat-label">Capacidad real estimada</div><div class="stat-value">${(h.estimated_capacity_wh/1000).toFixed(1)} kWh</div></div>
+        <div class="stat-tile"><div class="stat-label">${t('salud_estimada')}</div><div class="stat-value" style="color:var(${colorVar})">${h.health_pct}%</div></div>
+        <div class="stat-tile"><div class="stat-label">${t('salud_declarada')}</div><div class="stat-value">${(h.declared_capacity_wh/1000).toFixed(1)} kWh</div></div>
+        <div class="stat-tile"><div class="stat-label">${t('salud_real')}</div><div class="stat-value">${(h.estimated_capacity_wh/1000).toFixed(1)} kWh</div></div>
       </div>
       <div class="health-bar-track"><div class="health-bar-fill" style="width:${h.health_pct}%;background:var(${colorVar})"></div></div>
-      <p class="help">Basado en ${h.observations} ${h.observations === 1 ? 'observación reciente' : 'observaciones recientes'}. ${cyclesLine}</p>
+      <p class="help">${h.observations === 1 ? t('salud_based_on_one') : t('salud_based_on_n', { n: h.observations })} ${cyclesLine}</p>
     </div>`;
   }).join('');
 }
@@ -1319,7 +1865,7 @@ async function refreshStatus() {
   } catch (err) {
     document.body.insertAdjacentHTML('afterbegin',
       `<div class="card" style="border-color:var(--red)"><p style="color:var(--red)">
-        No se ha podido cargar la configuración (${err.message}). Recarga la página; si persiste, revisa que el add-on esté en ejecución.
+        ${t('status_load_error', { msg: err.message })}
       </p></div>`);
   }
 })();

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.5.5
+- Arreglo: con un horizonte de previsión que llegaba a la punta del día siguiente, el motor sumaba la punta de HOY y la de MAÑANA como si fuera una sola reserva a cubrir ya mismo — sin contar con que el valle de esta noche vuelve a recargar la batería antes de que llegue la punta de mañana. Esto forzaba cargas de emergencia en llano (más caras que valle) y bloqueaba descargas en llano que en realidad no hacían falta, aunque sobrara batería al final del día. Ahora la cuenta de "punta que queda por cubrir" se corta en la próxima hora valle, ya que esa hora es en sí misma una nueva oportunidad de recarga barata.
+
 ## 0.5.4
 - Nuevo: "Estado actual" con seis mejoras — diagrama del flujo de energía ahora mismo (de dónde sale la potencia solar y a dónde va), desglose individual por batería sin ir a Configuración, medidor de cuánto se está usando de la potencia contratada, cuenta atrás al próximo cambio de tramo tarifario (no solo a la próxima punta), tendencia del SOC de las últimas horas en la propia tarjeta, y comparativa del consumo de hoy frente a la media de los últimos 7 días.
 - Cambio: el histórico ahora conserva 8 días (antes 3) para poder calcular la comparativa de consumo semanal.

@@ -123,15 +123,25 @@ def build_plan(
     # aunque el techo configurado fuera 100%)
     reserve_wh = min(ceiling_wh, min_soc_wh + energy_needed_wh)
 
-    # Cuanto deficit de PUNTA queda por delante desde cada hora i (sin
-    # incluir la propia hora i si es punta, esa la cubre la rama 3 directamente).
-    # Sirve para que la descarga en LLANO nunca se coma battery que hace
-    # falta reservar para una punta posterior.
+    # Cuanto deficit de PUNTA queda por delante desde cada hora i, SOLO
+    # hasta la proxima hora valle (sin incluirla) — un valle es una nueva
+    # oportunidad de recarga barata, asi que la punta que venga DESPUES de
+    # ese valle ya se cubrira entonces, no hace falta reservarla ahora
+    # mismo. Sin este corte, una punta de mañana se sumaba a la de hoy y
+    # el motor forzaba cargas de emergencia en llano (mas caras) o se
+    # negaba a descargar en llano, aunque esta noche ya iba a recargar de
+    # sobra en valle. Sirve para que la descarga/carga de emergencia en
+    # LLANO nunca se guarden battery para una punta que un valle previo ya
+    # va a cubrir.
     future_punta_after = [0.0] * (horizon + 1)
     for i in range(horizon - 1, -1, -1):
-        extra = deficit_w[i] if prices_tiers[i][1] == "punta" else 0.0
-        future_punta_after[i] = future_punta_after[i + 1] + extra
-    # future_punta_after[i] = deficit total en punta desde la hora i (inclusive) en adelante
+        if prices_tiers[i][1] == "valle":
+            future_punta_after[i] = 0.0
+        else:
+            extra = deficit_w[i] if prices_tiers[i][1] == "punta" else 0.0
+            future_punta_after[i] = future_punta_after[i + 1] + extra
+    # future_punta_after[i] = deficit en punta desde la hora i (inclusive)
+    # hasta la proxima hora valle (sin pasar de ahi)
 
     # Para la carga sostenida (paced_charging): en que hora, de aqui en
     # adelante, va a hacer falta de verdad la bateria por primera vez — sea

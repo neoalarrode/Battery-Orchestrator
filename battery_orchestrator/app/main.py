@@ -35,6 +35,9 @@ _last_status = {
     "pv_now_actual": None,
     "current_soc_pct": None,
     "next_punta": None,
+    "next_tariff_change": None,
+    "energy_flow": None,
+    "consumption_comparison": None,
     "anomaly": None,
     "error": None,
 }
@@ -196,6 +199,38 @@ def run_cycle():
             "reserve_pct": round(min(100.0, 100 * current_soc_wh / reserve_wh), 1) if reserve_wh else 100.0,
         }
 
+    # Cuenta atras al proximo CAMBIO DE TRAMO (sea cual sea, no solo a
+    # punta) — util para saber cuanto queda del precio actual.
+    next_tariff_change = None
+    for i in range(1, len(plan)):
+        if plan[i].tier != now_hp.tier:
+            next_tariff_change = {"hours_until": i, "dt": plan[i].dt.isoformat(), "tier": plan[i].tier}
+            break
+
+    # Flujo de energia ahora mismo, para el diagrama de "Estado actual" —
+    # los mismos numeros que ya usa el planificador, solo reordenados para
+    # mostrar de donde sale la potencia y a donde va.
+    solar_to_casa_w = min(now_hp.pv_w, now_hp.load_w)
+    solar_to_batt_w = now_hp.charge_w if now_hp.charge_source == "solar" else 0.0
+    grid_to_batt_w = now_hp.charge_w if now_hp.charge_source == "grid" else 0.0
+    batt_to_casa_w = now_hp.discharge_w
+    grid_to_casa_w = max(0.0, now_hp.load_w - solar_to_casa_w - batt_to_casa_w)
+    grid_total_w = grid_to_casa_w + grid_to_batt_w
+    energy_needed_now_w = now_hp.load_w + now_hp.charge_w
+    autoconsumo_pct = 100.0
+    if energy_needed_now_w > 0:
+        autoconsumo_pct = max(0.0, min(100.0, 100.0 * (1 - grid_total_w / energy_needed_now_w)))
+    energy_flow = {
+        "solar_w": round(now_hp.pv_w),
+        "load_w": round(now_hp.load_w),
+        "solar_to_casa_w": round(solar_to_casa_w),
+        "solar_to_batt_w": round(solar_to_batt_w),
+        "batt_to_casa_w": round(batt_to_casa_w),
+        "battery_net_w": round(now_hp.charge_w - now_hp.discharge_w),
+        "grid_w": round(grid_total_w),
+        "autoconsumo_pct": round(autoconsumo_pct, 1),
+    }
+
     # Energia (Wh) movida en este ciclo, por bateria. En carga usamos la
     # potencia real repartida a cada una; en descarga cada bateria se
     # autogestiona (no la repartimos de verdad), asi que aqui SOLO para
@@ -244,6 +279,12 @@ def run_cycle():
         })
     except Exception as e:
         log.warning(f"No se pudo guardar el historico: {e}")
+
+    consumption_comparison = None
+    try:
+        consumption_comparison = history_store.get_recent_days_consumption(now, days=7)
+    except Exception as e:
+        log.warning(f"No se pudo calcular la comparativa de consumo: {e}")
 
     # Ahorro real: coste de lo que se ha comprado de verdad a red (consumo
     # directo que el solar no cubre, mas lo que se cargue de red en la
@@ -341,6 +382,9 @@ def run_cycle():
             pv_now_actual=pv_now_actual,
             current_soc_pct=current_soc_pct,
             next_punta=next_punta,
+            next_tariff_change=next_tariff_change,
+            energy_flow=energy_flow,
+            consumption_comparison=consumption_comparison,
             anomaly=anomaly,
             error=None,
         )

@@ -16,7 +16,7 @@ import threading
 from datetime import datetime, timedelta
 
 HISTORY_PATH = os.environ.get("HISTORY_PATH", "/data/history.json")
-MAX_AGE_HOURS = 72  # no hace falta guardar mas de un par de dias
+MAX_AGE_HOURS = 24 * 8  # 8 dias: cubre la comparativa de "hoy vs media de los ultimos 7 dias"
 
 _lock = threading.RLock()
 
@@ -60,3 +60,45 @@ def get_today(now: datetime) -> list[dict]:
     today_prefix = now.strftime("%Y-%m-%d")
     entries = [v for k, v in sorted(data.items()) if k.startswith(today_prefix) and k < _hour_key(now)]
     return entries
+
+
+def get_recent_days_consumption(now: datetime, days: int = 7) -> dict | None:
+    """
+    Compara el consumo acumulado de HOY (desde las 00:00 hasta ahora) con la
+    media de los `days` dias anteriores, cada uno hasta la MISMA hora del
+    dia — para que la comparacion sea justa (medio dia contra medio dia, no
+    contra un dia entero). Se calcula solo a partir del propio historico ya
+    guardado (campo "load_w" de cada hora), nada nuevo que pedir a HA.
+
+    Devuelve None si no hay al menos un dia previo completo con el que
+    comparar (instalacion recien estrenada).
+    """
+    data = _load()
+    today_prefix = now.strftime("%Y-%m-%d")
+    current_hour = now.hour
+
+    by_date: dict[str, float] = {}
+    for k, v in data.items():
+        date_part, hour_part = k.split("T")
+        if int(hour_part) >= current_hour:
+            continue
+        load_w = v.get("load_w")
+        if load_w is None:
+            continue
+        by_date[date_part] = by_date.get(date_part, 0.0) + load_w / 1000.0  # Wh -> kWh (1 entrada = 1 hora)
+
+    today_kwh = by_date.pop(today_prefix, 0.0)
+    past_dates = sorted(by_date.keys())[-days:]
+    if not past_dates:
+        return None
+
+    avg_kwh = sum(by_date[d] for d in past_dates) / len(past_dates)
+    if avg_kwh <= 0:
+        return None
+
+    return {
+        "today_kwh": round(today_kwh, 2),
+        "avg_kwh": round(avg_kwh, 2),
+        "days_compared": len(past_dates),
+        "delta_pct": round(100 * (today_kwh - avg_kwh) / avg_kwh, 1),
+    }

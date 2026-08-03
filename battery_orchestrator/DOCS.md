@@ -72,7 +72,7 @@ Si te equivocas de tipo no pasa nada grave: marcar un panel de autoconsumo como 
   <img src="screenshots/estado-actual.png" alt="Estado actual: SOC agregado, ahorro y cuenta atrás a la próxima punta" width="100%">
 </p>
 
-- **Estado actual** — resumen del ciclo más reciente: SOC agregado, tramo tarifario, precio, solar, consumo, si se está cargando/descargando, y el ahorro acumulado hoy y en total. Un indicador junto al título marca "Saludable" o "Anómalo" según si se ha detectado un consumo fuera de lo normal (ver [Ahorro y alertas](#ahorro-y-alertas-de-consumo)). Debajo, el log de lo que hizo la última ejecución, y una tarjeta con la cuenta atrás a la próxima hora punta y cuánta reserva llevas acumulada para cubrirla.
+- **Estado actual** — resumen del ciclo más reciente: SOC agregado (con la tendencia de las últimas horas), tramo tarifario, precio, solar, consumo, si se está cargando/descargando, ahorro acumulado hoy y en total, cuenta atrás al próximo cambio de tramo y comparativa del consumo de hoy frente a la media de los últimos días. Un indicador junto al título marca "Saludable" o "Anómalo" según si se ha detectado un consumo fuera de lo normal (ver [Ahorro y alertas](#ahorro-y-alertas-de-consumo)). Debajo, el log de lo que hizo la última ejecución. Más abajo: un diagrama del flujo de energía ahora mismo (de dónde sale la potencia solar y a dónde va), un medidor de cuánto estás usando de tu potencia contratada, el desglose de cada batería individual, y la cuenta atrás a la próxima hora punta con cuánta reserva llevas acumulada para cubrirla.
 
 <p align="center">
   <img src="screenshots/prevision.png" alt="Previsión: gráfica del SOC agregado a lo largo del día con franjas de tarifa" width="100%">

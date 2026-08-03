@@ -255,6 +255,47 @@
   }
   .stat-tile .stat-value.accent { color: var(--accent); }
   .stat-tile .stat-sub { font-size: .72rem; color: var(--muted); margin-top: 2px; }
+  .stat-tile .stat-sub.good { color: var(--green); }
+  .stat-tile .sparkline { display: block; margin-top: 6px; }
+
+  /* --- Layout responsivo: tarjetas lado a lado en pantallas anchas --- */
+  .row-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .row-2 > .card { margin-bottom: 0; }
+
+  /* --- Flujo de energia: barra de reparto, no grafo de nodos --- */
+  .flow-source-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+  .flow-source-name { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .1em; font-size: .68rem; color: var(--accent-2); font-weight: 700; }
+  .flow-source-value { font-family: var(--font-mono); font-size: 1.05rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .flow-bar-track { display: flex; height: 10px; border-radius: 6px; overflow: hidden; background: var(--bg-alt); border: 1px solid var(--border); }
+  .flow-bar-seg { height: 100%; transition: width .3s ease; }
+  .flow-endpoints { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 14px; }
+  .flow-endpoint { display: flex; align-items: center; gap: 9px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; min-width: 0; }
+  .flow-endpoint .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .flow-endpoint-label { font-family: var(--font-mono); font-size: .64rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .flow-endpoint-value { font-family: var(--font-mono); font-size: .86rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .autoconsumo-chip {
+    display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: .68rem;
+    font-weight: 700; color: var(--green); background: var(--green-soft); border-radius: 20px; padding: 4px 11px; margin-top: 12px;
+  }
+  .autoconsumo-chip.low { color: var(--amber); background: var(--amber-soft); }
+  .autoconsumo-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  /* --- Medidor de potencia contratada --- */
+  .meter-track { height: 10px; border-radius: 6px; background: var(--bg-alt); border: 1px solid var(--border); overflow: hidden; margin: 10px 0 6px; }
+  .meter-fill { height: 100%; border-radius: 6px; transition: width .3s ease; }
+  .meter-labels { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: .72rem; color: var(--muted); }
+
+  /* --- Baterias individuales (Estado actual) --- */
+  .battery-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+  .battery-mini { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; min-width: 0; }
+  .battery-mini .bm-name { font-weight: 600; font-size: .85rem; flex: 1 1 auto; min-width: 80px; }
+  .battery-mini .bm-bar-track { flex: 2 1 70px; height: 7px; border-radius: 5px; background: var(--border); overflow: hidden; min-width: 50px; }
+  .battery-mini .bm-bar-fill { height: 100%; border-radius: 5px; }
+  .battery-mini .bm-pct { font-family: var(--font-mono); font-size: .8rem; font-weight: 700; min-width: 42px; text-align: right; font-variant-numeric: tabular-nums; }
+  .battery-mini .bm-status { font-family: var(--font-mono); font-size: .62rem; padding: 3px 8px; border-radius: 20px; white-space: nowrap; }
+  .bm-status.charge { background: var(--accent-soft); color: var(--accent); }
+  .bm-status.discharge { background: var(--amber-soft); color: var(--amber); }
+  .bm-status.idle { background: var(--border); color: var(--muted); }
 
   /* --- Grafica SOC --- */
   .chart-wrap { position: relative; margin-top: 8px; }
@@ -313,6 +354,22 @@
 </div>
 
 <div id="anomaly-box"></div>
+
+<div class="card">
+  <h2>Flujo de energía ahora mismo <span class="hint" id="autoconsumo-hint"></span></h2>
+  <div id="energy-flow"></div>
+</div>
+
+<div class="row-2">
+  <div class="card">
+    <h2>Margen de potencia contratada</h2>
+    <div id="power-meter"></div>
+  </div>
+  <div class="card">
+    <h2>Baterías</h2>
+    <div id="battery-breakdown"></div>
+  </div>
+</div>
 
 <div class="card">
   <h2>Próxima punta</h2>
@@ -915,6 +972,9 @@ function renderStatus(status) {
   renderHealthPill(status.anomaly);
   renderAnomalyBox(status.anomaly);
   renderNextPunta(status.next_punta);
+  renderEnergyFlow(status.energy_flow);
+  renderPowerMeter(status.energy_flow);
+  renderBatteryBreakdown(status.distribution);
 
   const tbody = document.querySelector('#plan-table tbody');
   tbody.innerHTML = (status.plan || []).map(hp => `
@@ -943,7 +1003,7 @@ function renderStatTiles(status, savings) {
   const netW = dist.action === 'charge' ? now.charge_w : dist.action === 'discharge' ? -now.discharge_w : 0;
   const socNow = status.current_soc_pct !== null && status.current_soc_pct !== undefined ? status.current_soc_pct : now.soc_pct;
   const tiles = [
-    { label: 'SOC agregado', value: socNow + '%', accent: true },
+    { label: 'SOC agregado', value: socNow + '%', accent: true, extraHtml: renderSocSparkline(status) },
     { label: 'Tramo actual', value: `<span class="tier tier-${now.tier}">${now.tier}</span>`, raw: true },
     { label: 'Precio', value: now.price.toFixed(3) + ' €/kWh' },
     { label: 'Solar', value: now.pv_w + ' W' },
@@ -956,11 +1016,53 @@ function renderStatTiles(status, savings) {
       { label: 'Ahorro total', value: fmtEur(savings.total_savings_eur), accent: savings.total_savings_eur > 0 },
     );
   }
+  if (status.next_tariff_change) {
+    const ntc = status.next_tariff_change;
+    const label = ntc.hours_until <= 0 ? 'ahora' : ntc.hours_until === 1 ? '1 hora' : `${ntc.hours_until} horas`;
+    tiles.push({
+      label: 'Cambia a', value: label,
+      subHtml: `a <span class="tier tier-${ntc.tier}" style="font-size:.62rem">${ntc.tier}</span>`,
+    });
+  }
+  if (status.consumption_comparison) {
+    const cc = status.consumption_comparison;
+    const good = cc.delta_pct <= 0;
+    tiles.push({
+      label: `Vs. media ${cc.days_compared}d`,
+      value: (cc.delta_pct > 0 ? '+' : '') + cc.delta_pct + '%',
+      colorVar: good ? '--green' : '--red',
+      sub: `${cc.today_kwh} kWh hoy · media ${cc.avg_kwh} kWh`,
+    });
+  }
   return tiles.map(t => `
     <div class="stat-tile">
       <div class="stat-label">${t.label}</div>
-      <div class="stat-value ${t.accent ? 'accent' : ''}">${t.raw ? t.value : t.value}</div>
+      <div class="stat-value ${t.accent ? 'accent' : ''}" ${t.colorVar ? `style="color:var(${t.colorVar})"` : ''}>${t.value}</div>
+      ${t.extraHtml || ''}
+      ${t.sub ? `<div class="stat-sub">${t.sub}</div>` : ''}
+      ${t.subHtml ? `<div class="stat-sub">${t.subHtml}</div>` : ''}
     </div>`).join('');
+}
+
+function renderSocSparkline(status) {
+  const hist = (status.plan || []).filter(hp => hp.historical);
+  const recent = hist.slice(-7).map(hp => hp.soc_pct);
+  const nowVal = status.current_soc_pct;
+  if (nowVal !== null && nowVal !== undefined) recent.push(nowVal);
+  if (recent.length < 2) return '';
+  const min = Math.min(...recent), max = Math.max(...recent);
+  const range = Math.max(1, max - min);
+  const w = 100, h = 22, pad = 3;
+  const pts = recent.map((v, i) => {
+    const x = recent.length === 1 ? 0 : (i / (recent.length - 1)) * w;
+    const y = pad + (1 - (v - min) / range) * (h - pad * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const [lx, ly] = pts[pts.length - 1].split(',');
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" class="sparkline" preserveAspectRatio="none" aria-hidden="true">
+    <polyline points="${pts.join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline>
+    <circle cx="${lx}" cy="${ly}" r="2.4" fill="var(--accent)"></circle>
+  </svg>`;
 }
 
 function fmtEur(v) {
@@ -1019,6 +1121,83 @@ function renderNextPunta(nextPunta) {
     </div>
     <div class="health-bar-track" style="margin-top:12px"><div class="health-bar-fill" style="width:${pct}%;background:var(${colorVar})"></div></div>
     <p class="help">"Reserva actual" es cuánto de lo que el planificador cree necesario para cubrir toda la punta que queda por delante ya tienes acumulado — el mismo número que usa para decidir si cargar en llano de emergencia.</p>`;
+}
+
+function renderEnergyFlow(flow) {
+  const host = document.getElementById('energy-flow');
+  const hint = document.getElementById('autoconsumo-hint');
+  if (!flow) { host.innerHTML = '<p class="empty">Todavía no hay datos del ciclo.</p>'; hint.textContent = ''; return; }
+
+  hint.textContent = `${flow.autoconsumo_pct}% autoconsumo`;
+
+  const total = flow.solar_w || 0;
+  const casaSeg = total > 0 ? Math.min(100, 100 * flow.solar_to_casa_w / total) : 0;
+  const battSeg = total > 0 ? Math.min(100 - casaSeg, 100 * flow.solar_to_batt_w / total) : 0;
+
+  const battLabel = flow.battery_net_w > 0 ? `+${flow.battery_net_w} W` : flow.battery_net_w < 0 ? `${flow.battery_net_w} W` : '0 W';
+
+  host.innerHTML = `
+    <div class="flow-source-head">
+      <span class="flow-source-name">Solar</span>
+      <span class="flow-source-value">${total} W</span>
+    </div>
+    <div class="flow-bar-track" role="img" aria-label="De ${total}W de solar, ${flow.solar_to_casa_w}W van a la casa y ${flow.solar_to_batt_w}W a la batería.">
+      <div class="flow-bar-seg" style="width:${casaSeg}%; background:var(--muted)"></div>
+      <div class="flow-bar-seg" style="width:${battSeg}%; background:var(--accent)"></div>
+    </div>
+    <div class="flow-endpoints">
+      <div class="flow-endpoint">
+        <span class="dot" style="background:var(--muted)"></span>
+        <span><div class="flow-endpoint-label">Casa</div><div class="flow-endpoint-value">${flow.load_w} W</div></span>
+      </div>
+      <div class="flow-endpoint">
+        <span class="dot" style="background:var(--accent)"></span>
+        <span><div class="flow-endpoint-label">Batería</div><div class="flow-endpoint-value">${battLabel}</div></span>
+      </div>
+      <div class="flow-endpoint">
+        <span class="dot" style="background:${flow.grid_w > 0 ? 'var(--amber)' : 'var(--border)'}"></span>
+        <span><div class="flow-endpoint-label">Red</div><div class="flow-endpoint-value">${flow.grid_w} W</div></span>
+      </div>
+    </div>
+    <span class="autoconsumo-chip ${flow.autoconsumo_pct < 100 ? 'low' : ''}"><span class="dot"></span>${flow.autoconsumo_pct}% autoconsumo${flow.grid_w > 0 ? ' — importando de red' : ' — nada importado de red'}</span>`;
+}
+
+function renderPowerMeter(flow) {
+  const host = document.getElementById('power-meter');
+  const limit = cfg && cfg.general ? Number(cfg.general.contracted_power_w) || 0 : 0;
+  if (!limit) {
+    host.innerHTML = '<p class="empty">Configura tu potencia contratada en "Configuración → Seguridad y límites" para ver este medidor.</p>';
+    return;
+  }
+  const inUse = flow ? flow.grid_w : 0;
+  const pct = Math.min(100, 100 * inUse / limit);
+  const colorVar = pct >= 90 ? '--red' : pct >= 70 ? '--amber' : '--accent';
+  host.innerHTML = `
+    <div class="meter-track"><div class="meter-fill" style="width:${pct}%; background:var(${colorVar})"></div></div>
+    <div class="meter-labels"><span>${inUse} W en uso</span><span>límite ${limit} W</span></div>`;
+}
+
+function renderBatteryBreakdown(distribution) {
+  const host = document.getElementById('battery-breakdown');
+  const entries = distribution && distribution.per_battery ? distribution.per_battery : [];
+  if (!entries.length) { host.innerHTML = '<p class="empty">Todavía no hay datos del ciclo.</p>'; return; }
+  const action = distribution.action;
+  const rows = entries.map(e => {
+    if (e.soc_pct === null || e.soc_pct === undefined) {
+      return `<div class="battery-mini"><div class="bm-name">${e.name}</div><span class="bm-status idle">sin datos</span></div>`;
+    }
+    const statusClass = action === 'charge' && e.enabled ? 'charge' : action === 'discharge' && e.enabled ? 'discharge' : 'idle';
+    const statusText = statusClass === 'charge' ? `cargando ${e.power_w}W` : statusClass === 'discharge' ? `descarga ≤${e.power_w}W` : 'sin acción';
+    const barColor = statusClass === 'discharge' ? 'var(--amber)' : 'var(--accent)';
+    return `
+    <div class="battery-mini">
+      <div class="bm-name">${e.name}</div>
+      <div class="bm-bar-track"><div class="bm-bar-fill" style="width:${e.soc_pct}%; background:${barColor}"></div></div>
+      <div class="bm-pct">${e.soc_pct.toFixed ? e.soc_pct.toFixed(1) : e.soc_pct}%</div>
+      <span class="bm-status ${statusClass}">${statusText}</span>
+    </div>`;
+  }).join('');
+  host.innerHTML = `<div class="battery-row">${rows}</div>`;
 }
 
 function tierColorVar(tier) {

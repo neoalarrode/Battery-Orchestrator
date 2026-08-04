@@ -746,10 +746,10 @@ es: {
   card_next_punta_title: "Próxima punta",
   punta_now: "Estás en punta ahora mismo", punta_in_1h: "En 1 hora", punta_in_nh: "En {n} horas",
   punta_soc_now: "SOC ahora", punta_reserve_target: "Objetivo de reserva",
-  punta_forecast_accuracy: "Precisión última hora",
+  punta_forecast_accuracy: "Fiabilidad de la previsión",
   punta_forecast_detail: "Se esperaba un {predicted}% al cerrar la hora, ha quedado en {actual}% ({delta} puntos).",
   punta_forecast_pending: "Todavía no ha pasado ninguna hora completa desde que arrancó el add-on — aparecerá en cuanto se cierre la primera.",
-  punta_explain: '"SOC ahora" y "Objetivo de reserva" son cuánto tienes acumulado y cuánto cree el planificador que hace falta para cubrir toda la punta que queda por delante — el mismo número que usa para decidir si cargar en llano de emergencia. "Precisión última hora" es distinto: no mide cuánta batería tienes, sino si lo que ha pasado de verdad se parece a lo que el plan predijo (p.ej. un consumo inesperado puede hacer que la realidad se aleje de la previsión sin que la batería tenga ningún problema).',
+  punta_explain: '"SOC ahora" y "Objetivo de reserva" son cuánto tienes acumulado y cuánto cree el planificador que hace falta para cubrir toda la punta que queda por delante — el mismo número que usa para decidir si cargar en llano de emergencia. "Fiabilidad de la previsión" es distinto: no mide cuánta batería tienes, sino si lo que ha pasado de verdad se parece a lo que el plan predijo, en proporción a cuánto se esperaba que se moviera esa hora — no una resta directa de puntos contra 100 (p.ej. un consumo inesperado puede hacer que la realidad se aleje de la previsión sin que la batería tenga ningún problema).',
   punta_none: "No hay ninguna hora punta en el horizonte de previsión configurado.",
 
   card_soc_forecast_title: "SOC previsto", card_soc_forecast_hint: "nivel agregado de baterías a lo largo del día",
@@ -957,10 +957,10 @@ en: {
   card_next_punta_title: "Next peak period",
   punta_now: "You're in peak pricing right now", punta_in_1h: "In 1 hour", punta_in_nh: "In {n} hours",
   punta_soc_now: "SOC now", punta_reserve_target: "Reserve target",
-  punta_forecast_accuracy: "Last-hour accuracy",
+  punta_forecast_accuracy: "Forecast reliability",
   punta_forecast_detail: "The plan expected {predicted}% by the end of the hour, it ended up at {actual}% ({delta} points).",
   punta_forecast_pending: "No full hour has passed yet since the add-on started — this will appear once the first one closes.",
-  punta_explain: '"SOC now" and "Reserve target" are how much you have banked and how much the planner thinks is needed to cover all the remaining peak hours — the same number it uses to decide whether to charge in mid-peak as an emergency. "Last-hour accuracy" is different: it doesn\'t measure how much battery you have, it measures whether what actually happened matches what the plan predicted (e.g. unexpected consumption can push reality away from the forecast without the battery having any problem at all).',
+  punta_explain: '"SOC now" and "Reserve target" are how much you have banked and how much the planner thinks is needed to cover all the remaining peak hours — the same number it uses to decide whether to charge in mid-peak as an emergency. "Forecast reliability" is different: it doesn\'t measure how much battery you have, it measures whether what actually happened matches what the plan predicted, relative to how much it expected the battery to move that hour — not a straight points-off-100 subtraction (e.g. unexpected consumption can push reality away from the forecast without the battery having any problem at all).',
   punta_none: "There's no peak-price hour in the configured forecast horizon.",
 
   card_soc_forecast_title: "Forecast SOC", card_soc_forecast_hint: "aggregate battery level through the day",
@@ -2084,17 +2084,24 @@ function renderNextPunta(nextPunta, socForecast) {
   const dateLocale = currentLang === 'en' ? 'en-GB' : 'es-ES';
   const dt = new Date(nextPunta.dt).toLocaleString(dateLocale, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
 
-  // "Precisión última hora": no es cuanta reserva hay acumulada — es si
-  // lo que ha pasado de verdad se parece a lo que el plan predijo para
-  // el final de la hora que acaba de terminar. P.ej. si se esperaba un
-  // 70% pero un consumo inesperado (aire acondicionado a tope...) lo dejo
-  // en 40%, aqui se nota con un numero bajo y en rojo, no con el % de
-  // bateria en si. Ver forecast_store.py.
-  let accuracyPct = null, accuracyColorVar = '--muted';
+  // "Fiabilidad de la previsión": no es cuanta reserva hay acumulada — es
+  // si lo que ha pasado de verdad se parece a lo que el plan predijo para
+  // el final de la hora que acaba de terminar. Se expresa como % RELATIVO
+  // a cuanto preveia MOVERSE la bateria esa hora (predicted_delta_pct,
+  // ver forecast_store.py), no restando los puntos de desviacion
+  // directamente contra 100 — una desviacion de 3 puntos es gravisima si
+  // solo se preveian mover 2, e insignificante si se preveian mover 25;
+  // restar sin mas trataria los dos casos igual. RELIABILITY_FLOOR_PTS
+  // evita que un cambio previsto casi nulo (p.ej. 1 punto) dispare
+  // porcentajes absurdos por una desviacion pequeña en terminos absolutos.
+  const RELIABILITY_FLOOR_PTS = 10;
+  let reliabilityPct = null, accuracyColorVar = '--muted';
   if (socForecast) {
-    const deviation = Math.abs(socForecast.deviation_pct);
-    accuracyPct = Math.max(0, Math.min(100, Math.round(100 - deviation)));
-    accuracyColorVar = deviation <= 5 ? '--green' : deviation <= 20 ? '--amber' : '--red';
+    const predictedDelta = Math.abs(socForecast.predicted_delta_pct || 0);
+    const reference = Math.max(predictedDelta, RELIABILITY_FLOOR_PTS);
+    const absDev = Math.abs(socForecast.deviation_pct);
+    reliabilityPct = Math.max(0, Math.min(100, Math.round(100 * (1 - absDev / reference))));
+    accuracyColorVar = reliabilityPct >= 80 ? '--green' : reliabilityPct >= 50 ? '--amber' : '--red';
   }
   const forecastDetail = socForecast
     ? t('punta_forecast_detail', {
@@ -2107,11 +2114,11 @@ function renderNextPunta(nextPunta, socForecast) {
     <div class="punta-countdown">${label}</div>
     <p class="help" style="margin-top:2px">${dt}</p>
     <div class="stat-grid" style="margin-top:14px">
-      <div class="stat-tile"><div class="stat-label">${t('punta_forecast_accuracy')}</div><div class="stat-value" style="color:var(${accuracyColorVar})">${accuracyPct !== null ? accuracyPct + '%' : '—'}</div></div>
+      <div class="stat-tile"><div class="stat-label">${t('punta_forecast_accuracy')}</div><div class="stat-value" style="color:var(${accuracyColorVar})">${reliabilityPct !== null ? reliabilityPct + '%' : '—'}</div></div>
       <div class="stat-tile"><div class="stat-label">${t('punta_soc_now')}</div><div class="stat-value">${(nextPunta.current_soc_wh/1000).toFixed(1)} kWh</div></div>
       <div class="stat-tile"><div class="stat-label">${t('punta_reserve_target')}</div><div class="stat-value">${(nextPunta.reserve_target_wh/1000).toFixed(1)} kWh</div></div>
     </div>
-    <div class="health-bar-track" style="margin-top:12px"><div class="health-bar-fill" style="width:${accuracyPct !== null ? accuracyPct : 0}%;background:var(${accuracyColorVar})"></div></div>
+    <div class="health-bar-track" style="margin-top:12px"><div class="health-bar-fill" style="width:${reliabilityPct !== null ? reliabilityPct : 0}%;background:var(${accuracyColorVar})"></div></div>
     <p class="help">${forecastDetail}</p>
     <p class="help">${t('punta_explain')}</p>`;
 }

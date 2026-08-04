@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.10.2
+- Arreglo: "Fiabilidad de la previsión" (antes "Precisión última hora") restaba directamente los puntos de desviación de SOC contra 100 — una escala sin relación real (una desviación de 3 puntos es gravísima si solo se preveía mover 2, e insignificante si se preveían mover 25; restar sin más trataba los dos casos igual). Ahora se calcula en proporción a cuánto preveía moverse la batería esa hora, con un mínimo de 10 puntos de referencia para no disparar porcentajes absurdos cuando apenas se preveía movimiento.
+
 ## 0.10.1
 - Arreglo: al exponer el puerto de solo lectura (wallpanel) fuera de la LAN a través de un proxy o reenvío de puertos, la interfaz podía romperse al arrancar ("No se pudo cargar la configuración") — detectaba el modo wallpanel mirando si el navegador veía literalmente el puerto 8098, y un proxy puede evitar que lo vea aunque el servidor siga bloqueando esa ruta igualmente. Ahora se decide por la respuesta real del servidor (si `/api/config` falla, se cae a modo de solo lectura), no por adivinar el puerto.
 

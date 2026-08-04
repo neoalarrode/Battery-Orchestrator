@@ -94,10 +94,14 @@ def build_plan(
     sube sola (mismo calculo, menos horas) hasta el maximo si hace falta —
     no es una rama de emergencia aparte, es el mismo numero.
 
-    Devuelve (plan, reserve_wh): el plan hora a hora, y el nivel de SOC
-    absoluto (Wh) que el motor esta intentando alcanzar ahora mismo para
-    cubrir punta/llano futuros — util para mostrar "cuanto falta para la
-    reserva" en la interfaz sin duplicar esta cuenta en otro sitio.
+    Devuelve (plan, reserve_wh, reserve_until_next_valle_wh): el plan hora
+    a hora, el nivel de SOC absoluto (Wh) que el motor esta intentando
+    alcanzar ahora mismo para cubrir punta/llano futuros DE TODO EL
+    HORIZONTE (util para el reparto interno de carga/descarga), y el
+    mismo objetivo pero SOLO hasta la proxima hora valle — que es el
+    numero que hay que enseñar en la interfaz como "cuanto hace falta
+    para la proxima punta", porque una punta de mañana no cuenta si esta
+    noche hay valle de por medio (esta noche ya la recargara).
     """
     horizon = len(pv_forecast_w)
     hours = [now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=i) for i in range(horizon)]
@@ -142,6 +146,13 @@ def build_plan(
             future_punta_after[i] = future_punta_after[i + 1] + extra
     # future_punta_after[i] = deficit en punta desde la hora i (inclusive)
     # hasta la proxima hora valle (sin pasar de ahi)
+
+    # Version "para mostrar" de reserve_wh: lo mismo pero limitado a la
+    # punta que queda antes del proximo valle, no a todo el horizonte
+    # configurado (que puede llegar a la punta de mañana). Es el mismo
+    # criterio que ya usa la carga de emergencia en llano (rama 2b, mas
+    # abajo) para decidir cuanto cargar de verdad.
+    reserve_until_next_valle_wh = min(ceiling_wh, min_soc_wh + future_punta_after[0])
 
     # Para la carga sostenida (paced_charging): en que hora, de aqui en
     # adelante, va a hacer falta de verdad la bateria por primera vez — sea
@@ -275,7 +286,7 @@ def build_plan(
         hp.soc_wh = soc
         plan.append(hp)
 
-    return plan, reserve_wh
+    return plan, reserve_wh, reserve_until_next_valle_wh
 
 
 if __name__ == "__main__":
@@ -294,7 +305,7 @@ if __name__ == "__main__":
 
     cfg = FixedTariffConfig()
     prices_tiers = fixed_tariff_prices(now, horizon, cfg)
-    plan, reserve_wh = build_plan(
+    plan, reserve_wh, reserve_until_next_valle_wh = build_plan(
         now=now,
         pv_forecast_w=pv,
         load_forecast_w=load,

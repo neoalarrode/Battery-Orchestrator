@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.2
+- Arreglo: "Consumo" y "Flujo de energía ahora mismo" en vivo usaban directamente el sensor de consumo declarado como si fuera el consumo total — pero ese sensor es la base YA SIN la carga de baterías (así lo pide la propia tarjeta de "Consumo de la casa"), así que en cuanto el sol o las baterías cubrían casi todo el consumo, esos widgets se quedaban mostrando casi 0W aunque hubiera cientos de W circulando de verdad. Ahora se reconstruye igual que en el resto de la app: base + solar + descarga de baterías.
+- Arreglo: "Objetivo de reserva" (en "Próxima punta") contaba la punta de TODO el horizonte de previsión configurado (podía incluir la de mañana), no solo la que queda antes del próximo valle — inflaba muchísimo el número en instalaciones con horizonte largo. Ahora usa el mismo criterio de corte en el próximo valle que ya usa el planificador de verdad para decidir cuánto cargar.
+
 ## 0.9.1
 - Arreglo: la potencia de descarga en vivo de cada batería (cajita "Descargando" y la barra de "Flujo de energía ahora mismo") asumía que el sensor de descarga siempre da un valor positivo. Algunas integraciones de batería/inversor exponen en cambio una "potencia de batería" con signo, negativa al descargar — con esas, la aportación de la batería se recortaba a 0 y ese consumo se le atribuía por error a la red. Ahora se usa el valor absoluto de la lectura, así que da igual el convenio de signo del sensor concreto.
 

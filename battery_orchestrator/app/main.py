@@ -190,7 +190,7 @@ def run_cycle():
     if priority_mode == "longevidad" and total_capacity_wh:
         effective_max_usable_wh = min(max_usable_wh, total_capacity_wh * 0.90)
 
-    plan, reserve_wh = scheduler.build_plan(
+    plan, reserve_wh, reserve_until_next_valle_wh = scheduler.build_plan(
         now=now,
         pv_forecast_w=pv_forecast,
         load_forecast_w=load_forecast,
@@ -278,19 +278,22 @@ def run_cycle():
         log.info(line)
     log.info(f"Hora actual: {now_hp.tier} ({now_hp.price} EUR/kWh) - {now_hp.reason}")
 
-    # Cuenta atras a la proxima punta: la propia reserva (reserve_wh) que
-    # acaba de calcular el planificador es el numero real que se esta
-    # usando para decidir, asi que se reutiliza tal cual en vez de volver
-    # a calcularlo aparte.
+    # Cuenta atras a la proxima punta: se usa reserve_until_next_valle_wh
+    # (no reserve_wh a secas), que es el mismo criterio de "cortar en el
+    # proximo valle" que ya usa el planificador para decidir de verdad
+    # cuanto cargar — reserve_wh cuenta TODO el horizonte configurado
+    # (podia incluir la punta de mañana aunque esta noche ya haya valle
+    # de por medio para recargar), y eso inflaba el objetivo mostrado por
+    # encima de lo que de verdad hace falta ahora mismo.
     next_punta = None
     next_punta_idx = next((i for i, hp in enumerate(plan) if hp.tier == "punta"), None)
     if next_punta_idx is not None:
         next_punta = {
             "hours_until": next_punta_idx,
             "dt": plan[next_punta_idx].dt.isoformat(),
-            "reserve_target_wh": round(reserve_wh),
+            "reserve_target_wh": round(reserve_until_next_valle_wh),
             "current_soc_wh": round(current_soc_wh),
-            "reserve_pct": round(min(100.0, 100 * current_soc_wh / reserve_wh), 1) if reserve_wh else 100.0,
+            "reserve_pct": round(min(100.0, 100 * current_soc_wh / reserve_until_next_valle_wh), 1) if reserve_until_next_valle_wh else 100.0,
         }
 
     # Cuenta atras al proximo CAMBIO DE TRAMO (sea cual sea, no solo a

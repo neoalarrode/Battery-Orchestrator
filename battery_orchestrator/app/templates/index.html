@@ -2045,7 +2045,16 @@ function renderEnergyFlow() {
   const flow = lastStatus && lastStatus.energy_flow;
   if (!live && !flow) { host.innerHTML = `<p class="empty">${t('status_no_cycle_data')}</p>`; hint.textContent = ''; return; }
 
-  const liveLoadW = live && live.load_now_w !== null && live.load_now_w !== undefined ? live.load_now_w : (flow ? flow.load_w : 0);
+  // El sensor de consumo ("load_now_w") es la base YA SIN la carga de
+  // baterías (ver "Consumo de la casa" en Configuración) — en la práctica
+  // viene a ser lo que se esta tirando de RED para consumo. El consumo
+  // TOTAL real se reconstruye sumandole el solar y la descarga de
+  // baterías, igual que hace ha_client.true_load_forecast() con el
+  // histórico. Sin esto, en cuanto el sol o las baterías cubren casi todo
+  // el consumo, la base lee casi 0 y la barra entera salía mal (todo el
+  // consumo parecía inexistente, nada se le atribuia a la batería).
+  const liveGridW = live && live.load_now_w !== null && live.load_now_w !== undefined
+    ? Math.max(0, live.load_now_w) : (flow ? Math.max(0, flow.grid_w) : 0);
   const liveSolarW = live && live.pv_now_w !== null && live.pv_now_w !== undefined ? live.pv_now_w : (flow ? flow.solar_w : 0);
   // El sensor de bateria declarado es de DESCARGA (ver "Sensor de
   // descarga" en Baterías) — solo da una lectura fiable en vivo mientras
@@ -2058,10 +2067,10 @@ function renderEnergyFlow() {
     ? live.batteries.reduce((sum, b) => sum + Math.abs(b.power_w || 0), 0)
     : (flow ? flow.batt_to_casa_w : 0);
 
-  const totalDemand = Math.max(0, Math.round(liveLoadW));
-  const solarUsed = Math.max(0, Math.min(liveSolarW, totalDemand));
-  const battUsed = Math.max(0, Math.min(liveBattDischargeW, totalDemand - solarUsed));
-  const gridUsed = Math.max(0, totalDemand - solarUsed - battUsed);
+  const solarUsed = Math.max(0, Math.round(liveSolarW));
+  const battUsed = Math.max(0, Math.round(liveBattDischargeW));
+  const gridUsed = Math.max(0, Math.round(liveGridW));
+  const totalDemand = solarUsed + battUsed + gridUsed;
 
   const autoconsumoPct = totalDemand > 0 ? Math.max(0, Math.min(100, Math.round(100 * (1 - gridUsed / totalDemand)))) : 100;
   hint.textContent = `${autoconsumoPct}${t('autoconsumo_suffix')}`;
@@ -2226,6 +2235,21 @@ async function refreshLive() {
   renderEnergyFlow();
 }
 
+// El sensor de consumo declarado ("Sensor de consumo de red") es la base
+// YA SIN la carga de baterías (ver "Consumo de la casa" en Configuración)
+// — para reconstruir el consumo real total hay que sumarle la producción
+// solar y la descarga de baterías, exactamente igual que hace
+// ha_client.true_load_forecast() con el histórico. Sin esto, en cuanto
+// las baterías (o el sol) cubren casi todo el consumo, el sensor base
+// lee casi 0 y parecía que "no había consumo" aunque las baterías
+// estuvieran descargando a tope.
+function liveReconstructedLoadW() {
+  if (!lastLive || lastLive.load_now_w === null || lastLive.load_now_w === undefined) return null;
+  const solar = lastLive.pv_now_w || 0;
+  const battDischarge = (lastLive.batteries || []).reduce((sum, b) => sum + Math.abs(b.power_w || 0), 0);
+  return lastLive.load_now_w + solar + battDischarge;
+}
+
 function applyLiveToStatTiles() {
   // Actualiza el NUMERO directamente en las cajitas que ya existen (SOC
   // agregado, Solar, Consumo), sin esperar al proximo ciclo completo de
@@ -2242,8 +2266,9 @@ function applyLiveToStatTiles() {
     solarEl.textContent = Math.round(lastLive.pv_now_w) + ' W';
   }
   const loadEl = document.getElementById('stat-consumption-value');
-  if (loadEl && lastLive.load_now_w !== null && lastLive.load_now_w !== undefined) {
-    loadEl.textContent = Math.round(lastLive.load_now_w) + ' W';
+  const totalLoadW = liveReconstructedLoadW();
+  if (loadEl && totalLoadW !== null) {
+    loadEl.textContent = Math.round(totalLoadW) + ' W';
   }
   // "Cargando/Descargando": solo se puede refrescar en vivo mientras se
   // esta descargando — el sensor de bateria declarado es de DESCARGA (ver

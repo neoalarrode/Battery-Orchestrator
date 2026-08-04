@@ -109,6 +109,19 @@ def get_history(entity_id: str, days: int) -> list[dict]:
     return data[0] if data else []
 
 
+def has_recent_history(entity_id: str, days: int = 1) -> bool:
+    """
+    Comprobacion barata: ¿hay algun punto de historico real para este sensor
+    en los ultimos `days` dias? Se usa para saber si ya se puede calcular una
+    media horaria de verdad (`hourly_average_forecast`) o si el sensor es
+    demasiado nuevo y todavia no hay nada que promediar.
+    """
+    try:
+        return bool(get_history(entity_id, days))
+    except requests.RequestException:
+        return False
+
+
 def hourly_average_forecast(entity_id: str, horizon_hours: int, days: int = 21, default: float = 0.0) -> list[float]:
     """
     Previsión simple y explicable para CUALQUIER sensor numerico: para cada

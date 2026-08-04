@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.0
+- Arreglo: la carga en hora valle calculaba el objetivo de reserva contra todo el horizonte de previsión en vez de pararse en el siguiente tramo valle, y no tenía en cuenta las horas llano (solo punta) al decidir cuánto cargar — ahora cubre correctamente llano + punta hasta el próximo valle, priorizando siempre cubrir antes las horas punta.
+- Nuevo: corrección estadística de la previsión solar. Si un array de paneles declara su sensor de generación real ("current_sensor"), la previsión hora a hora se corrige con la media real de esa misma hora del día en los últimos días (igual que ya se hacía con el consumo): se usa el mínimo entre esa media real y la previsión oficial (API de Forecast.Solar o sensor de HA), así se prioriza lo que la ubicación real ha demostrado generar (sombras, obstáculos...) salvo que la previsión oficial sea aún más baja para esa hora (señal de peor tiempo de lo habitual). Sin histórico todavía (sensor recién declarado), se usa la previsión oficial sin corregir.
+
 ## 0.10.3
 - Nuevo: favicon en la pestaña del navegador (el mismo cuadrado degradado violeta→cian con el rayo de la cabecera) — antes no se veía ningún icono propio.
 

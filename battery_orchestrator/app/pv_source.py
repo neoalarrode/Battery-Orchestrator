@@ -20,6 +20,16 @@ de los dos tipos a la vez.
 La llamada a la API se cachea (por array) para no agotar la cuota gratuita
 de peticiones/hora, independientemente de cada cuanto se ejecute el ciclo
 de decision.
+
+Ademas, si un array declara su sensor de generación instantánea
+("current_sensor"), la previsión hora a hora se corrige con lo que ese
+sensor ha generado REALMENTE de media a esa misma hora del día en los
+últimos días: se toma el mínimo entre la previsión oficial y esa media
+real. Así se prefiere el histórico real (que conoce sombras/obstáculos de
+tu ubicación que ninguna previsión genérica capta) salvo que la previsión
+oficial sea aún más baja para esa hora (señal de que se espera peor tiempo
+de lo habitual). Sin sensor declarado, o mientras no tenga histórico
+todavía (recién dado de alta), se usa la previsión oficial sin corregir.
 """
 
 from __future__ import annotations
@@ -88,10 +98,28 @@ def fetch_forecast_solar_api(array_id: str, api_key: str, lat: float, lon: float
     return _hourly_from_watts(_cache[array_id]["watts"], horizon_hours)
 
 
+def _historical_actual_forecast(current_sensor: str, horizon_hours: int, days: int = 21) -> list[float] | None:
+    """
+    Previsión basada en lo que este mismo array ha generado REALMENTE en el
+    pasado (media por hora del dia de los ultimos `days` dias de su sensor de
+    generación instantánea) — igual que ya hace la app para el consumo. Sirve
+    para corregir el sesgo sistemático de la previsión "oficial" (API o
+    sensor de HA), que no conoce tu ubicación real (sombras, obstáculos,
+    orientación...).
+
+    Devuelve None si el sensor todavía no tiene ningún histórico (recién
+    declarado) — en ese caso no hay nada con que corregir y se usa la
+    previsión oficial tal cual, hasta que se acumule algo.
+    """
+    if not ha_client.has_recent_history(current_sensor, days=1):
+        return None
+    return ha_client.hourly_average_forecast(current_sensor, horizon_hours, days=days, default=0.0)
+
+
 def get_array_forecast(array: dict, horizon_hours: int, refresh_seconds: int) -> list[float]:
     mode = array.get("mode", "entity")
     if mode == "forecast_solar_api":
-        return fetch_forecast_solar_api(
+        official = fetch_forecast_solar_api(
             array_id=array["id"],
             api_key=array.get("api_key", ""),
             lat=array.get("lat", 0),
@@ -102,10 +130,21 @@ def get_array_forecast(array: dict, horizon_hours: int, refresh_seconds: int) ->
             horizon_hours=horizon_hours,
             refresh_seconds=refresh_seconds,
         )
-    entity_id = array.get("entity_id")
-    if not entity_id:
-        return [0.0] * horizon_hours
-    return ha_client.pv_forecast_from_entity(entity_id, horizon_hours)
+    else:
+        entity_id = array.get("entity_id")
+        official = ha_client.pv_forecast_from_entity(entity_id, horizon_hours) if entity_id else [0.0] * horizon_hours
+
+    current_sensor = array.get("current_sensor")
+    if current_sensor:
+        historical_actual = _historical_actual_forecast(current_sensor, horizon_hours)
+        if historical_actual is not None:
+            # Se hace mas caso a la media real por hora (conoce mejor tu
+            # ubicación que cualquier previsión genérica) EXCEPTO cuando la
+            # previsión oficial es menor: eso suele indicar que se espera
+            # peor tiempo del habitual para esa hora (nubes), y ese matiz
+            # día a día sí lo capta la previsión oficial y el histórico no.
+            return [min(historical_actual[i], official[i]) for i in range(horizon_hours)]
+    return official
 
 
 def get_pv_forecast_total(

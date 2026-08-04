@@ -94,65 +94,84 @@ def build_plan(
     sube sola (mismo calculo, menos horas) hasta el maximo si hace falta —
     no es una rama de emergencia aparte, es el mismo numero.
 
-    Devuelve (plan, reserve_wh, reserve_until_next_valle_wh): el plan hora
-    a hora, el nivel de SOC absoluto (Wh) que el motor esta intentando
-    alcanzar ahora mismo para cubrir punta/llano futuros DE TODO EL
-    HORIZONTE (util para el reparto interno de carga/descarga), y el
-    mismo objetivo pero SOLO hasta la proxima hora valle — que es el
-    numero que hay que enseñar en la interfaz como "cuanto hace falta
-    para la proxima punta", porque una punta de mañana no cuenta si esta
-    noche hay valle de por medio (esta noche ya la recargara).
+    Devuelve (plan, reserve_wh): el plan hora a hora, y el nivel de SOC
+    absoluto (Wh) que el motor esta intentando alcanzar AHORA MISMO para
+    cubrir punta y llano futuros — util para mostrar "cuanto falta para
+    la reserva" en la interfaz sin duplicar esta cuenta en otro sitio.
     """
     horizon = len(pv_forecast_w)
     hours = [now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=i) for i in range(horizon)]
     ceiling_wh = max_usable_wh if max_usable_wh is not None else total_capacity_wh
+    usable_capacity_wh = ceiling_wh - min_soc_wh
 
     deficit_w = [max(0.0, load_forecast_w[i] - pv_forecast_w[i]) for i in range(horizon)]
     surplus_w = [max(0.0, pv_forecast_w[i] - load_forecast_w[i]) for i in range(horizon)]
 
-    # --- PASADA A: cuanta energia reservar para las horas punta que quedan ---
-    # (si no hay horas punta con deficit, tambien miramos llano como segunda prioridad)
-    punta_need_wh = sum(deficit_w[i] for i in range(horizon) if prices_tiers[i][1] == "punta")
-    llano_need_wh = sum(deficit_w[i] for i in range(horizon) if prices_tiers[i][1] == "llano")
-
-    usable_capacity_wh = ceiling_wh - min_soc_wh
-    # Cuanta ENERGIA hace falta acumular (cubrir punta primero, luego llano
-    # si cabe), limitado a lo que la bateria puede fisicamente entregar.
-    energy_needed_wh = min(punta_need_wh, usable_capacity_wh)
-    energy_needed_wh += min(llano_need_wh, max(0.0, usable_capacity_wh - energy_needed_wh))
-    # Convertido a NIVEL ABSOLUTO de SOC (no un delta): el suelo minimo mas
-    # la energia que hace falta, sin superar nunca el techo real declarado.
-    # (antes esto se comparaba mal contra el SOC absoluto y el objetivo
-    # quedaba siempre min_soc_wh por debajo del techo real, p.ej. un 97%
-    # aunque el techo configurado fuera 100%)
-    reserve_wh = min(ceiling_wh, min_soc_wh + energy_needed_wh)
-
-    # Cuanto deficit de PUNTA queda por delante desde cada hora i, SOLO
-    # hasta la proxima hora valle (sin incluirla) — un valle es una nueva
-    # oportunidad de recarga barata, asi que la punta que venga DESPUES de
-    # ese valle ya se cubrira entonces, no hace falta reservarla ahora
-    # mismo. Sin este corte, una punta de mañana se sumaba a la de hoy y
-    # el motor forzaba cargas de emergencia en llano (mas caras) o se
-    # negaba a descargar en llano, aunque esta noche ya iba a recargar de
-    # sobra en valle. Sirve para que la descarga/carga de emergencia en
-    # LLANO nunca se guarden battery para una punta que un valle previo ya
-    # va a cubrir.
+    # --- PASADA A: cuanto deficit de punta y de llano quedan por delante
+    # desde cada hora i, SOLO hasta la proxima hora valle (sin incluirla)
+    # — un valle es una nueva oportunidad de recarga barata, asi que lo
+    # que venga DESPUES de ese valle ya se cubrira entonces, no hace falta
+    # reservarlo ahora mismo. Sin este corte (el bug que arreglaba la
+    # version anterior de esto), una punta o llano de mañana se sumaba a
+    # la de hoy y el motor cargaba de mas en valle esta noche, dejando
+    # menos hueco para el sol de mañana — o forzaba cargas de emergencia
+    # en llano, o se negaba a descargar en llano/valle, aunque un valle
+    # previo ya fuera a recargar de sobra.
     future_punta_after = [0.0] * (horizon + 1)
+    future_llano_after = [0.0] * (horizon + 1)
     for i in range(horizon - 1, -1, -1):
         if prices_tiers[i][1] == "valle":
             future_punta_after[i] = 0.0
+            future_llano_after[i] = 0.0
         else:
-            extra = deficit_w[i] if prices_tiers[i][1] == "punta" else 0.0
-            future_punta_after[i] = future_punta_after[i + 1] + extra
-    # future_punta_after[i] = deficit en punta desde la hora i (inclusive)
-    # hasta la proxima hora valle (sin pasar de ahi)
+            future_punta_after[i] = future_punta_after[i + 1] + (deficit_w[i] if prices_tiers[i][1] == "punta" else 0.0)
+            future_llano_after[i] = future_llano_after[i + 1] + (deficit_w[i] if prices_tiers[i][1] == "llano" else 0.0)
+    # future_punta_after[i] / future_llano_after[i] = deficit en ese tramo
+    # desde la hora i (inclusive) hasta la proxima hora valle (sin pasar de ahi)
 
-    # Version "para mostrar" de reserve_wh: lo mismo pero limitado a la
-    # punta que queda antes del proximo valle, no a todo el horizonte
-    # configurado (que puede llegar a la punta de mañana). Es el mismo
-    # criterio que ya usa la carga de emergencia en llano (rama 2b, mas
-    # abajo) para decidir cuanto cargar de verdad.
-    reserve_until_next_valle_wh = min(ceiling_wh, min_soc_wh + future_punta_after[0])
+    # Las dos lineas de arriba resetean a 0 EN CADA hora de valle (por
+    # diseño: sirven para llano/punta, que preguntan "cuanto queda hasta
+    # el proximo valle" y ahi mismo, en un valle, la respuesta es "nada,
+    # ya estoy en uno"). Pero para decidir CUANTO CARGAR mientras se esta
+    # EN valle (ramas 2 y 5, mas abajo) hace falta lo contrario: todas las
+    # horas de un mismo bloque de valle seguido deben apuntar al MISMO
+    # objetivo — lo que haga falta para el tramo no-valle que viene justo
+    # despues — para poder repartir la carga a lo largo de todo el valle,
+    # no solo en su ultima hora (que es donde future_*_after[i] deja de
+    # estar a 0). Se propaga hacia atras el valor de la primera hora
+    # no-valle que se encuentre.
+    valle_target_punta = [0.0] * (horizon + 1)
+    valle_target_llano = [0.0] * (horizon + 1)
+    for i in range(horizon - 1, -1, -1):
+        if prices_tiers[i][1] == "valle":
+            valle_target_punta[i] = valle_target_punta[i + 1] if i + 1 < horizon else 0.0
+            valle_target_llano[i] = valle_target_llano[i + 1] if i + 1 < horizon else 0.0
+        else:
+            valle_target_punta[i] = future_punta_after[i]
+            valle_target_llano[i] = future_llano_after[i]
+
+    def _reserve_target(i: int) -> float:
+        """
+        Nivel ABSOLUTO de SOC (Wh) que hace falta alcanzar, visto desde la
+        hora valle i, para cubrir el punta y llano del tramo no-valle que
+        viene justo despues de este bloque de valle — punta primero, y
+        con la capacidad que quede, llano. Es el objetivo que usa tanto la
+        carga en valle (rama 2) como la descarga de excedente en valle
+        (rama 5); solo tiene sentido llamarla en horas de valle.
+        """
+        energy_needed = min(valle_target_punta[i], usable_capacity_wh)
+        energy_needed += min(valle_target_llano[i], max(0.0, usable_capacity_wh - energy_needed))
+        return min(ceiling_wh, min_soc_wh + energy_needed)
+
+    # reserve_wh (para mostrar "cuanto hace falta ahora mismo"): si la
+    # hora actual es valle, usa el objetivo propagado del bloque de valle
+    # (lo de arriba); si no, el corte normal hasta el proximo valle.
+    if prices_tiers[0][1] == "valle":
+        reserve_wh = _reserve_target(0)
+    else:
+        energy_needed_now = min(future_punta_after[0], usable_capacity_wh)
+        energy_needed_now += min(future_llano_after[0], max(0.0, usable_capacity_wh - energy_needed_now))
+        reserve_wh = min(ceiling_wh, min_soc_wh + energy_needed_now)
 
     # Para la carga sostenida (paced_charging): en que hora, de aqui en
     # adelante, va a hacer falta de verdad la bateria por primera vez — sea
@@ -199,9 +218,10 @@ def build_plan(
         # 2) Carga desde red en VALLE, oportunista, hasta la reserva completa
         #    (punta + llano que quepa). Respetando la potencia contratada.
         #    Se salta por completo en modo "autoconsumo" (allow_grid_charging=False).
-        elif allow_grid_charging and tier == "valle" and soc < reserve_wh:
-            headroom = min(ceiling_wh - soc, reserve_wh - soc)
-            charge_limit = _paced_charge_limit(i, soc, reserve_wh) if paced_charging else max_charge_w
+        elif allow_grid_charging and tier == "valle" and soc < _reserve_target(i):
+            target = _reserve_target(i)
+            headroom = min(ceiling_wh - soc, target - soc)
+            charge_limit = _paced_charge_limit(i, soc, target) if paced_charging else max_charge_w
             if contracted_power_w > 0:
                 grid_headroom = max(0.0, contracted_power_w - load_forecast_w[i])
                 charge_limit = min(charge_limit, grid_headroom)
@@ -211,9 +231,9 @@ def build_plan(
                 hp.charge_w = charge
                 hp.charge_source = "grid"
                 if paced_charging and charge_limit < max_charge_w:
-                    hp.reason = f"carga sostenida en valle (objetivo reserva {reserve_wh/1000:.2f} kWh)"
+                    hp.reason = f"carga sostenida en valle (objetivo reserva {target/1000:.2f} kWh)"
                 else:
-                    hp.reason = f"carga en valle (objetivo reserva {reserve_wh/1000:.2f} kWh)"
+                    hp.reason = f"carga en valle (objetivo reserva {target/1000:.2f} kWh)"
             elif charge_limit <= 0:
                 hp.reason = "sin carga: al limite de potencia contratada"
 
@@ -273,7 +293,7 @@ def build_plan(
         #    Ademas libera hueco para no desperdiciar el excedente solar de
         #    mañana. Nunca toca la reserva: solo gasta lo que sobra de ella.
         elif deficit_w[i] > 0 and tier == "valle":
-            available = max(0.0, soc - reserve_wh)
+            available = max(0.0, soc - _reserve_target(i))
             discharge = min(deficit_w[i], max_discharge_w, available)
             if discharge > 0:
                 soc -= discharge
@@ -286,7 +306,7 @@ def build_plan(
         hp.soc_wh = soc
         plan.append(hp)
 
-    return plan, reserve_wh, reserve_until_next_valle_wh
+    return plan, reserve_wh
 
 
 if __name__ == "__main__":
@@ -305,7 +325,7 @@ if __name__ == "__main__":
 
     cfg = FixedTariffConfig()
     prices_tiers = fixed_tariff_prices(now, horizon, cfg)
-    plan, reserve_wh, reserve_until_next_valle_wh = build_plan(
+    plan, reserve_wh = build_plan(
         now=now,
         pv_forecast_w=pv,
         load_forecast_w=load,

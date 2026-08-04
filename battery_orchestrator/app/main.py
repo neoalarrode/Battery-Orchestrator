@@ -12,6 +12,9 @@ import anomaly_store
 import battery_exec
 import capacity_store
 import config_store
+import deferrable_exec
+import deferrable_scheduler
+import deferrable_store
 import ha_client
 import history_store
 import lifetime_store
@@ -39,6 +42,7 @@ _last_status = {
     "energy_flow": None,
     "consumption_comparison": None,
     "anomaly": None,
+    "deferrable_loads": [],
     "error": None,
 }
 
@@ -66,6 +70,8 @@ def run_cycle():
     """Un ciclo completo: leer estado, planificar, repartir, ejecutar."""
     cfg = config_store.load_config()
     batteries_cfg = cfg["batteries"]
+    dry_run = bool(cfg["general"]["dry_run"])
+    cycle_hours = cfg["general"]["cycle_seconds"] / 3600
 
     if not batteries_cfg:
         with _state_lock:
@@ -103,6 +109,12 @@ def run_cycle():
         )
     else:
         load_forecast = [300.0] * horizon
+
+    # Lectura en vivo del consumo base, UNA sola vez por ciclo — se reutiliza
+    # tanto para decidir si cortar antes de tiempo una carga diferible
+    # interrumpible como para la deteccion de anomalias mas abajo, en vez de
+    # pedirsela dos veces a Home Assistant.
+    live_base_load_w = ha_client.get_numeric_state(load_sensor, default=None) if load_sensor else None
 
     # Baterias con sensor de SOC caido no cuentan para la planificacion
     # agregada de esta pasada (se excluyen tambien de la ejecucion real
@@ -166,6 +178,46 @@ def run_cycle():
         paced_charging=paced_charging,
     )
 
+    # Cargas diferibles: se planifican con el mismo plan hora a hora que
+    # acaba de calcular el motor de baterias (asi saben en que horas la
+    # bateria ya se va a quedar con el excedente solar), y se aplican ya
+    # mismo si "ahora" cae dentro de alguna ventana decidida.
+    deferrable_loads_cfg = cfg.get("deferrable_loads", [])
+    deferrable_log_lines: list[str] = []
+    deferrable_live_power: dict[str, float] = {}
+    deferrable_expected_now_w = 0.0
+    deferrable_schedules: dict[str, dict] = {}
+    if deferrable_loads_cfg:
+        plan_hours = [hp.dt for hp in plan]
+        charge_w_by_hour = [hp.charge_w for hp in plan]
+        charge_source_by_hour = [hp.charge_source for hp in plan]
+        prices_by_hour = [hp.price for hp in plan]
+
+        for load in deferrable_loads_cfg:
+            if not load.get("enabled", True):
+                continue
+            schedule = deferrable_scheduler.plan_for_load(
+                load, now, plan_hours, pv_forecast, load_forecast,
+                charge_w_by_hour, charge_source_by_hour, prices_by_hour,
+            )
+            if schedule:
+                deferrable_schedules[load["id"]] = schedule
+
+        live_pv_for_deferrable = pv_now_actual if pv_now_actual is not None else pv_forecast[0]
+        live_surplus_w = (
+            max(0.0, live_pv_for_deferrable - live_base_load_w) if live_base_load_w is not None
+            else max(0.0, plan[0].pv_w - plan[0].load_w)
+        )
+
+        deferrable_log_lines, deferrable_live_power, deferrable_expected_now_w, just_done_once = deferrable_exec.execute(
+            deferrable_loads_cfg, deferrable_schedules, now, cycle_hours,
+            live_surplus_w=live_surplus_w, dry_run=dry_run,
+        )
+        for line in deferrable_log_lines:
+            log.info(line)
+        for load_id in just_done_once:
+            config_store.update_deferrable_load(cfg, load_id, {"done": True})
+
     now_hp = plan[0]
     pv_surplus_now = max(0.0, now_hp.pv_w - now_hp.load_w)
     # Lo que ya se esta autoconsumiendo directo (paneles "hybrid" conectados
@@ -177,7 +229,6 @@ def run_cycle():
     distribution = battery_exec.plan_distribution(
         batteries, ac_charge_w, now_hp.discharge_w, pv_surplus_w=pv_surplus_now
     )
-    dry_run = bool(cfg["general"]["dry_run"])
     log_lines = battery_exec.execute(batteries, distribution, dry_run=dry_run)
 
     for line in log_lines:
@@ -237,7 +288,6 @@ def run_cycle():
     # llevar la cuenta se estima proporcional a su potencia maxima de
     # descarga entre las que estan activas — es una estimacion, no una
     # medicion exacta de lo que ha hecho cada una.
-    cycle_hours = cfg["general"]["cycle_seconds"] / 3600
     by_id = {b.id: b for b in batteries}
     per_battery_energy: dict[str, tuple[str | None, float]] = {b.id: (None, 0.0) for b in batteries}
     if distribution["action"] == "charge":
@@ -305,35 +355,37 @@ def run_cycle():
     # Deteccion de anomalias de consumo: compara el consumo real medido
     # AHORA MISMO (no la previsión) contra lo que la previsión historica
     # esperaba para esta hora. Solo se puede calcular si hay sensor de
-    # consumo configurado.
+    # consumo configurado. A lo esperado se le suma el consumo estimado de
+    # las cargas diferibles que la propia app tiene encendidas ahora mismo
+    # (deferrable_expected_now_w) — asi no se confunde una lavadora que
+    # ACABAMOS de encender nosotros mismos con un consumo fuera de lo normal.
     anomaly = None
-    if load_sensor:
+    if load_sensor and live_base_load_w is not None:
         try:
-            live_base = ha_client.get_numeric_state(load_sensor, default=None)
-            if live_base is not None:
-                live_pv = pv_now_actual if pv_now_actual is not None else pv_forecast[0]
-                live_discharge = sum(
-                    ha_client.get_numeric_state(b.get("power_sensor"), default=0.0) or 0.0
-                    for b in batteries_cfg if b.get("power_sensor")
-                )
-                live_load_w = live_base + live_pv + live_discharge
-                anomaly = anomaly_store.update(now, live_load_w, load_forecast[0])
-                if anomaly["changed"]:
-                    if anomaly["status"] == "anomaly":
-                        ha_client.call_service("persistent_notification", "create", extra={
-                            "notification_id": ANOMALY_NOTIFICATION_ID,
-                            "title": "Battery Orchestrator: consumo anómalo",
-                            "message": (
-                                f"Consumo real ~{anomaly['live_load_w']}W, muy por encima de lo "
-                                f"esperado para esta hora (~{anomaly['expected_load_w']}W)."
-                            ),
-                        })
-                        log.warning(f"Anomalia de consumo detectada: {anomaly['live_load_w']}W vs {anomaly['expected_load_w']}W esperados")
-                    else:
-                        ha_client.call_service("persistent_notification", "dismiss", extra={
-                            "notification_id": ANOMALY_NOTIFICATION_ID,
-                        })
-                        log.info("Anomalia de consumo resuelta")
+            live_pv = pv_now_actual if pv_now_actual is not None else pv_forecast[0]
+            live_discharge = sum(
+                ha_client.get_numeric_state(b.get("power_sensor"), default=0.0) or 0.0
+                for b in batteries_cfg if b.get("power_sensor")
+            )
+            live_load_w = live_base_load_w + live_pv + live_discharge
+            expected_load_w = load_forecast[0] + deferrable_expected_now_w
+            anomaly = anomaly_store.update(now, live_load_w, expected_load_w)
+            if anomaly["changed"]:
+                if anomaly["status"] == "anomaly":
+                    ha_client.call_service("persistent_notification", "create", extra={
+                        "notification_id": ANOMALY_NOTIFICATION_ID,
+                        "title": "Battery Orchestrator: consumo anómalo",
+                        "message": (
+                            f"Consumo real ~{anomaly['live_load_w']}W, muy por encima de lo "
+                            f"esperado para esta hora (~{anomaly['expected_load_w']}W)."
+                        ),
+                    })
+                    log.warning(f"Anomalia de consumo detectada: {anomaly['live_load_w']}W vs {anomaly['expected_load_w']}W esperados")
+                else:
+                    ha_client.call_service("persistent_notification", "dismiss", extra={
+                        "notification_id": ANOMALY_NOTIFICATION_ID,
+                    })
+                    log.info("Anomalia de consumo resuelta")
         except Exception as e:
             log.warning(f"No se pudo comprobar la anomalia de consumo: {e}")
     if anomaly is None:
@@ -372,12 +424,29 @@ def run_cycle():
         for hp in plan
     ]
 
+    # Estado de cada carga diferible para el dashboard: lo REAL (potencia
+    # que esta consumiendo ahora, si tiene sensor) junto con lo PROGRAMADO
+    # (la ventana decidida, y por que).
+    deferrable_status = [
+        {
+            "id": load["id"], "name": load["name"], "enabled": load.get("enabled", True),
+            "interruptible": load.get("interruptible", False),
+            "frequency": load.get("frequency", "daily"),
+            "switch_entity": load["switch_entity"],
+            "schedule": deferrable_schedules.get(load["id"]),
+            "live_power_w": deferrable_live_power.get(load["id"]),
+            "auto_estimated_energy_wh": deferrable_store.get_estimated_energy_wh(load["id"]),
+            "auto_estimated_duration_hours": deferrable_store.get_estimated_duration_hours(load["id"]),
+        }
+        for load in deferrable_loads_cfg
+    ]
+
     with _state_lock:
         _last_status.update(
             last_run=datetime.now().isoformat(),
             plan=today_history + future_plan,
             distribution=distribution,
-            log_lines=log_lines,
+            log_lines=log_lines + deferrable_log_lines,
             skipped_batteries=skipped,
             pv_now_actual=pv_now_actual,
             current_soc_pct=current_soc_pct,
@@ -386,6 +455,7 @@ def run_cycle():
             energy_flow=energy_flow,
             consumption_comparison=consumption_comparison,
             anomaly=anomaly,
+            deferrable_loads=deferrable_status,
             error=None,
         )
 
@@ -482,10 +552,103 @@ def api_delete_pv_array(array_id):
     return jsonify({"deleted": ok})
 
 
+@app.post("/api/deferrable_loads")
+def api_add_deferrable_load():
+    cfg = config_store.load_config()
+    load = config_store.add_deferrable_load(cfg, request.get_json(force=True))
+    return jsonify(load), 201
+
+
+@app.put("/api/deferrable_loads/<load_id>")
+def api_update_deferrable_load(load_id):
+    cfg = config_store.load_config()
+    updated = config_store.update_deferrable_load(cfg, load_id, request.get_json(force=True))
+    if updated is None:
+        return jsonify({"error": "no encontrada"}), 404
+    return jsonify(updated)
+
+
+@app.delete("/api/deferrable_loads/<load_id>")
+def api_delete_deferrable_load(load_id):
+    cfg = config_store.load_config()
+    ok = config_store.delete_deferrable_load(cfg, load_id)
+    if ok:
+        deferrable_store.clear_load(load_id)
+    return jsonify({"deleted": ok})
+
+
+@app.post("/api/deferrable_loads/<load_id>/reschedule")
+def api_reschedule_deferrable_load(load_id):
+    """Solo relevante para frequency="once" ya ejecutada: la vuelve a
+    dejar pendiente de programar, sin tocar el resto de su configuracion."""
+    cfg = config_store.load_config()
+    updated = config_store.update_deferrable_load(cfg, load_id, {"done": False})
+    if updated is None:
+        return jsonify({"error": "no encontrada"}), 404
+    deferrable_store.clear_load(load_id)
+    return jsonify(updated)
+
+
 @app.get("/api/status")
 def api_status():
     with _state_lock:
         return jsonify(_last_status)
+
+
+@app.get("/api/live")
+def api_live():
+    """
+    Lectura RAPIDA de solo lectura: nada de previsión, planificacion ni
+    ejecucion, solo el estado medido en Home Assistant AHORA MISMO. Pensada
+    para que el dashboard refresque los numeros "en vivo" cada pocos
+    segundos sin esperar al proximo ciclo completo de optimizacion (que es
+    mas lento y solo se relanza cada `cycle_seconds`).
+    """
+    cfg = config_store.load_config()
+
+    battery_live = []
+    total_capacity_wh, current_soc_wh = 0.0, 0.0
+    for b in cfg["batteries"]:
+        soc = ha_client.get_numeric_state(b["soc_sensor"], default=None)
+        power = ha_client.get_numeric_state(b.get("power_sensor"), default=None) if b.get("power_sensor") else None
+        battery_live.append({"id": b["id"], "name": b["name"], "soc_pct": soc, "power_w": power})
+        if soc is not None:
+            cap = float(b.get("capacity_wh", 0))
+            total_capacity_wh += cap
+            current_soc_wh += soc / 100 * cap
+    current_soc_pct = round(100 * current_soc_wh / total_capacity_wh, 1) if total_capacity_wh else None
+
+    pv_sensors = [a.get("current_sensor") for a in cfg["pv_arrays"] if a.get("current_sensor")]
+    pv_now_w = None
+    if pv_sensors:
+        vals = [v for v in (ha_client.get_numeric_state(s, default=None) for s in pv_sensors) if v is not None]
+        pv_now_w = round(sum(vals)) if vals else None
+
+    load_sensor = cfg.get("load_sensor")
+    load_now_w = ha_client.get_numeric_state(load_sensor, default=None) if load_sensor else None
+
+    deferrable_live = []
+    for load in cfg.get("deferrable_loads", []):
+        try:
+            switch_state = ha_client.get_state(load["switch_entity"])["state"]
+        except ha_client.HAError:
+            switch_state = None
+        power_sensor = load.get("power_sensor")
+        power = ha_client.get_numeric_state(power_sensor, default=None) if power_sensor else None
+        deferrable_live.append({
+            "id": load["id"], "name": load["name"],
+            "switch_state": switch_state, "power_w": power,
+            "schedule": deferrable_store.get_schedule(load["id"]),
+        })
+
+    return jsonify({
+        "now": datetime.now().isoformat(),
+        "batteries": battery_live,
+        "current_soc_pct": current_soc_pct,
+        "pv_now_w": pv_now_w,
+        "load_now_w": load_now_w,
+        "deferrable_loads": deferrable_live,
+    })
 
 
 @app.get("/api/battery_health")

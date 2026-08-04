@@ -67,6 +67,15 @@ con excedente solar"...).
 - **Prioridad configurable**: ahorro (por defecto), autoconsumo solar
   puro (nunca carga desde red) o longevidad de batería (no supera el 90%
   de SOC).
+- **Cargas diferibles**: lavadora, lavavajillas, termo eléctrico... cualquier
+  electrodoméstico con un enchufe/switch controlable. Tú eliges la
+  frecuencia (puntual, diaria o varias veces al día, con días de la semana
+  concretos si quieres) y si se puede interrumpir a medias o no; la app
+  decide sola la hora que más conviene, con excedente solar o, en su
+  defecto, la más barata — sin disparar falsas alarmas de consumo anómalo.
+- **Estado en vivo**: SOC, solar y consumo se refrescan cada 5 segundos
+  leyendo directo de Home Assistant, sin esperar al próximo ciclo completo
+  de optimización.
 - **Todo configurable desde la web**: baterías, tarifa, paneles solares,
   sensor de consumo — nada hardcodeado salvo la URL base de la API
   gratuita de Forecast.Solar. Configuración exportable/importable en un

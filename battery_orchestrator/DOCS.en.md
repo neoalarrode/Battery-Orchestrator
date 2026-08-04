@@ -12,6 +12,7 @@
   <a href="#what-it-does">What it does</a> ·
   <a href="#getting-started">Getting started</a> ·
   <a href="#installation-type-per-panelstring">Installation type</a> ·
+  <a href="#deferrable-loads">Deferrable loads</a> ·
   <a href="#the-tabs">The tabs</a> ·
   <a href="#battery-health-how-its-calculated">Battery health</a> ·
   <a href="#savings-and-consumption-alerts">Savings and alerts</a> ·
@@ -41,7 +42,8 @@ Every cycle (configurable, every 60s by default):
    - Discharge during peak hours first; during mid-peak only with the surplus left over once what's needed for the rest of the day's peak periods is reserved.
    - Also discharge during off-peak hours, but only with the surplus above that same reserve — typical after a sunny day with a good forecast for the next one: instead of buying from the grid overnight (even if cheap) or just leaving the battery full, it uses up the surplus and frees up room so tomorrow's sun isn't wasted. It never touches the reserve.
 5. Shares the charge power across your batteries proportionally to their declared real capacity (a full battery gets 0W, the rest share what's left). Discharge is NOT shared — each battery self-manages — but the discharge power limit for each one is still set: the max you declared, unless it's full and there's still solar surplus, in which case it's set to 0W so it doesn't self-discharge needlessly.
-6. Applies the decision to Home Assistant (or just logs it, in simulation mode) and updates the day's history and each battery's health observations.
+6. Decides the window for each declared deferrable load (washing machine, water heater...) using that same hour-by-hour plan, and turns its switch on or off depending on whether "now" falls inside that window — see [Deferrable loads](#deferrable-loads).
+7. Applies the decision to Home Assistant (or just logs it, in simulation mode) and updates the day's history and each battery's health observations.
 
 None of this uses linear programming or machine learning: it's code you
 can read end to end, and every hour of the plan carries its reason in
@@ -56,10 +58,11 @@ plain text.
 5. Add your solar panels in "Settings → Solar forecast": via an HA sensor that already publishes a forecast, or directly through the Forecast.Solar API (you'll need lat/lon/tilt/azimuth/kWp for your installation; the API key is optional, empty = free plan). If you have an instantaneous-generation sensor for THAT panel/string, declare it in the same form — it corrects the current hour for that panel with the real reading instead of relying only on the forecast. If you have several strings/roofs, each with its own sensor, there's no need to create an aggregated sensor in Home Assistant: declare each one separately and the app sums them itself, both forecast and real generation. Also set the **installation type** for each panel (see below).
 6. Real home consumption, in "Settings → Home consumption": point it at a sensor that **already subtracts the batteries' AC charging** (for example an "instantaneous consumption" sensor from your installation) — **not** a raw grid meter that does include it. The app automatically adds, hour by hour, the solar production and each battery's discharge (the sensors from step 3) to reconstruct full real consumption, whatever is covering it at each moment. No signed sensor or charge sensor is needed: the charge terms cancel out mathematically by starting from a sensor that already subtracts them.
 7. If you have contracted power, enter it in "Settings → Safety & limits" so grid charging never exceeds it (charging with solar surplus doesn't count, it doesn't draw from the grid).
-8. Click "Run cycle now" in "Current status" and check the day's plan and the SOC chart in the "Forecast" tab.
-9. Choose your priority mode in "Settings → Priority" if the default behavior ("Savings") isn't what you want — see [Priority](#priority-savings-self-consumption-or-longevity).
-10. Once you trust the decisions, turn off simulation mode.
-11. Download a backup of your configuration from "Settings → Backup" — useful if you ever reinstall the add-on.
+8. If you have appliances on a controllable plug (washing machine, dishwasher, water heater...) that can wait for whatever time suits best, declare them in "Settings → Deferrable loads" — see [Deferrable loads](#deferrable-loads).
+9. Click "Run cycle now" in "Current status" and check the day's plan and the SOC chart in the "Forecast" tab.
+10. Choose your priority mode in "Settings → Priority" if the default behavior ("Savings") isn't what you want — see [Priority](#priority-savings-self-consumption-or-longevity).
+11. Once you trust the decisions, turn off simulation mode.
+12. Download a backup of your configuration from "Settings → Backup" — useful if you ever reinstall the add-on.
 
 ## Installation type per panel/string
 
@@ -70,13 +73,29 @@ The installation type is declared on each **solar panel/array**, not on the batt
 
 Getting the type wrong isn't a big deal: marking a self-consumption panel as "connected to battery" makes the app subtract too much when requesting AC charging (batteries will charge somewhat slower than they could); marking a panel that's actually connected to a battery as "self-consumption" makes the app request more AC power than needed (harmless, the battery was already receiving that energy on its own). Check the "Current status" log after the change to confirm it does what you expect.
 
+## Deferrable loads
+
+<p align="center">
+  <img src="screenshots/cargas-diferibles.png" alt="Deferrable loads widget in Current status: live state and scheduled window for each load" width="100%">
+</p>
+
+Appliances with a controllable switch/plug (washing machine, dishwasher, electric water heater...) that don't need to run at an exact moment, only within a window of the day. Declared in "Settings → Deferrable loads":
+
+- A **switch** the app turns on and off, and optionally a **power sensor (W)** for that same load — with it, the app measures on its own how much energy each activation uses and how long its cycle actually takes, without you having to enter it by hand (though you can give a starting estimate if you want).
+- **Frequency**: one-off (a single time, won't repeat until you "reschedule" it from the UI), daily (once a day), or several times a day (configurable count). With daily or several-times-a-day, you can limit it to specific days of the week — e.g. a washing machine only on Mondays and Saturdays.
+- **Interruptible or not.** Some loads are fine to cut off mid-way — an electric water heater, for example, just picks up heating again next time it's needed. Others, like a washing machine or dishwasher, must not be interrupted mid-program. Only mark it interruptible in the first case: if it is, the app turns it off early if the expected solar surplus that justified the window disappears for several cycles in a row; if it isn't, it stays on for its whole window no matter what, and the window grows on its own if history shows its cycle takes longer than configured.
+
+**How it decides when to run it:** for each activation, the app first looks for the hour (or block of hours, if it needs more than one) with the most forecast solar surplus that's enough for it; if no slot has enough surplus, it automatically picks the cheapest available hour instead — you don't choose between a "solar mode" or a "cheap mode," the system decides on its own based on what's available that day.
+
+**Doesn't trigger false anomalous-consumption alerts:** while a deferrable load is on by the app's own decision, its expected consumption is automatically added to the forecast used by the anomaly detector (see [Savings and alerts](#savings-and-consumption-alerts)) — so it doesn't mistake a washing machine it just turned on itself for unusual consumption.
+
 ## The tabs
 
 <p align="center">
   <img src="screenshots/estado-actual.png" alt="Current status: aggregate SOC, savings and countdown to the next peak period" width="100%">
 </p>
 
-- **Current status** — summary of the most recent cycle: aggregate SOC (with the trend from the last few hours), tariff tier, price, solar, consumption, whether it's charging/discharging, savings accumulated today and in total, countdown to the next tier change and a comparison of today's consumption against the average of recent days. An indicator next to the title shows "Healthy" or "Anomaly" depending on whether unusual consumption has been detected (see [Savings and alerts](#savings-and-consumption-alerts)). Below that, the log of what the last run did. Further down: a diagram of the energy flow right now (where solar power comes from and where it goes), a meter showing how much of your contracted power is in use, the breakdown for each individual battery, and the countdown to the next peak-price hour with how much reserve you've banked to cover it.
+- **Current status** — summary of the most recent cycle: aggregate SOC (with the trend from the last few hours), tariff tier, price, solar, consumption, whether it's charging/discharging, savings accumulated today and in total, countdown to the next tier change and a comparison of today's consumption against the average of recent days. An indicator next to the title shows "Healthy" or "Anomaly" depending on whether unusual consumption has been detected (see [Savings and alerts](#savings-and-consumption-alerts)). Right under the title, the "Live now" line (SOC, solar and consumption) refreshes on its own every 5 seconds reading straight from Home Assistant — no need to wait for the next full optimization cycle (which is slower and only repeats every `cycle_seconds`) to see a fresh number. Below that, the log of what the last run did. Further down: a diagram of the energy flow right now (where solar power comes from and where it goes), a meter showing how much of your contracted power is in use, the breakdown for each individual battery, the countdown to the next peak-price hour with how much reserve you've banked to cover it, and the status of each deferrable load (live and scheduled window, see [Deferrable loads](#deferrable-loads)).
 
 <p align="center">
   <img src="screenshots/prevision.png" alt="Forecast: aggregate SOC chart through the day with tariff bands" width="100%">
@@ -138,3 +157,4 @@ Additionally, with "Savings" or "Longevity" selected (doesn't apply with "Solar 
 - The historical consumption/solar forecast automatically retries with shorter windows if your Home Assistant keeps fewer days than requested (by default the `recorder` only keeps 10).
 - Accumulated savings and the anomalous-consumption alert need the "Home consumption" sensor configured — without it, neither is calculated nor shown in "Current status".
 - Restoring a configuration from a file only checks that it has the expected basic keys (batteries, tariff, solar, general); review the data after importing in case it comes from an older version of the add-on.
+- A deferrable load marked as NOT interruptible stays on for its whole scheduled window no matter what, even if the forecast solar surplus disappears — that's the safe default for appliances with a program (washing machine, dishwasher). Only mark it interruptible if it's genuinely fine to cut off mid-way.

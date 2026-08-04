@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.0
+- Nuevo: cargas diferibles — declara electrodomésticos con un enchufe/switch controlable (lavadora, lavavajillas, termo eléctrico...) en "Configuración → Cargas diferibles". Para cada uno eliges la frecuencia (puntual, diaria o varias veces al día, con días de la semana concretos si quieres) y si se puede interrumpir a medias o no. La app decide sola la hora que más conviene: primero busca excedente solar suficiente, y si no lo hay, la hora más barata disponible. Con un sensor de consumo (opcional), la app aprende sola cuánta energía gasta cada activación y cuánto tarda de verdad su ciclo, para que una carga no interrumpible (lavadora, lavavajillas) nunca se corte a medio programa.
+- Nuevo: el consumo esperado de las cargas diferibles activas se suma a la previsión que usa el detector de anomalías, para que la app no confunda una carga que ella misma acaba de encender con un consumo fuera de lo normal.
+- Nuevo: widget "Cargas diferibles" en Estado actual, con el estado en vivo (encendida/apagada, potencia real) y la ventana programada de cada carga.
+- Nuevo: la línea "En vivo ahora" (SOC, solar, consumo) en Estado actual se refresca cada 5 segundos leyendo directo de Home Assistant, sin esperar al próximo ciclo completo de optimización.
+
 ## 0.6.0
 - Nuevo: interfaz bilingüe español/inglés — se autodetecta el idioma del navegador, y hay un desplegable con banderita en la esquina superior derecha para elegirlo a mano (Auto/Español/English). El idioma elegido se guarda como el de esta instalación (junto al resto de la configuración), así que no hace falta volver a seleccionarlo al entrar desde otro dispositivo o navegador.
 - Nuevo: README y DOCS traducidos al inglés (`README.en.md`, `DOCS.en.md`), con enlaces cruzados entre ambos idiomas en la cabecera de cada documento.

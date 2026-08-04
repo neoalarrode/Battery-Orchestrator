@@ -28,6 +28,7 @@ DEFAULT_CONFIG = {
         "pvpc_sensor": "",
     },
     "pv_arrays": [],
+    "deferrable_loads": [],
     "load_sensor": "",  # consumo base YA SIN carga de baterias (p.ej. "consumo_instantaneo"); + solar + descarga de baterias = consumo real
     "general": {
         "horizon_hours": 30,
@@ -54,6 +55,20 @@ DEFAULT_PV_ARRAY = {
     "kwp": 1.0,
     "current_sensor": "",  # generacion INSTANTANEA real (W) de este array/string, corrige la hora actual del plan
     "installation_type": "ac_coupled",  # "ac_coupled" (necesita orden de carga por AC) | "hybrid" (conectado directo a una bateria, se autoconsume solo)
+}
+
+DEFAULT_DEFERRABLE_LOAD = {
+    "name": "",
+    "switch_entity": "",       # switch que la app enciende/apaga
+    "power_sensor": "",        # opcional: sensor de potencia (W) para medir su consumo real y estimarlo solo
+    "duration_hours": 1,       # cuantas horas seguidas necesita encendida
+    "estimated_energy_wh": 0,  # 0 = usar la estimacion automatica por historico de activaciones (ver deferrable_store)
+    "frequency": "daily",      # "once" (una vez y no se repite) | "daily" (una vez al dia) | "multiple_daily" (varias veces al dia)
+    "runs_per_day": 2,         # solo se usa con "multiple_daily"
+    "days_of_week": [],        # que dias programarla con "daily"/"multiple_daily": [] = todos los dias; si no, lista de 0=lunes..6=domingo (p.ej. lavadora solo lunes y sabado -> [0, 5])
+    "interruptible": False,    # True: se puede apagar antes de tiempo si el excedente solar previsto desaparece (p.ej. un termo). False: se queda encendida toda su ventana pase lo que pase (p.ej. una lavadora, no se debe cortar a medio programa)
+    "enabled": True,
+    "done": False,             # solo relevante con frequency="once": ya se ejecuto una vez, no se vuelve a programar sola
 }
 
 
@@ -156,3 +171,28 @@ def delete_pv_array(cfg: dict, array_id: str) -> bool:
     cfg["pv_arrays"] = [a for a in cfg["pv_arrays"] if a["id"] != array_id]
     save_config(cfg)
     return len(cfg["pv_arrays"]) < before
+
+
+def add_deferrable_load(cfg: dict, load: dict) -> dict:
+    merged = dict(DEFAULT_DEFERRABLE_LOAD)
+    merged.update(load)
+    merged["id"] = merged.get("id") or str(uuid.uuid4())[:8]
+    cfg.setdefault("deferrable_loads", []).append(merged)
+    save_config(cfg)
+    return merged
+
+
+def update_deferrable_load(cfg: dict, load_id: str, updates: dict) -> dict | None:
+    for load in cfg.get("deferrable_loads", []):
+        if load["id"] == load_id:
+            load.update(updates)
+            save_config(cfg)
+            return load
+    return None
+
+
+def delete_deferrable_load(cfg: dict, load_id: str) -> bool:
+    before = len(cfg.get("deferrable_loads", []))
+    cfg["deferrable_loads"] = [d for d in cfg.get("deferrable_loads", []) if d["id"] != load_id]
+    save_config(cfg)
+    return len(cfg["deferrable_loads"]) < before

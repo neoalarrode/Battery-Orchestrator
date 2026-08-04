@@ -67,6 +67,16 @@ solar surplus available"...).
 - **Configurable priority**: savings (default), pure solar
   self-consumption (never charges from the grid), or battery longevity
   (never exceeds 90% SOC).
+- **Deferrable loads**: washing machine, dishwasher, electric water
+  heater... any appliance with a controllable switch/plug. You choose the
+  frequency (one-off, daily, or several times a day, optionally limited to
+  specific days of the week) and whether it can be interrupted mid-way or
+  not; the app decides on its own the best time to run it — with solar
+  surplus, or failing that the cheapest hour available — without
+  triggering false anomalous-consumption alerts.
+- **Live status**: SOC, solar and consumption refresh every 5 seconds
+  reading straight from Home Assistant, without waiting for the next full
+  optimization cycle.
 - **Everything configurable from the web UI**: batteries, tariff, solar
   panels, consumption sensor — nothing hardcoded except the base URL of
   the free Forecast.Solar API. Configuration is exportable/importable as

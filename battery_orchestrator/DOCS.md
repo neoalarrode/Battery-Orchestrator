@@ -12,6 +12,7 @@
   <a href="#qué-hace">Qué hace</a> ·
   <a href="#primeros-pasos">Primeros pasos</a> ·
   <a href="#tipo-de-instalación-por-panelstring">Tipo de instalación</a> ·
+  <a href="#cargas-diferibles">Cargas diferibles</a> ·
   <a href="#las-pestañas">Las pestañas</a> ·
   <a href="#salud-de-batería-cómo-se-calcula">Salud de batería</a> ·
   <a href="#ahorro-y-alertas-de-consumo">Ahorro y alertas</a> ·
@@ -41,7 +42,8 @@ Cada ciclo (configurable, por defecto cada 60s):
    - Descargar en punta primero; en llano solo con el excedente que sobre una vez reservado lo necesario para toda la punta futura del día.
    - Descargar también en valle, pero solo con el excedente que sobre por encima de esa misma reserva — típico tras un día de mucho sol con buena previsión para el siguiente: en vez de comprar de red por la noche (aunque sea barato) o dejar la batería llena sin más, se gasta lo que sobra y se libera hueco para no desperdiciar el sol de mañana. Nunca toca la reserva.
 5. Reparte la potencia de carga entre tus baterías proporcional a su capacidad real declarada (una batería llena recibe 0W, el resto se reparte lo que sobra). La descarga NO se reparte — cada batería se autogestiona — pero sí se fija el límite de potencia de descarga de cada una: el máximo que declaraste, salvo que esté llena y siga habiendo excedente solar, en cuyo caso se pone a 0W para que no se autodescargue sin necesidad.
-6. Aplica la decisión a Home Assistant (o solo la registra, en modo simulación) y actualiza el histórico del día y las observaciones de salud de cada batería.
+6. Decide la ventana de cada carga diferible declarada (lavadora, termo...) con el mismo plan hora a hora, y enciende o apaga su switch según si "ahora" cae dentro de esa ventana — ver [Cargas diferibles](#cargas-diferibles).
+7. Aplica la decisión a Home Assistant (o solo la registra, en modo simulación) y actualiza el histórico del día y las observaciones de salud de cada batería.
 
 Nada de esto usa programación lineal ni aprendizaje automático: es código
 que puedes leer de arriba a abajo, y cada hora del plan lleva su motivo en
@@ -56,10 +58,11 @@ texto plano.
 5. Añade tus paneles solares en "Configuración → Previsión solar": por sensor de HA que ya publique previsión, o directamente por la API de Forecast.Solar (necesitas lat/lon/inclinación/azimut/kWp de tu instalación; la API key es opcional, vacío = plan gratuito). Si tienes un sensor de generación instantánea de ESE panel/string, decláralo en el mismo formulario — corrige la hora actual de ese panel con el dato real en vez de depender solo de la previsión. Si tienes varios strings/tejados, cada uno con su propio sensor, no hace falta crear ningún sensor agregado en Home Assistant: declara cada uno por separado y la app los suma sola, tanto la previsión como la generación real. Indica también el **tipo de instalación** de cada panel (ver más abajo).
 6. Consumo real de la casa, en "Configuración → Consumo de la casa": indica un sensor que **ya reste la carga AC de las baterías** (por ejemplo un "consumo instantáneo" de tu instalación) — **no** un medidor de red en bruto que sí la incluya. La app le suma sola, hora a hora, la producción solar y la descarga de cada batería (los sensores del paso 3) para reconstruir el consumo real completo, sea cual sea la fuente que lo esté cubriendo en cada momento. No hace falta ningún sensor con signo ni de carga: los términos de carga se cancelan matemáticamente al partir de un sensor que ya los resta.
 7. Si tienes potencia contratada, indícala en "Configuración → Seguridad y límites" para que nunca la supere al cargar desde red (la carga con excedente solar no cuenta, no tira de la red).
-8. Pulsa "Ejecutar ciclo ahora" en "Estado actual" y revisa el plan del día y la gráfica de SOC en la pestaña "Previsión".
-9. Elige tu modo de prioridad en "Configuración → Prioridad" si el comportamiento por defecto ("Ahorro") no es el que quieres — ver [Prioridad](#prioridad-ahorro-autoconsumo-o-longevidad).
-10. Cuando confíes en las decisiones, desactiva el modo simulación.
-11. Descarga una copia de tu configuración desde "Configuración → Copia de seguridad" — útil si algún día reinstalas el add-on.
+8. Si tienes electrodomésticos con enchufe controlable (lavadora, lavavajillas, termo...) que puedan esperar a la hora que más convenga, decláralos en "Configuración → Cargas diferibles" — ver [Cargas diferibles](#cargas-diferibles).
+9. Pulsa "Ejecutar ciclo ahora" en "Estado actual" y revisa el plan del día y la gráfica de SOC en la pestaña "Previsión".
+10. Elige tu modo de prioridad en "Configuración → Prioridad" si el comportamiento por defecto ("Ahorro") no es el que quieres — ver [Prioridad](#prioridad-ahorro-autoconsumo-o-longevidad).
+11. Cuando confíes en las decisiones, desactiva el modo simulación.
+12. Descarga una copia de tu configuración desde "Configuración → Copia de seguridad" — útil si algún día reinstalas el add-on.
 
 ## Tipo de instalación por panel/string
 
@@ -70,13 +73,29 @@ El tipo de instalación se declara en cada **panel/array solar**, no en la bater
 
 Si te equivocas de tipo no pasa nada grave: marcar un panel de autoconsumo como "conectado a batería" hace que la app descuente de más al pedir carga por AC (las baterías cargarán algo menos rápido de lo que podrían); marcar un panel realmente conectado a batería como "autoconsumo" hace que la app pida más potencia por AC de la que hace falta (inofensivo, la batería ya estaba recibiendo esa energía por su cuenta). Revisa el log de "Estado actual" tras el cambio para confirmar que hace lo que esperas.
 
+## Cargas diferibles
+
+<p align="center">
+  <img src="screenshots/cargas-diferibles.png" alt="Widget de cargas diferibles en Estado actual: estado en vivo y ventana programada de cada carga" width="100%">
+</p>
+
+Electrodomésticos con un enchufe/switch controlable (lavadora, lavavajillas, termo eléctrico...) que no necesitan funcionar en un momento exacto, solo dentro de una ventana del día. Se declaran en "Configuración → Cargas diferibles":
+
+- **Switch** que la app enciende y apaga, y opcionalmente un **sensor de consumo (W)** de esa misma carga — con él, la app mide sola cuánta energía gasta cada activación y de cuánto dura de verdad su ciclo, sin que tengas que indicarlo a mano (aunque puedes dar una estimación de partida si quieres).
+- **Frecuencia**: puntual (una sola vez, no se repite hasta que la "reprogramas" desde la interfaz), diaria (una vez al día) o varias veces al día (número configurable). Con diaria o varias veces al día, puedes limitarla a días concretos de la semana — por ejemplo una lavadora solo lunes y sábado.
+- **Interrumpible o no.** Algunas cargas no pasa nada por cortarlas a medias — un termo eléctrico, por ejemplo, sigue calentando la próxima vez que le toque. Otras, como una lavadora o un lavavajillas, no se deben interrumpir a mitad de programa. Márcala como interrumpible solo en el primer caso: si lo es, la app la apaga antes de tiempo si el excedente solar previsto que justificaba la ventana desaparece varios ciclos seguidos; si no lo es, se queda encendida toda su ventana pase lo que pase, y la ventana crece sola si el histórico dice que su ciclo tarda más de lo configurado.
+
+**Cómo decide cuándo encenderla:** para cada activación, la app busca primero la hora (o bloque de horas, si necesita más de una) con más excedente solar previsto que le baste; si ningún hueco tiene excedente suficiente, elige automáticamente la hora más barata disponible en su lugar — sin que tengas que elegir tú entre "modo solar" o "modo barato", el sistema decide solo según lo que haya cada día.
+
+**No dispara falsas alarmas de consumo anómalo:** mientras una carga diferible está encendida por decisión de la propia app, su consumo esperado se suma automáticamente a la previsión que usa el detector de anomalías (ver [Ahorro y alertas](#ahorro-y-alertas-de-consumo)) — así no confunde una lavadora que acaba de encender ella misma con un consumo fuera de lo normal.
+
 ## Las pestañas
 
 <p align="center">
   <img src="screenshots/estado-actual.png" alt="Estado actual: SOC agregado, ahorro y cuenta atrás a la próxima punta" width="100%">
 </p>
 
-- **Estado actual** — resumen del ciclo más reciente: SOC agregado (con la tendencia de las últimas horas), tramo tarifario, precio, solar, consumo, si se está cargando/descargando, ahorro acumulado hoy y en total, cuenta atrás al próximo cambio de tramo y comparativa del consumo de hoy frente a la media de los últimos días. Un indicador junto al título marca "Saludable" o "Anómalo" según si se ha detectado un consumo fuera de lo normal (ver [Ahorro y alertas](#ahorro-y-alertas-de-consumo)). Debajo, el log de lo que hizo la última ejecución. Más abajo: un diagrama del flujo de energía ahora mismo (de dónde sale la potencia solar y a dónde va), un medidor de cuánto estás usando de tu potencia contratada, el desglose de cada batería individual, y la cuenta atrás a la próxima hora punta con cuánta reserva llevas acumulada para cubrirla.
+- **Estado actual** — resumen del ciclo más reciente: SOC agregado (con la tendencia de las últimas horas), tramo tarifario, precio, solar, consumo, si se está cargando/descargando, ahorro acumulado hoy y en total, cuenta atrás al próximo cambio de tramo y comparativa del consumo de hoy frente a la media de los últimos días. Un indicador junto al título marca "Saludable" o "Anómalo" según si se ha detectado un consumo fuera de lo normal (ver [Ahorro y alertas](#ahorro-y-alertas-de-consumo)). Justo debajo del título, la línea "En vivo ahora" (SOC, solar y consumo) se refresca sola cada 5 segundos leyendo directo de Home Assistant — no hace falta esperar a que se relance el ciclo completo de optimización (que tarda más y solo se repite cada `cycle_seconds`) para ver un dato fresco. Debajo, el log de lo que hizo la última ejecución. Más abajo: un diagrama del flujo de energía ahora mismo (de dónde sale la potencia solar y a dónde va), un medidor de cuánto estás usando de tu potencia contratada, el desglose de cada batería individual, la cuenta atrás a la próxima hora punta con cuánta reserva llevas acumulada para cubrirla, y el estado de cada carga diferible (en vivo y ventana programada, ver [Cargas diferibles](#cargas-diferibles)).
 
 <p align="center">
   <img src="screenshots/prevision.png" alt="Previsión: gráfica del SOC agregado a lo largo del día con franjas de tarifa" width="100%">
@@ -138,3 +157,4 @@ Además, con "Ahorro" o "Longevidad" seleccionado (no aplica con "Autoconsumo so
 - La previsión de consumo/solar por histórico reintenta sola con ventanas más cortas si tu Home Assistant conserva menos días de los que pides (por defecto el `recorder` solo guarda 10).
 - El ahorro acumulado y la alerta de consumo anómalo necesitan el sensor de "Consumo de la casa" configurado — sin él, ni se calculan ni aparecen en "Estado actual".
 - Restaurar una configuración desde archivo solo comprueba que tenga las claves básicas esperadas (baterías, tarifa, solar, general); revisa los datos después de importar por si vienen de una versión antigua del add-on.
+- Una carga diferible marcada como NO interrumpible se queda encendida toda su ventana programada pase lo que pase, aunque el excedente solar previsto desaparezca — es la opción segura por defecto para electrodomésticos con programa (lavadora, lavavajillas). Márcala como interrumpible solo si de verdad no pasa nada por cortarla a medias.

@@ -356,6 +356,7 @@
 
 <div class="card">
   <h2><span data-i18n="card_estado_title">Estado actual</span> <span class="hint" id="last-run"></span><span id="health-pill" class="pill"></span></h2>
+  <p class="help" id="live-strip"></p>
   <div id="stat-grid" class="stat-grid" style="margin-bottom:16px"></div>
   <div id="status"></div>
   <div class="actions">
@@ -385,6 +386,11 @@
 <div class="card">
   <h2 data-i18n="card_next_punta_title">Próxima punta</h2>
   <div id="next-punta"></div>
+</div>
+
+<div class="card">
+  <h2><span data-i18n="card_deferrable_title">Cargas diferibles</span> <span class="hint" data-i18n="card_deferrable_hint">en vivo (real) y ventana programada</span></h2>
+  <div id="deferrable-status"></div>
 </div>
 
 </div>
@@ -542,6 +548,62 @@
     <div class="actions">
       <button onclick="addPvArray()" id="pv-form-submit-btn" data-i18n="btn_add_panel">Añadir panel</button>
       <button class="ghost" onclick="cancelPvArrayForm()" type="button" data-i18n="btn_cancel">Cancelar</button>
+    </div>
+  </details>
+</div>
+
+<div class="card">
+  <h2><span data-i18n="card_deferrable_title">Cargas diferibles</span></h2>
+  <div id="deferrable-loads-list"></div>
+  <details id="add-deferrable-panel">
+    <summary class="add-toggle" id="add-deferrable-summary" data-i18n="add_deferrable_toggle">+ Añadir carga diferible</summary>
+    <div class="grid2" style="margin-top:10px">
+      <div>
+        <label data-i18n="label_name">Nombre</label><input id="df-name" placeholder="Lavadora">
+        <label data-i18n="label_switch_entity">Switch que enciende/apaga</label><input id="df-switch" placeholder="switch.enchufe_lavadora">
+        <label data-i18n="label_power_sensor_optional">Sensor de consumo (W, opcional)</label><input id="df-power-sensor" placeholder="sensor.enchufe_lavadora_potencia">
+        <p class="help" data-i18n="help_power_sensor_deferrable">Si lo indicas, la app mide sola cuánta energía gasta cada activación y ajusta la estimación con el tiempo — no hace falta que la indiques a mano.</p>
+        <label data-i18n="label_duration_hours">Duración estimada (horas)</label><input id="df-duration" type="number" min="1" value="1">
+        <label data-i18n="label_estimated_energy">Consumo estimado por activación (Wh, opcional)</label><input id="df-energy" type="number" placeholder="1500">
+        <p class="help" data-i18n="help_estimated_energy">Déjalo vacío para que la app lo estime sola por historico en cuanto tenga sensor de consumo y unas cuantas activaciones. Mientras tanto usa una estimación de partida razonable.</p>
+      </div>
+      <div>
+        <label data-i18n="label_frequency">Frecuencia</label>
+        <select id="df-frequency" onchange="toggleDeferrableFrequencyFields()">
+          <option value="once" data-i18n="opt_freq_once">Puntual — una sola vez</option>
+          <option value="daily" selected data-i18n="opt_freq_daily">Diaria — una vez al día</option>
+          <option value="multiple_daily" data-i18n="opt_freq_multiple">Varias veces al día</option>
+        </select>
+        <div id="df-runs-row">
+          <label data-i18n="label_runs_per_day">Veces al día</label><input id="df-runs" type="number" min="2" value="2">
+        </div>
+        <div id="df-days-row">
+          <label data-i18n="label_days_of_week">Días de la semana (vacío = todos)</label>
+          <div class="checkline" id="df-days-chips" style="flex-wrap:wrap;gap:8px 14px">
+            <label class="checkline" style="gap:4px"><input type="checkbox" class="df-day" value="0"><span data-i18n="day_mon">Lu</span></label>
+            <label class="checkline" style="gap:4px"><input type="checkbox" class="df-day" value="1"><span data-i18n="day_tue">Ma</span></label>
+            <label class="checkline" style="gap:4px"><input type="checkbox" class="df-day" value="2"><span data-i18n="day_wed">Mi</span></label>
+            <label class="checkline" style="gap:4px"><input type="checkbox" class="df-day" value="3"><span data-i18n="day_thu">Ju</span></label>
+            <label class="checkline" style="gap:4px"><input type="checkbox" class="df-day" value="4"><span data-i18n="day_fri">Vi</span></label>
+            <label class="checkline" style="gap:4px"><input type="checkbox" class="df-day" value="5"><span data-i18n="day_sat">Sa</span></label>
+            <label class="checkline" style="gap:4px"><input type="checkbox" class="df-day" value="6"><span data-i18n="day_sun">Do</span></label>
+          </div>
+        </div>
+        <div class="checkline" style="margin-top:12px">
+          <input id="df-interruptible" type="checkbox">
+          <label data-i18n="label_interruptible">Interrumpible: se puede apagar antes de tiempo si el excedente solar previsto desaparece</label>
+        </div>
+        <p class="help" data-i18n="help_interruptible">Actívalo para cargas que no pasa nada por cortar a medias (p.ej. un termo eléctrico). Déjalo desactivado para las que sí importa que terminen su programa entero (p.ej. una lavadora o un lavavajillas) — esas se quedan encendidas toda su ventana pase lo que pase, y la ventana crece sola si el histórico dice que tardan más de lo configurado.</p>
+        <div class="checkline">
+          <input id="df-enabled" type="checkbox" checked>
+          <label data-i18n="label_enabled_deferrable">Activa</label>
+        </div>
+      </div>
+    </div>
+    <p class="help" id="deferrable-form-error" style="display:none"></p>
+    <div class="actions">
+      <button onclick="addDeferrableLoad()" id="deferrable-form-submit-btn" data-i18n="btn_save_deferrable">Guardar carga</button>
+      <button class="ghost" onclick="cancelDeferrableForm()" type="button" data-i18n="btn_cancel">Cancelar</button>
     </div>
   </details>
 </div>
@@ -782,6 +844,43 @@ es: {
 
   status_no_cycle_data: "Todavía no hay datos del ciclo.",
   power_health_loading: "Cargando...",
+
+  card_deferrable_title: "Cargas diferibles",
+  card_deferrable_hint: "en vivo (real) y ventana programada",
+  empty_no_deferrable: "Todavía no has añadido ninguna carga diferible.",
+  deferrable_no_schedule: "sin programar todavía",
+  deferrable_mode_solar: "excedente solar", deferrable_mode_cheap: "hora barata",
+  deferrable_on: "Encendida", deferrable_off: "Apagada", deferrable_unknown: "Sin datos en vivo",
+  deferrable_disabled: "desactivada", deferrable_scheduled: "Programado",
+  deferrable_interruptible_badge: "interrumpible",
+  live_prefix: "En vivo ahora:", live_soc: "SOC {pct}%", live_solar: "Solar {w} W", live_load: "Consumo {w} W",
+
+  add_deferrable_toggle: "+ Añadir carga diferible",
+  label_switch_entity: "Switch que enciende/apaga",
+  label_power_sensor_optional: "Sensor de consumo (W, opcional)",
+  help_power_sensor_deferrable: "Si lo indicas, la app mide sola cuánta energía gasta cada activación y ajusta la estimación con el tiempo — no hace falta que la indiques a mano.",
+  label_duration_hours: "Duración estimada (horas)",
+  label_estimated_energy: "Consumo estimado por activación (Wh, opcional)",
+  help_estimated_energy: "Déjalo vacío para que la app lo estime sola por historico en cuanto tenga sensor de consumo y unas cuantas activaciones. Mientras tanto usa una estimación de partida razonable.",
+  label_frequency: "Frecuencia",
+  opt_freq_once: "Puntual — una sola vez", opt_freq_daily: "Diaria — una vez al día", opt_freq_multiple: "Varias veces al día",
+  label_runs_per_day: "Veces al día",
+  label_days_of_week: "Días de la semana (vacío = todos)",
+  day_mon: "Lu", day_tue: "Ma", day_wed: "Mi", day_thu: "Ju", day_fri: "Vi", day_sat: "Sa", day_sun: "Do",
+  label_interruptible: "Interrumpible: se puede apagar antes de tiempo si el excedente solar previsto desaparece",
+  help_interruptible: "Actívalo para cargas que no pasa nada por cortar a medias (p.ej. un termo eléctrico). Déjalo desactivado para las que sí importa que terminen su programa entero (p.ej. una lavadora o un lavavajillas) — esas se quedan encendidas toda su ventana pase lo que pase, y la ventana crece sola si el histórico dice que tardan más de lo configurado.",
+  label_enabled_deferrable: "Activa",
+  btn_save_deferrable: "Guardar carga", btn_save_deferrable_changes: "Guardar cambios",
+  editing_deferrable: 'Editando "{name}"',
+  btn_reschedule: "Reprogramar",
+  kv_switch: "Switch", kv_power_sensor: "Sensor de consumo", kv_duration: "Duración", kv_frequency: "Frecuencia",
+  kv_days: "Días", kv_estimated_energy: "Consumo estimado", kv_auto_energy: "Estimado por histórico",
+  freq_once_label: "Puntual", freq_daily_label: "Diaria", freq_multiple_label: "{n} veces al día",
+  freq_once_done: "ya ejecutada",
+  error_deferrable_required: "Nombre y el switch son obligatorios.",
+  toast_deferrable_added: "Carga diferible añadida.", toast_deferrable_updated: "Carga diferible actualizada.",
+  toast_deferrable_deleted: "Carga diferible eliminada.", toast_could_not_delete_deferrable: "No se pudo eliminar (error {status}).",
+  toast_deferrable_rescheduled: "Se volverá a programar en el próximo ciclo.",
 },
 en: {
   topbar_eyebrow: "Home energy management",
@@ -938,6 +1037,43 @@ en: {
 
   status_no_cycle_data: "There's no cycle data yet.",
   power_health_loading: "Loading...",
+
+  card_deferrable_title: "Deferrable loads",
+  card_deferrable_hint: "live (real) and scheduled window",
+  empty_no_deferrable: "You haven't added any deferrable load yet.",
+  deferrable_no_schedule: "not scheduled yet",
+  deferrable_mode_solar: "solar surplus", deferrable_mode_cheap: "cheap hour",
+  deferrable_on: "On", deferrable_off: "Off", deferrable_unknown: "No live data",
+  deferrable_disabled: "disabled", deferrable_scheduled: "Scheduled",
+  deferrable_interruptible_badge: "interruptible",
+  live_prefix: "Live now:", live_soc: "SOC {pct}%", live_solar: "Solar {w} W", live_load: "Load {w} W",
+
+  add_deferrable_toggle: "+ Add deferrable load",
+  label_switch_entity: "Switch to turn on/off",
+  label_power_sensor_optional: "Power sensor (W, optional)",
+  help_power_sensor_deferrable: "If set, the app measures how much energy each activation uses on its own and refines the estimate over time — no need to enter it by hand.",
+  label_duration_hours: "Estimated duration (hours)",
+  label_estimated_energy: "Estimated energy per activation (Wh, optional)",
+  help_estimated_energy: "Leave blank to let the app estimate it from history once it has a power sensor and a few activations. Until then it uses a reasonable starting estimate.",
+  label_frequency: "Frequency",
+  opt_freq_once: "One-off — a single time", opt_freq_daily: "Daily — once a day", opt_freq_multiple: "Several times a day",
+  label_runs_per_day: "Times per day",
+  label_days_of_week: "Days of the week (empty = every day)",
+  day_mon: "Mo", day_tue: "Tu", day_wed: "We", day_thu: "Th", day_fri: "Fr", day_sat: "Sa", day_sun: "Su",
+  label_interruptible: "Interruptible: can be turned off early if the expected solar surplus disappears",
+  help_interruptible: "Turn this on for loads that are fine to cut off mid-way (e.g. an electric water heater). Leave it off for ones that need to finish their full program (e.g. a washing machine or dishwasher) — those stay on for their whole window no matter what, and the window grows on its own if history shows they take longer than configured.",
+  label_enabled_deferrable: "Enabled",
+  btn_save_deferrable: "Save load", btn_save_deferrable_changes: "Save changes",
+  editing_deferrable: 'Editing "{name}"',
+  btn_reschedule: "Reschedule",
+  kv_switch: "Switch", kv_power_sensor: "Power sensor", kv_duration: "Duration", kv_frequency: "Frequency",
+  kv_days: "Days", kv_estimated_energy: "Estimated energy", kv_auto_energy: "Estimated from history",
+  freq_once_label: "One-off", freq_daily_label: "Daily", freq_multiple_label: "{n} times a day",
+  freq_once_done: "already run",
+  error_deferrable_required: "Name and the switch are required.",
+  toast_deferrable_added: "Deferrable load added.", toast_deferrable_updated: "Deferrable load updated.",
+  toast_deferrable_deleted: "Deferrable load deleted.", toast_could_not_delete_deferrable: "Couldn't delete it (error {status}).",
+  toast_deferrable_rescheduled: "It will be scheduled again on the next cycle.",
 },
 };
 
@@ -999,14 +1135,23 @@ const LOG_LINE_PATTERNS_EN = [
   [/^\[(.+?)\] descarga BLOQUEADA a 0W \((.+?), SOC ([\d.]+%|N\/D)\)$/, (m) => `[${m[1]}] discharge BLOCKED at 0W (${translateNote(m[2])}, SOC ${m[3]})`],
   [/^\[(.+?)\] sin accion \(SOC ([\d.]+%|N\/D)\)$/, (m) => `[${m[1]}] no action (SOC ${m[2]})`],
   [/^\[(.+?)\] OMITIDA — (.+)$/, (m) => `[${m[1]}] SKIPPED — ${translateNote(m[2])}`],
+  [/^\[(.+?)\] ENCENDIDA \((excedente solar|hora barata), ventana (\d{2}:\d{2})-(\d{2}:\d{2})\)$/,
+    (m) => `[${m[1]}] ON (${m[2] === 'excedente solar' ? 'solar surplus' : 'cheap hour'}, window ${m[3]}-${m[4]})`],
+  [/^\[(.+?)\] apagada \(fuera de ventana programada\)$/, (m) => `[${m[1]}] off (outside its scheduled window)`],
+  [/^\[(.+?)\] interrumpida: el excedente solar previsto ya no esta disponible$/,
+    (m) => `[${m[1]}] interrupted: the expected solar surplus is no longer there`],
+  [/^\[(.+?)\] sesion finalizada, ~(\d+)Wh medidos$/, (m) => `[${m[1]}] session finished, ~${m[2]}Wh measured`],
 ];
 
 function translateLogLine(esLine) {
   if (currentLang !== 'en' || !esLine) return esLine;
   let line = esLine;
   let suffix = '';
-  const avisoMatch = line.match(/^(.*) — AVISO: no se pudo aplicar en Home Assistant \((.+)\)$/);
-  if (avisoMatch) { line = avisoMatch[1]; suffix = ` — WARNING: could not apply in Home Assistant (${avisoMatch[2]})`; }
+  const avisoMatch = line.match(/^(.*) — AVISO: no se pudo (aplicar|encender|apagar) en Home Assistant \((.+)\)$/);
+  if (avisoMatch) {
+    const verb = { aplicar: 'apply', encender: 'turn on', apagar: 'turn off' }[avisoMatch[2]];
+    line = avisoMatch[1]; suffix = ` — WARNING: could not ${verb} in Home Assistant (${avisoMatch[3]})`;
+  }
   const simPrefix = line.startsWith('[SIMULACION] ');
   if (simPrefix) line = line.slice('[SIMULACION] '.length);
   for (const [re, fn] of LOG_LINE_PATTERNS_EN) {
@@ -1054,7 +1199,9 @@ async function onLangChange() {
   updatePvInstallTypeHelp();
   renderBatteries();
   renderPvArrays();
+  renderDeferrableLoads();
   if (lastStatus) renderStatus(lastStatus);
+  renderLiveStrip();
   const socChartPanel = document.querySelector('.tab-panel[data-tab="prevision"]');
   if (socChartPanel && socChartPanel.classList.contains('active') && lastStatus) renderSocChart(lastStatus.plan || []);
   if (document.querySelector('.tab-panel[data-tab="salud"]').classList.contains('active')) loadBatteryHealth();
@@ -1073,8 +1220,10 @@ async function onLangChange() {
 let cfg = null;
 let editingBatteryId = null;
 let editingPvArrayId = null;
+let editingDeferrableLoadId = null;
 let lastStatus = null;
 let lastSavings = null;
+let lastLive = null;
 
 function switchTab(name) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
@@ -1098,6 +1247,7 @@ async function loadConfig() {
 
   renderBatteries();
   renderPvArrays();
+  renderDeferrableLoads();
   updatePvInstallTypeHelp();
 
   document.getElementById('t-mode').value = cfg.tariff.mode || 'fixed';
@@ -1399,6 +1549,159 @@ async function deletePvArray(id) {
   toast(t('toast_panel_deleted'));
 }
 
+function deferrableFrequencyLabel(load) {
+  if (load.frequency === 'once') return load.done ? `${t('freq_once_label')} (${t('freq_once_done')})` : t('freq_once_label');
+  if (load.frequency === 'multiple_daily') return t('freq_multiple_label', { n: load.runs_per_day || 2 });
+  return t('freq_daily_label');
+}
+
+const DAY_KEYS = ['day_mon', 'day_tue', 'day_wed', 'day_thu', 'day_fri', 'day_sat', 'day_sun'];
+
+function renderDeferrableLoads() {
+  const el = document.getElementById('deferrable-loads-list');
+  const loads = cfg.deferrable_loads || [];
+  if (!loads.length) { el.innerHTML = `<p class="empty">${t('empty_no_deferrable')}</p>`; return; }
+  el.innerHTML = loads.map(load => `
+    <details class="item-card item-details">
+      <summary>
+        <span class="item-name">${load.name}${!load.enabled ? ` <span class="meta">(${t('deferrable_disabled')})</span>` : ''}</span>
+        <span class="meta">${deferrableFrequencyLabel(load)}</span>
+      </summary>
+      <div class="item-body">
+        <div class="kv"><span>${t('kv_switch')}</span><code>${load.switch_entity}</code></div>
+        ${load.power_sensor ? `<div class="kv"><span>${t('kv_power_sensor')}</span><code>${load.power_sensor}</code></div>` : ''}
+        <div class="kv"><span>${t('kv_duration')}</span><code>${load.duration_hours}h</code></div>
+        <div class="kv"><span>${t('kv_frequency')}</span><code>${deferrableFrequencyLabel(load)}</code></div>
+        ${(load.days_of_week && load.days_of_week.length) ? `<div class="kv"><span>${t('kv_days')}</span><code>${load.days_of_week.map(d => t(DAY_KEYS[d])).join(', ')}</code></div>` : ''}
+        ${load.estimated_energy_wh ? `<div class="kv"><span>${t('kv_estimated_energy')}</span><code>${load.estimated_energy_wh} Wh</code></div>`
+          : load.auto_estimated_energy_wh ? `<div class="kv"><span>${t('kv_auto_energy')}</span><code>${Math.round(load.auto_estimated_energy_wh)} Wh</code></div>` : ''}
+        ${load.interruptible ? `<div class="kv"><span>${t('label_interruptible').split(':')[0]}</span><code>${t('deferrable_interruptible_badge')}</code></div>` : ''}
+        <div class="actions">
+          <button class="secondary" onclick="editDeferrableLoad('${load.id}')" type="button">${t('btn_edit')}</button>
+          ${(load.frequency === 'once' && load.done) ? `<button class="secondary" onclick="rescheduleDeferrableLoad('${load.id}')" type="button">${t('btn_reschedule')}</button>` : ''}
+          <button class="danger" onclick="deleteDeferrableLoad('${load.id}')" type="button">${t('btn_delete_battery')}</button>
+        </div>
+      </div>
+    </details>`).join('');
+}
+
+function toggleDeferrableFrequencyFields() {
+  const freq = document.getElementById('df-frequency').value;
+  document.getElementById('df-runs-row').style.display = freq === 'multiple_daily' ? 'block' : 'none';
+  document.getElementById('df-days-row').style.display = freq === 'once' ? 'none' : 'block';
+}
+
+function showDeferrableFormError(msg) {
+  const el = document.getElementById('deferrable-form-error');
+  if (!msg) { el.style.display = 'none'; el.textContent = ''; return; }
+  el.style.display = 'block'; el.classList.add('warn'); el.textContent = msg;
+}
+
+function resetDeferrableForm() {
+  ['df-name', 'df-switch', 'df-power-sensor', 'df-energy'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('df-duration').value = 1;
+  document.getElementById('df-runs').value = 2;
+  document.getElementById('df-frequency').value = 'daily';
+  document.getElementById('df-interruptible').checked = false;
+  document.getElementById('df-enabled').checked = true;
+  document.querySelectorAll('.df-day').forEach(cb => cb.checked = false);
+  toggleDeferrableFrequencyFields();
+  editingDeferrableLoadId = null;
+  document.getElementById('add-deferrable-summary').textContent = t('add_deferrable_toggle');
+  document.getElementById('deferrable-form-submit-btn').textContent = t('btn_save_deferrable');
+  showDeferrableFormError('');
+}
+
+function cancelDeferrableForm() {
+  resetDeferrableForm();
+  document.getElementById('add-deferrable-panel').open = false;
+}
+
+function editDeferrableLoad(id) {
+  const load = (cfg.deferrable_loads || []).find(x => x.id === id);
+  if (!load) return;
+  document.getElementById('df-name').value = load.name || '';
+  document.getElementById('df-switch').value = load.switch_entity || '';
+  document.getElementById('df-power-sensor').value = load.power_sensor || '';
+  document.getElementById('df-duration').value = load.duration_hours ?? 1;
+  document.getElementById('df-energy').value = load.estimated_energy_wh || '';
+  document.getElementById('df-frequency').value = load.frequency || 'daily';
+  document.getElementById('df-runs').value = load.runs_per_day ?? 2;
+  document.getElementById('df-interruptible').checked = !!load.interruptible;
+  document.getElementById('df-enabled').checked = load.enabled !== false;
+  const days = new Set(load.days_of_week || []);
+  document.querySelectorAll('.df-day').forEach(cb => cb.checked = days.has(parseInt(cb.value, 10)));
+  toggleDeferrableFrequencyFields();
+
+  editingDeferrableLoadId = id;
+  document.getElementById('add-deferrable-summary').textContent = t('editing_deferrable', { name: load.name || '' });
+  document.getElementById('deferrable-form-submit-btn').textContent = t('btn_save_deferrable_changes');
+  showDeferrableFormError('');
+  const panel = document.getElementById('add-deferrable-panel');
+  panel.open = true;
+  panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function addDeferrableLoad() {
+  showDeferrableFormError('');
+  const days = Array.from(document.querySelectorAll('.df-day:checked')).map(cb => parseInt(cb.value, 10));
+  const load = {
+    name: document.getElementById('df-name').value.trim(),
+    switch_entity: document.getElementById('df-switch').value.trim(),
+    power_sensor: document.getElementById('df-power-sensor').value.trim() || null,
+    duration_hours: parseInt(document.getElementById('df-duration').value, 10) || 1,
+    estimated_energy_wh: parseFloat(document.getElementById('df-energy').value) || 0,
+    frequency: document.getElementById('df-frequency').value,
+    runs_per_day: parseInt(document.getElementById('df-runs').value, 10) || 2,
+    days_of_week: days,
+    interruptible: document.getElementById('df-interruptible').checked,
+    enabled: document.getElementById('df-enabled').checked,
+  };
+  if (!load.name || !load.switch_entity) {
+    showDeferrableFormError(t('error_deferrable_required')); return;
+  }
+
+  const isEdit = !!editingDeferrableLoadId;
+  const url = isEdit ? 'api/deferrable_loads/' + editingDeferrableLoadId : 'api/deferrable_loads';
+  const method = isEdit ? 'PUT' : 'POST';
+
+  try {
+    const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(load) });
+    if (!res.ok) {
+      const body = await res.text();
+      showDeferrableFormError(t('error_server', { status: res.status, detail: body || t('error_no_detail') }));
+      return;
+    }
+  } catch (err) {
+    showDeferrableFormError(t('error_connect', { msg: err.message }));
+    return;
+  }
+  resetDeferrableForm();
+  document.getElementById('add-deferrable-panel').open = false;
+  await loadConfig();
+  toast(isEdit ? t('toast_deferrable_updated') : t('toast_deferrable_added'));
+}
+
+async function deleteDeferrableLoad(id) {
+  try {
+    const res = await fetch('api/deferrable_loads/' + id, { method: 'DELETE' });
+    if (!res.ok) { toast(t('toast_could_not_delete_deferrable', { status: res.status })); return; }
+  } catch (err) {
+    toast(t('error_connect', { msg: err.message })); return;
+  }
+  await loadConfig();
+  toast(t('toast_deferrable_deleted'));
+}
+
+async function rescheduleDeferrableLoad(id) {
+  try {
+    const res = await fetch(`api/deferrable_loads/${id}/reschedule`, { method: 'POST' });
+    if (!res.ok) return;
+  } catch (err) { return; }
+  await loadConfig();
+  toast(t('toast_deferrable_rescheduled'));
+}
+
 function parsePeriods(str) {
   return str.split(',').map(s => s.trim()).filter(Boolean).map(s => s.split('-').map(n => parseInt(n, 10)));
 }
@@ -1514,6 +1817,7 @@ function renderStatus(status) {
   renderEnergyFlow(status.energy_flow);
   renderPowerMeter(status.energy_flow);
   renderBatteryBreakdown(status.distribution);
+  renderDeferrableStatus();
 
   const dateLocale = currentLang === 'en' ? 'en-GB' : 'es-ES';
   const tbody = document.querySelector('#plan-table tbody');
@@ -1743,6 +2047,64 @@ function renderBatteryBreakdown(distribution) {
   host.innerHTML = `<div class="battery-row">${rows}</div>`;
 }
 
+function fmtHm(iso) {
+  return new Date(iso).toLocaleTimeString(currentLang === 'en' ? 'en-GB' : 'es-ES', { hour: '2-digit', minute: '2-digit' });
+}
+
+function renderDeferrableStatus() {
+  const host = document.getElementById('deferrable-status');
+  if (!host) return;
+  const loads = (lastStatus && lastStatus.deferrable_loads) || [];
+  if (!loads.length) { host.innerHTML = `<p class="empty">${t('empty_no_deferrable')}</p>`; return; }
+
+  const liveById = {};
+  if (lastLive && lastLive.deferrable_loads) lastLive.deferrable_loads.forEach(d => { liveById[d.id] = d; });
+
+  const rows = loads.map(load => {
+    const live = liveById[load.id];
+    const isOn = live ? live.switch_state === 'on' : null;
+    const livePowerTxt = live && live.power_w !== null && live.power_w !== undefined ? ` · ${Math.round(live.power_w)} W` : '';
+    const statusClass = isOn === true ? 'charge' : 'idle';
+    const statusTxt = isOn === true ? t('deferrable_on') + livePowerTxt : isOn === false ? t('deferrable_off') : t('deferrable_unknown');
+
+    const schedule = load.schedule;
+    let schedTxt = t('deferrable_no_schedule');
+    if (schedule && schedule.occurrences && schedule.occurrences.length) {
+      schedTxt = schedule.occurrences.map(o =>
+        `${fmtHm(o.start)}–${fmtHm(o.end)} (${o.mode === 'solar' ? t('deferrable_mode_solar') : t('deferrable_mode_cheap')})`
+      ).join(' · ');
+    }
+
+    return `
+    <div class="battery-mini" style="flex-wrap:wrap">
+      <div class="bm-name">${load.name}${!load.enabled ? ` <span class="meta">(${t('deferrable_disabled')})</span>` : ''}${load.interruptible ? ` <span class="meta">· ${t('deferrable_interruptible_badge')}</span>` : ''}</div>
+      <span class="bm-status ${statusClass}">${statusTxt}</span>
+      <div class="meta" style="flex-basis:100%">${t('deferrable_scheduled')}: ${schedTxt}</div>
+    </div>`;
+  }).join('');
+  host.innerHTML = `<div class="battery-row">${rows}</div>`;
+}
+
+async function refreshLive() {
+  try {
+    lastLive = await (await fetch('api/live')).json();
+  } catch (err) {
+    return;  // fallo puntual: se reintenta solo en el siguiente poll, cada 5s
+  }
+  renderLiveStrip();
+  renderDeferrableStatus();
+}
+
+function renderLiveStrip() {
+  const el = document.getElementById('live-strip');
+  if (!el || !lastLive) return;
+  const parts = [];
+  if (lastLive.current_soc_pct !== null && lastLive.current_soc_pct !== undefined) parts.push(t('live_soc', { pct: lastLive.current_soc_pct }));
+  if (lastLive.pv_now_w !== null && lastLive.pv_now_w !== undefined) parts.push(t('live_solar', { w: Math.round(lastLive.pv_now_w) }));
+  if (lastLive.load_now_w !== null && lastLive.load_now_w !== undefined) parts.push(t('live_load', { w: Math.round(lastLive.load_now_w) }));
+  el.textContent = parts.length ? `${t('live_prefix')} ${parts.join(' · ')}` : '';
+}
+
 function tierColorVar(tier) {
   return tier === 'punta' ? '--red' : tier === 'llano' ? '--amber' : '--green';
 }
@@ -1862,6 +2224,11 @@ async function refreshStatus() {
     await loadConfig();
     await refreshStatus();
     setInterval(refreshStatus, 15000);
+    // "en vivo" aparte del ciclo completo de optimizacion: lecturas
+    // directas a Home Assistant, mucho mas rapidas de refrescar (5s) que
+    // esperar a que se relance el ciclo entero (cycle_seconds, tipicamente 60s).
+    await refreshLive();
+    setInterval(refreshLive, 5000);
   } catch (err) {
     document.body.insertAdjacentHTML('afterbegin',
       `<div class="card" style="border-color:var(--red)"><p style="color:var(--red)">

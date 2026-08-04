@@ -102,7 +102,7 @@ Más capturas (configuración, alerta de consumo anómalo) en [DOCS.md](DOCS.md)
 1. En Home Assistant: **Ajustes → Add-ons → Tienda de add-ons → ⋮ →
    Repositorios**, y añade:
    ```
-   https://github.com/neoalarrode/EF-HA-Orchestrator
+   https://github.com/neoalarrode/Battery-Orchestrator
    ```
 2. Busca "Battery Orchestrator" en la tienda, instálalo e inícialo.
 3. Ábrelo desde el panel lateral (usa Ingress, no expone ningún puerto).

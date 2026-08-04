@@ -1296,13 +1296,13 @@ let lastStatus = null;
 let lastSavings = null;
 let lastLive = null;
 let wallpanelLangPref = 'auto';
-// Puerto de solo lectura (ver WALLPANEL_PORT en main.py): si la pagina se
-// ha cargado directamente por ese puerto (sin pasar por el Ingress de
-// Home Assistant, que reescribe el origen), se activa el modo wallpanel
-// — sin pestaña de Configuración ni botón de "Ejecutar ciclo ahora". El
-// backend bloquea esas rutas igualmente aunque se fuerce por la API, este
-// flag solo controla que la interfaz no las muestre.
-const isWallpanel = window.location.port === '8098';
+// Modo wallpanel (solo lectura, ver WALLPANEL_PORT en main.py): NO se
+// adivina por el puerto que vea el navegador — si el puerto se reenvia o
+// pasa por un proxy/tunel para verlo desde fuera de la LAN, el navegador
+// puede no ver nunca el 8098 literal aunque el backend siga bloqueando
+// esas rutas igualmente. Se decide por la respuesta REAL del servidor:
+// si GET /api/config falla, es que este puerto no tiene acceso — punto.
+let isWallpanel = false;
 
 function switchTab(name) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
@@ -1318,7 +1318,23 @@ function toast(msg) {
 }
 
 async function loadConfig() {
-  cfg = await (await fetch('api/config')).json();
+  try {
+    const res = await fetch('api/config');
+    if (!res.ok) throw new Error('config not available (status ' + res.status + ')');
+    cfg = await res.json();
+  } catch (err) {
+    // El servidor ha rechazado o no tiene la configuracion disponible por
+    // este puerto (ver isWallpanel mas arriba) — se cae a modo de solo
+    // lectura en vez de romper el arranque entero. No se adivina esto de
+    // antemano por la URL/puerto porque un proxy o reenvio de puertos
+    // puede hacer que el navegador nunca vea el puerto real.
+    cfg = null;
+    isWallpanel = true;
+    applyWallpanelMode();
+    currentLang = detectBrowserLang();
+    applyStaticI18n();
+    return;
+  }
 
   const savedLang = cfg.general.language || 'auto';
   currentLang = savedLang === 'auto' ? detectBrowserLang() : savedLang;
@@ -2520,15 +2536,9 @@ function applyWallpanelMode() {
 
 (async () => {
   try {
-    if (isWallpanel) {
-      applyWallpanelMode();
-      // Sin cfg (la configuracion no es accesible por este puerto): el
-      // idioma se resuelve solo del navegador, sin persistirlo.
-      currentLang = detectBrowserLang();
-      applyStaticI18n();
-    } else {
-      await loadConfig();
-    }
+    // loadConfig() decide sola si hay que caer a modo wallpanel, segun si
+    // el servidor responde o no a /api/config — ver la funcion.
+    await loadConfig();
     await refreshStatus();
     setInterval(refreshStatus, 15000);
     // "en vivo" aparte del ciclo completo de optimizacion: lecturas

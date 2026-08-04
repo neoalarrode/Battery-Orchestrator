@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.10.1
+- Arreglo: al exponer el puerto de solo lectura (wallpanel) fuera de la LAN a través de un proxy o reenvío de puertos, la interfaz podía romperse al arrancar ("No se pudo cargar la configuración") — detectaba el modo wallpanel mirando si el navegador veía literalmente el puerto 8098, y un proxy puede evitar que lo vea aunque el servidor siga bloqueando esa ruta igualmente. Ahora se decide por la respuesta real del servidor (si `/api/config` falla, se cae a modo de solo lectura), no por adivinar el puerto.
+
 ## 0.10.0
 - Nuevo: sensor de potencia de batería con carga y descarga — en "Configuración → Baterías" ahora se puede elegir entre ningún sensor, dos sensores por separado (descarga, como antes, y opcionalmente uno de carga) o un único sensor combinado con signo (positivo cargando, negativo descargando). Con lectura de carga disponible, "Cargando/Descargando" y "Flujo de energía ahora mismo" pasan a mostrar la carga en vivo (antes solo se veía la última orden mandada), y el widget indica si esa carga viene de excedente solar o de red, comparando en vivo si hay importación de red a la vez. Las instalaciones que ya tenían un sensor de descarga declarado siguen funcionando igual, sin tener que tocar nada.
 - Arreglo: el consumo total en vivo (cajita "Consumo" y "Flujo de energía ahora mismo") podía inflarse cuando había excedente solar exportándose sin usar — se estaba contando toda la producción solar como si se hubiera consumido entera, en vez de solo la parte que de verdad ha ido a la casa o a cargar la batería.

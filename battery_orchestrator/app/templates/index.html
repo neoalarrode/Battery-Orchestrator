@@ -2050,9 +2050,12 @@ function renderEnergyFlow() {
   // El sensor de bateria declarado es de DESCARGA (ver "Sensor de
   // descarga" en Baterías) — solo da una lectura fiable en vivo mientras
   // la bateria esta descargando, no cuando carga (ver la nota aparte mas
-  // abajo para la carga).
+  // abajo para la carga). Math.abs(): no todas las integraciones lo
+  // exponen siempre en positivo (algunas usan "potencia de bateria" con
+  // signo, negativa al descargar) — se toma el valor absoluto para que
+  // de igual el convenio de signo del sensor concreto.
   const liveBattDischargeW = live && live.batteries && live.batteries.length
-    ? live.batteries.reduce((sum, b) => sum + (b.power_w || 0), 0)
+    ? live.batteries.reduce((sum, b) => sum + Math.abs(b.power_w || 0), 0)
     : (flow ? flow.batt_to_casa_w : 0);
 
   const totalDemand = Math.max(0, Math.round(liveLoadW));
@@ -2253,7 +2256,12 @@ function applyLiveToStatTiles() {
   if (powerEl && action === 'discharge' && lastLive.batteries && lastLive.batteries.length) {
     const vals = lastLive.batteries.map(b => b.power_w).filter(v => v !== null && v !== undefined);
     if (vals.length) {
-      const total = vals.reduce((a, b) => a + b, 0);
+      // Math.abs(): no todas las integraciones exponen la potencia de
+      // descarga como siempre positiva (algunas usan "potencia de
+      // bateria" con signo, negativa al descargar) — como ya sabemos por
+      // `action` que esta descargando, el signo concreto del sensor no
+      // importa para saber cuanto esta aportando.
+      const total = vals.reduce((a, b) => a + Math.abs(b), 0);
       powerEl.textContent = '-' + Math.round(total) + ' W';
     }
   }

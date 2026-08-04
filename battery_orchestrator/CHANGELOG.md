@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.1
+- Arreglo: la potencia de descarga en vivo de cada batería (cajita "Descargando" y la barra de "Flujo de energía ahora mismo") asumía que el sensor de descarga siempre da un valor positivo. Algunas integraciones de batería/inversor exponen en cambio una "potencia de batería" con signo, negativa al descargar — con esas, la aportación de la batería se recortaba a 0 y ese consumo se le atribuía por error a la red. Ahora se usa el valor absoluto de la lectura, así que da igual el convenio de signo del sensor concreto.
+
 ## 0.9.0
 - Arreglo: el gráfico "Flujo de energía ahora mismo" se quedaba parado y con números irreales — se basaba en la previsión media histórica de esa hora (recalculada solo una vez por ciclo completo, cada `cycle_seconds`), no en lo que estaba pasando de verdad. Ahora se lee directo de Home Assistant y se refresca cada 5 segundos, igual que el resto del panel "en vivo". La carga de batería (que no tiene sensor de potencia en vivo, solo el de descarga) se muestra aparte como la última orden mandada, para no mezclar dato medido con dato ordenado en el mismo número.
 - Arreglo: en el puerto de solo lectura (wallpanel), "Margen de potencia contratada" aparecía siempre como no configurado, aunque sí lo estuviera — dependía de la configuración completa, que ese puerto no tiene acceso. Ahora viaja en el propio estado en vivo.

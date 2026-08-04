@@ -696,8 +696,9 @@ es: {
 
   card_estado_title: "Estado actual", btn_run_now: "Ejecutar ciclo ahora",
   card_flow_title: "Flujo de energía ahora mismo",
-  card_flow_sub: "De dónde sale la potencia solar y a dónde va, de un vistazo — sin sumar los números sueltos de las otras tarjetas.",
-  flow_casa: "Casa", flow_bateria: "Batería", flow_red: "Red",
+  card_flow_sub: "De dónde sale la energía que estás consumiendo ahora mismo, de un vistazo — sin sumar los números sueltos de las otras tarjetas.",
+  flow_total_now: "Consumo total ahora mismo",
+  flow_bateria: "Batería", flow_red: "Red",
   flow_autoconsumo_import: " — importando de red", flow_autoconsumo_none: " — nada importado de red",
   autoconsumo_suffix: "% autoconsumo",
 
@@ -888,8 +889,9 @@ en: {
 
   card_estado_title: "Current status", btn_run_now: "Run cycle now",
   card_flow_title: "Energy flow right now",
-  card_flow_sub: "Where solar power comes from and where it goes, at a glance — no need to add up the other tiles.",
-  flow_casa: "Home", flow_bateria: "Battery", flow_red: "Grid",
+  card_flow_sub: "Where the energy you're consuming right now comes from, at a glance — no need to add up the other tiles.",
+  flow_total_now: "Total consumption right now",
+  flow_bateria: "Battery", flow_red: "Grid",
   flow_autoconsumo_import: " — importing from grid", flow_autoconsumo_none: " — nothing imported from grid",
   autoconsumo_suffix: "% self-consumption",
 
@@ -1974,36 +1976,48 @@ function renderEnergyFlow(flow) {
 
   hint.textContent = `${flow.autoconsumo_pct}${t('autoconsumo_suffix')}`;
 
-  const total = flow.solar_w || 0;
-  const casaSeg = total > 0 ? Math.min(100, 100 * flow.solar_to_casa_w / total) : 0;
-  const battSeg = total > 0 ? Math.min(100 - casaSeg, 100 * flow.solar_to_batt_w / total) : 0;
+  // La barra representa el CONSUMO TOTAL activo ahora mismo — casa +
+  // carga de bateria, si la hay — y se rellena en proporcion a de DONDE
+  // sale esa energia (solar / bateria descargando / red), no de a donde
+  // va. Los tres numeros suman exactamente el total: la carga de bateria
+  // ya viene contada dentro del tramo solar o del tramo red segun de cual
+  // de las dos venga (charge_source), nunca aparte.
+  const chargeW = Math.max(0, flow.battery_net_w || 0);
+  const totalDemand = (flow.load_w || 0) + chargeW;
+  const solarUsed = (flow.solar_to_casa_w || 0) + (flow.solar_to_batt_w || 0);
+  const battUsed = flow.batt_to_casa_w || 0;
+  const gridUsed = flow.grid_w || 0;
 
-  const battLabel = flow.battery_net_w > 0 ? `+${flow.battery_net_w} W` : flow.battery_net_w < 0 ? `${flow.battery_net_w} W` : '0 W';
+  const solarSeg = totalDemand > 0 ? Math.min(100, 100 * solarUsed / totalDemand) : 0;
+  const battSeg = totalDemand > 0 ? Math.min(100 - solarSeg, 100 * battUsed / totalDemand) : 0;
+  const gridSeg = totalDemand > 0 ? Math.max(0, 100 - solarSeg - battSeg) : 0;
+  const gridColor = gridUsed > 0 ? 'var(--amber)' : 'var(--border)';
 
   host.innerHTML = `
     <div class="flow-source-head">
-      <span class="flow-source-name">${t('stat_solar')}</span>
-      <span class="flow-source-value">${total} W</span>
+      <span class="flow-source-name">${t('flow_total_now')}</span>
+      <span class="flow-source-value">${totalDemand} W</span>
     </div>
-    <div class="flow-bar-track" role="img" aria-label="${total}W, ${flow.solar_to_casa_w}W / ${flow.solar_to_batt_w}W">
-      <div class="flow-bar-seg" style="width:${casaSeg}%; background:var(--muted)"></div>
-      <div class="flow-bar-seg" style="width:${battSeg}%; background:var(--accent)"></div>
+    <div class="flow-bar-track" role="img" aria-label="${totalDemand}W: ${t('stat_solar')} ${solarUsed}W, ${t('flow_bateria')} ${battUsed}W, ${t('flow_red')} ${gridUsed}W">
+      <div class="flow-bar-seg" style="width:${solarSeg}%; background:var(--accent)"></div>
+      <div class="flow-bar-seg" style="width:${battSeg}%; background:var(--accent-2)"></div>
+      <div class="flow-bar-seg" style="width:${gridSeg}%; background:${gridColor}"></div>
     </div>
     <div class="flow-endpoints">
       <div class="flow-endpoint">
-        <span class="dot" style="background:var(--muted)"></span>
-        <span><div class="flow-endpoint-label">${t('flow_casa')}</div><div class="flow-endpoint-value">${flow.load_w} W</div></span>
-      </div>
-      <div class="flow-endpoint">
         <span class="dot" style="background:var(--accent)"></span>
-        <span><div class="flow-endpoint-label">${t('flow_bateria')}</div><div class="flow-endpoint-value">${battLabel}</div></span>
+        <span><div class="flow-endpoint-label">${t('stat_solar')}</div><div class="flow-endpoint-value">${solarUsed} W</div></span>
       </div>
       <div class="flow-endpoint">
-        <span class="dot" style="background:${flow.grid_w > 0 ? 'var(--amber)' : 'var(--border)'}"></span>
-        <span><div class="flow-endpoint-label">${t('flow_red')}</div><div class="flow-endpoint-value">${flow.grid_w} W</div></span>
+        <span class="dot" style="background:var(--accent-2)"></span>
+        <span><div class="flow-endpoint-label">${t('flow_bateria')}</div><div class="flow-endpoint-value">${battUsed} W</div></span>
+      </div>
+      <div class="flow-endpoint">
+        <span class="dot" style="background:${gridColor}"></span>
+        <span><div class="flow-endpoint-label">${t('flow_red')}</div><div class="flow-endpoint-value">${gridUsed} W</div></span>
       </div>
     </div>
-    <span class="autoconsumo-chip ${flow.autoconsumo_pct < 100 ? 'low' : ''}"><span class="dot"></span>${flow.autoconsumo_pct}${t('autoconsumo_suffix')}${flow.grid_w > 0 ? t('flow_autoconsumo_import') : t('flow_autoconsumo_none')}</span>`;
+    <span class="autoconsumo-chip ${flow.autoconsumo_pct < 100 ? 'low' : ''}"><span class="dot"></span>${flow.autoconsumo_pct}${t('autoconsumo_suffix')}${gridUsed > 0 ? t('flow_autoconsumo_import') : t('flow_autoconsumo_none')}</span>`;
 }
 
 function renderPowerMeter(flow) {

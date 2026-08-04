@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.10.3
+- Nuevo: favicon en la pestaña del navegador (el mismo cuadrado degradado violeta→cian con el rayo de la cabecera) — antes no se veía ningún icono propio.
+
 ## 0.10.2
 - Arreglo: "Fiabilidad de la previsión" (antes "Precisión última hora") restaba directamente los puntos de desviación de SOC contra 100 — una escala sin relación real (una desviación de 3 puntos es gravísima si solo se preveía mover 2, e insignificante si se preveían mover 25; restar sin más trataba los dos casos igual). Ahora se calcula en proporción a cuánto preveía moverse la batería esa hora, con un mínimo de 10 puntos de referencia para no disparar porcentajes absurdos cuando apenas se preveía movimiento.
 

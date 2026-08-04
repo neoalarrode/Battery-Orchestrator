@@ -662,7 +662,30 @@ def api_live():
     for b in cfg["batteries"]:
         soc = ha_client.get_numeric_state(b["soc_sensor"], default=None)
         power = ha_client.get_numeric_state(b.get("power_sensor"), default=None) if b.get("power_sensor") else None
-        battery_live.append({"id": b["id"], "name": b["name"], "soc_pct": soc, "power_w": power})
+
+        # net_power_w: potencia CON SIGNO (positiva cargando, negativa
+        # descargando), pensada para poder ver en vivo tambien la carga,
+        # no solo la descarga (que es lo unico que da power_sensor). Se
+        # calcula segun el modo que haya elegido el usuario para esta
+        # bateria — "combined" (un sensor con signo ya de por si) o
+        # "separate" (dos sensores, cada uno siempre positivo o cero).
+        # Instalaciones de antes de que existiera este desplegable no
+        # tienen "power_sensor_mode" guardado: se tratan como "separate"
+        # con solo el de descarga relleno, que es exactamente su
+        # comportamiento de siempre (no se pierde nada al actualizar).
+        mode = b.get("power_sensor_mode") or ("separate" if b.get("power_sensor") or b.get("charge_power_sensor") else "none")
+        net_power = None
+        if mode == "combined" and b.get("net_power_sensor"):
+            net_power = ha_client.get_numeric_state(b.get("net_power_sensor"), default=None)
+        elif mode == "separate":
+            charge = (
+                ha_client.get_numeric_state(b.get("charge_power_sensor"), default=None)
+                if b.get("charge_power_sensor") else None
+            )
+            if charge is not None or power is not None:
+                net_power = abs(charge or 0.0) - abs(power or 0.0)
+
+        battery_live.append({"id": b["id"], "name": b["name"], "soc_pct": soc, "power_w": power, "net_power_w": net_power})
         if soc is not None:
             cap = float(b.get("capacity_wh", 0))
             total_capacity_wh += cap

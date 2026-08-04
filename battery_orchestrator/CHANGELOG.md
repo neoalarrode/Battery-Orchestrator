@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.0
+- Nuevo: sensor de potencia de batería con carga y descarga — en "Configuración → Baterías" ahora se puede elegir entre ningún sensor, dos sensores por separado (descarga, como antes, y opcionalmente uno de carga) o un único sensor combinado con signo (positivo cargando, negativo descargando). Con lectura de carga disponible, "Cargando/Descargando" y "Flujo de energía ahora mismo" pasan a mostrar la carga en vivo (antes solo se veía la última orden mandada), y el widget indica si esa carga viene de excedente solar o de red, comparando en vivo si hay importación de red a la vez. Las instalaciones que ya tenían un sensor de descarga declarado siguen funcionando igual, sin tener que tocar nada.
+- Arreglo: el consumo total en vivo (cajita "Consumo" y "Flujo de energía ahora mismo") podía inflarse cuando había excedente solar exportándose sin usar — se estaba contando toda la producción solar como si se hubiera consumido entera, en vez de solo la parte que de verdad ha ido a la casa o a cargar la batería.
+
 ## 0.9.2
 - Arreglo: "Consumo" y "Flujo de energía ahora mismo" en vivo usaban directamente el sensor de consumo declarado como si fuera el consumo total — pero ese sensor es la base YA SIN la carga de baterías (así lo pide la propia tarjeta de "Consumo de la casa"), así que en cuanto el sol o las baterías cubrían casi todo el consumo, esos widgets se quedaban mostrando casi 0W aunque hubiera cientos de W circulando de verdad. Ahora se reconstruye igual que en el resto de la app: base + solar + descarga de baterías.
 - Arreglo: "Objetivo de reserva" (en "Próxima punta") contaba la punta de TODO el horizonte de previsión configurado (podía incluir la de mañana), no solo la que queda antes del próximo valle — inflaba muchísimo el número en instalaciones con horizonte largo. Ahora usa el mismo criterio de corte en el próximo valle que ya usa el planificador de verdad para decidir cuánto cargar.

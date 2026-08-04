@@ -356,7 +356,6 @@
 
 <div class="card">
   <h2><span data-i18n="card_estado_title">Estado actual</span> <span class="hint" id="last-run"></span><span id="health-pill" class="pill"></span></h2>
-  <p class="help" id="live-strip"></p>
   <div id="stat-grid" class="stat-grid" style="margin-bottom:16px"></div>
   <div id="status"></div>
   <div class="actions">
@@ -853,7 +852,6 @@ es: {
   deferrable_on: "Encendida", deferrable_off: "Apagada", deferrable_unknown: "Sin datos en vivo",
   deferrable_disabled: "desactivada", deferrable_scheduled: "Programado",
   deferrable_interruptible_badge: "interrumpible",
-  live_prefix: "En vivo ahora:", live_soc: "SOC {pct}%", live_solar: "Solar {w} W", live_load: "Consumo {w} W",
 
   add_deferrable_toggle: "+ Añadir carga diferible",
   label_switch_entity: "Switch que enciende/apaga",
@@ -1046,7 +1044,6 @@ en: {
   deferrable_on: "On", deferrable_off: "Off", deferrable_unknown: "No live data",
   deferrable_disabled: "disabled", deferrable_scheduled: "Scheduled",
   deferrable_interruptible_badge: "interruptible",
-  live_prefix: "Live now:", live_soc: "SOC {pct}%", live_solar: "Solar {w} W", live_load: "Load {w} W",
 
   add_deferrable_toggle: "+ Add deferrable load",
   label_switch_entity: "Switch to turn on/off",
@@ -1201,7 +1198,7 @@ async function onLangChange() {
   renderPvArrays();
   renderDeferrableLoads();
   if (lastStatus) renderStatus(lastStatus);
-  renderLiveStrip();
+  applyLiveToStatTiles();
   const socChartPanel = document.querySelector('.tab-panel[data-tab="prevision"]');
   if (socChartPanel && socChartPanel.classList.contains('active') && lastStatus) renderSocChart(lastStatus.plan || []);
   if (document.querySelector('.tab-panel[data-tab="salud"]').classList.contains('active')) loadBatteryHealth();
@@ -1847,12 +1844,12 @@ function renderStatTiles(status, savings) {
   const netW = dist.action === 'charge' ? now.charge_w : dist.action === 'discharge' ? -now.discharge_w : 0;
   const socNow = status.current_soc_pct !== null && status.current_soc_pct !== undefined ? status.current_soc_pct : now.soc_pct;
   const tiles = [
-    { label: t('stat_soc'), value: socNow + '%', accent: true, extraHtml: renderSocSparkline(status) },
+    { id: 'stat-soc-value', label: t('stat_soc'), value: socNow + '%', accent: true, extraHtml: renderSocSparkline(status) },
     { label: t('stat_tier'), value: `<span class="tier tier-${now.tier}">${translateTier(now.tier)}</span>`, raw: true },
     { label: t('stat_price'), value: now.price.toFixed(3) + ' €/kWh' },
-    { label: t('stat_solar'), value: now.pv_w + ' W' },
-    { label: t('stat_consumption'), value: now.load_w + ' W' },
-    { label: actionLabel, value: (netW === 0 ? '0' : (netW > 0 ? '+' : '') + netW) + ' W', accent: netW !== 0 },
+    { id: 'stat-solar-value', label: t('stat_solar'), value: now.pv_w + ' W' },
+    { id: 'stat-consumption-value', label: t('stat_consumption'), value: now.load_w + ' W' },
+    { id: 'stat-power-value', label: actionLabel, value: (netW === 0 ? '0' : (netW > 0 ? '+' : '') + netW) + ' W', accent: netW !== 0 },
   ];
   if (savings) {
     tiles.push(
@@ -1881,7 +1878,7 @@ function renderStatTiles(status, savings) {
   return tiles.map(tile => `
     <div class="stat-tile">
       <div class="stat-label">${tile.label}</div>
-      <div class="stat-value ${tile.accent ? 'accent' : ''}" ${tile.colorVar ? `style="color:var(${tile.colorVar})"` : ''}>${tile.value}</div>
+      <div id="${tile.id || ''}" class="stat-value ${tile.accent ? 'accent' : ''}" ${tile.colorVar ? `style="color:var(${tile.colorVar})"` : ''}>${tile.value}</div>
       ${tile.extraHtml || ''}
       ${tile.sub ? `<div class="stat-sub">${tile.sub}</div>` : ''}
       ${tile.subHtml ? `<div class="stat-sub">${tile.subHtml}</div>` : ''}
@@ -2091,18 +2088,44 @@ async function refreshLive() {
   } catch (err) {
     return;  // fallo puntual: se reintenta solo en el siguiente poll, cada 5s
   }
-  renderLiveStrip();
+  applyLiveToStatTiles();
   renderDeferrableStatus();
 }
 
-function renderLiveStrip() {
-  const el = document.getElementById('live-strip');
-  if (!el || !lastLive) return;
-  const parts = [];
-  if (lastLive.current_soc_pct !== null && lastLive.current_soc_pct !== undefined) parts.push(t('live_soc', { pct: lastLive.current_soc_pct }));
-  if (lastLive.pv_now_w !== null && lastLive.pv_now_w !== undefined) parts.push(t('live_solar', { w: Math.round(lastLive.pv_now_w) }));
-  if (lastLive.load_now_w !== null && lastLive.load_now_w !== undefined) parts.push(t('live_load', { w: Math.round(lastLive.load_now_w) }));
-  el.textContent = parts.length ? `${t('live_prefix')} ${parts.join(' · ')}` : '';
+function applyLiveToStatTiles() {
+  // Actualiza el NUMERO directamente en las cajitas que ya existen (SOC
+  // agregado, Solar, Consumo), sin esperar al proximo ciclo completo de
+  // optimizacion ni volver a pintar toda la tarjeta (para no perder la
+  // gráfica/sparkline que cuelga de la misma caja).
+  if (!lastLive) return;
+
+  const socEl = document.getElementById('stat-soc-value');
+  if (socEl && lastLive.current_soc_pct !== null && lastLive.current_soc_pct !== undefined) {
+    socEl.textContent = lastLive.current_soc_pct + '%';
+  }
+  const solarEl = document.getElementById('stat-solar-value');
+  if (solarEl && lastLive.pv_now_w !== null && lastLive.pv_now_w !== undefined) {
+    solarEl.textContent = Math.round(lastLive.pv_now_w) + ' W';
+  }
+  const loadEl = document.getElementById('stat-consumption-value');
+  if (loadEl && lastLive.load_now_w !== null && lastLive.load_now_w !== undefined) {
+    loadEl.textContent = Math.round(lastLive.load_now_w) + ' W';
+  }
+  // "Cargando/Descargando": solo se puede refrescar en vivo mientras se
+  // esta descargando — el sensor de bateria declarado es de DESCARGA (ver
+  // "Sensor de descarga" en Baterías), no hay lectura en vivo fiable de la
+  // potencia de CARGA real (el limite que se manda no es lo mismo que lo
+  // que la bateria esta tirando de verdad). Mejor no actualizar ese numero
+  // que inventar uno.
+  const powerEl = document.getElementById('stat-power-value');
+  const action = lastStatus && lastStatus.distribution && lastStatus.distribution.action;
+  if (powerEl && action === 'discharge' && lastLive.batteries && lastLive.batteries.length) {
+    const vals = lastLive.batteries.map(b => b.power_w).filter(v => v !== null && v !== undefined);
+    if (vals.length) {
+      const total = vals.reduce((a, b) => a + b, 0);
+      powerEl.textContent = '-' + Math.round(total) + ' W';
+    }
+  }
 }
 
 function tierColorVar(tier) {

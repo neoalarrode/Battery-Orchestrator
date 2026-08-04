@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.7.1
+- Cambio: el refresco en vivo cada 5 segundos (SOC, solar, consumo) ya no se muestra en una línea de texto aparte — ahora actualiza directamente el número dentro de las propias cajitas de "Estado actual" (SOC agregado, Solar, Consumo), sin esperar al ciclo completo de optimización. La cajita "Cargando/Descargando" también se refresca en vivo, pero solo mientras se está descargando — no hay forma fiable de leer la potencia de carga real en vivo (el sensor de batería declarado es de descarga, no de carga), así que ese número se deja tal cual hasta el próximo ciclo en vez de inventarlo.
+
 ## 0.7.0
 - Nuevo: cargas diferibles — declara electrodomésticos con un enchufe/switch controlable (lavadora, lavavajillas, termo eléctrico...) en "Configuración → Cargas diferibles". Para cada uno eliges la frecuencia (puntual, diaria o varias veces al día, con días de la semana concretos si quieres) y si se puede interrumpir a medias o no. La app decide sola la hora que más conviene: primero busca excedente solar suficiente, y si no lo hay, la hora más barata disponible. Con un sensor de consumo (opcional), la app aprende sola cuánta energía gasta cada activación y cuánto tarda de verdad su ciclo, para que una carga no interrumpible (lavadora, lavavajillas) nunca se corte a medio programa.
 - Nuevo: el consumo esperado de las cargas diferibles activas se suma a la previsión que usa el detector de anomalías, para que la app no confunda una carga que ella misma acaba de encender con un consumo fuera de lo normal.

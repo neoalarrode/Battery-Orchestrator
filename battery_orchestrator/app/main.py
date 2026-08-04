@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import threading
 import time
 from datetime import datetime
 
 from flask import Flask, Response, jsonify, request, send_from_directory
+from werkzeug.serving import make_server
 
 import anomaly_store
 import battery_exec
@@ -27,6 +29,30 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger("battery_orchestrator")
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
+
+# Puerto adicional, expuesto directamente por el add-on (ver "ports" en
+# config.yaml), para poder ver el panel sin pasar por el Ingress de Home
+# Assistant — pensado para dejarlo fijo en una tablet de pared con una app
+# tipo WallPanel/Fully Kiosk. Es SOLO LECTURA: ni expone la configuracion
+# (nombres de entidades, api key de Forecast.Solar...) ni permite forzar
+# "Ejecutar ciclo ahora", porque a diferencia de Ingress no lleva delante
+# la autenticacion de Home Assistant. El puerto normal (Ingress) sigue
+# teniendo acceso completo como siempre.
+WALLPANEL_PORT = int(os.environ.get("WALLPANEL_PORT", 8098))
+WALLPANEL_ALLOWED_GET = {"/", "/api/status", "/api/live", "/api/savings", "/api/battery_health", "/api/anomaly"}
+
+
+@app.before_request
+def _restrict_wallpanel_port():
+    if request.environ.get("SERVER_PORT") != str(WALLPANEL_PORT):
+        return None  # peticion por Ingress (u otro puerto): sin restriccion
+    if request.method == "GET" and request.path in WALLPANEL_ALLOWED_GET:
+        return None
+    return jsonify({
+        "error": "No disponible desde el puerto de solo lectura (wallpanel). "
+                 "Configura el add-on desde el panel lateral de Home Assistant.",
+    }), 403
+
 
 _state_lock = threading.Lock()
 _last_status = {
@@ -700,7 +726,18 @@ def static_files(path):
     return send_from_directory("static", path)
 
 
+def _run_wallpanel_server():
+    try:
+        server = make_server("0.0.0.0", WALLPANEL_PORT, app, threaded=True)
+        log.info(f"Panel de solo lectura (wallpanel) escuchando en el puerto {WALLPANEL_PORT}")
+        server.serve_forever()
+    except OSError as e:
+        log.warning(f"No se pudo abrir el puerto wallpanel ({WALLPANEL_PORT}): {e}")
+
+
 if __name__ == "__main__":
     t = threading.Thread(target=background_loop, daemon=True)
     t.start()
+    wp = threading.Thread(target=_run_wallpanel_server, daemon=True)
+    wp.start()
     app.run(host="0.0.0.0", port=8099, threaded=True)

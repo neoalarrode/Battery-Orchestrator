@@ -13,6 +13,7 @@
   <a href="#getting-started">Getting started</a> ·
   <a href="#installation-type-per-panelstring">Installation type</a> ·
   <a href="#deferrable-loads">Deferrable loads</a> ·
+  <a href="#read-only-panel-wallpanel">Read-only panel</a> ·
   <a href="#the-tabs">The tabs</a> ·
   <a href="#battery-health-how-its-calculated">Battery health</a> ·
   <a href="#savings-and-consumption-alerts">Savings and alerts</a> ·
@@ -89,6 +90,14 @@ Appliances with a controllable switch/plug (washing machine, dishwasher, electri
 
 **Doesn't trigger false anomalous-consumption alerts:** while a deferrable load is on by the app's own decision, its expected consumption is automatically added to the forecast used by the anomaly detector (see [Savings and alerts](#savings-and-consumption-alerts)) — so it doesn't mistake a washing machine it just turned on itself for unusual consumption.
 
+## Read-only panel (wallpanel)
+
+Besides Ingress, the add-on exposes its own port (**8098** by default, configurable like any other add-on port from **Settings → Add-ons → Battery Orchestrator → Network**) so you can reach the panel directly by IP without going through Home Assistant's login — meant for pinning it on a wall-mounted tablet with an app like [WallPanel](https://github.com/thanksmister/wallpanel-android) or Fully Kiosk Browser, pointed at `http://<your-ha-ip>:8098`.
+
+Through that port the panel is **read-only**: "Current status", "Forecast" and "Battery health" show the same live data as always, but the "Settings" tab doesn't appear and neither does the "Run cycle now" button. This isn't just cosmetic — the server itself rejects (with a 403) any attempt to read or change the configuration, add/edit/delete batteries, panels or deferrable loads, or force a cycle, if the request comes in through that port, even if you bypass the UI and call the API directly. The reason is that, unlike Ingress, this port has no Home Assistant login in front of it, so it must not be able to touch anything.
+
+If you're not going to use it, you can disable it by leaving the port empty in the add-on's network settings.
+
 ## The tabs
 
 <p align="center">
@@ -158,3 +167,4 @@ Additionally, with "Savings" or "Longevity" selected (doesn't apply with "Solar 
 - Accumulated savings and the anomalous-consumption alert need the "Home consumption" sensor configured — without it, neither is calculated nor shown in "Current status".
 - Restoring a configuration from a file only checks that it has the expected basic keys (batteries, tariff, solar, general); review the data after importing in case it comes from an older version of the add-on.
 - A deferrable load marked as NOT interruptible stays on for its whole scheduled window no matter what, even if the forecast solar surplus disappears — that's the safe default for appliances with a program (washing machine, dishwasher). Only mark it interruptible if it's genuinely fine to cut off mid-way.
+- The read-only port (see [Read-only panel](#read-only-panel-wallpanel)) has no login in front of it — anyone with access to your local network can view it (never write, that's blocked server-side). Don't expose it outside your LAN (without a VPN) or forward it to the internet.

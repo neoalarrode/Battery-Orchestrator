@@ -76,6 +76,11 @@ con excedente solar"...).
 - **Estado en vivo**: SOC, solar y consumo se refrescan cada 5 segundos
   leyendo directo de Home Assistant, sin esperar al próximo ciclo completo
   de optimización.
+- **Panel de solo lectura (wallpanel)**: además de Ingress, un puerto
+  propio para dejar el panel fijo en una tablet de pared (WallPanel, Fully
+  Kiosk...) sin pasar por el login de Home Assistant — sin acceso alguno a
+  la configuración, bloqueado también en el servidor, no solo oculto en la
+  interfaz.
 - **Todo configurable desde la web**: baterías, tarifa, paneles solares,
   sensor de consumo — nada hardcodeado salvo la URL base de la API
   gratuita de Forecast.Solar. Configuración exportable/importable en un

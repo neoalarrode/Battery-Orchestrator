@@ -13,6 +13,7 @@
   <a href="#primeros-pasos">Primeros pasos</a> ·
   <a href="#tipo-de-instalación-por-panelstring">Tipo de instalación</a> ·
   <a href="#cargas-diferibles">Cargas diferibles</a> ·
+  <a href="#panel-de-solo-lectura-wallpanel">Panel de solo lectura</a> ·
   <a href="#las-pestañas">Las pestañas</a> ·
   <a href="#salud-de-batería-cómo-se-calcula">Salud de batería</a> ·
   <a href="#ahorro-y-alertas-de-consumo">Ahorro y alertas</a> ·
@@ -89,6 +90,14 @@ Electrodomésticos con un enchufe/switch controlable (lavadora, lavavajillas, te
 
 **No dispara falsas alarmas de consumo anómalo:** mientras una carga diferible está encendida por decisión de la propia app, su consumo esperado se suma automáticamente a la previsión que usa el detector de anomalías (ver [Ahorro y alertas](#ahorro-y-alertas-de-consumo)) — así no confunde una lavadora que acaba de encender ella misma con un consumo fuera de lo normal.
 
+## Panel de solo lectura (wallpanel)
+
+El add-on expone, además de Ingress, un puerto propio (por defecto el **8098**, configurable como cualquier otro puerto de add-on desde **Ajustes → Add-ons → Battery Orchestrator → Red**) para poder acceder al panel directamente por IP sin pasar por el inicio de sesión de Home Assistant — pensado para dejarlo fijo en una tablet de pared con una app tipo [WallPanel](https://github.com/thanksmister/wallpanel-android) o Fully Kiosk Browser, apuntando a `http://<ip-de-tu-ha>:8098`.
+
+Por ese puerto el panel es **de solo lectura**: se ven "Estado actual", "Previsión" y "Salud de batería" con los mismos datos en vivo de siempre, pero la pestaña "Configuración" no aparece y el botón "Ejecutar ciclo ahora" tampoco. Esto no es solo cosmético — el propio servidor rechaza (con un error 403) cualquier intento de leer o modificar la configuración, añadir/editar/eliminar baterías, paneles o cargas diferibles, o forzar un ciclo, si la petición llega por ese puerto, aunque se salte la interfaz y se llame a la API directamente. La razón es que, a diferencia de Ingress, este puerto no lleva delante el inicio de sesión de Home Assistant, así que no debe poder tocar nada.
+
+Si no lo vas a usar, puedes desactivarlo dejando el puerto vacío en la configuración de red del add-on.
+
 ## Las pestañas
 
 <p align="center">
@@ -158,3 +167,4 @@ Además, con "Ahorro" o "Longevidad" seleccionado (no aplica con "Autoconsumo so
 - El ahorro acumulado y la alerta de consumo anómalo necesitan el sensor de "Consumo de la casa" configurado — sin él, ni se calculan ni aparecen en "Estado actual".
 - Restaurar una configuración desde archivo solo comprueba que tenga las claves básicas esperadas (baterías, tarifa, solar, general); revisa los datos después de importar por si vienen de una versión antigua del add-on.
 - Una carga diferible marcada como NO interrumpible se queda encendida toda su ventana programada pase lo que pase, aunque el excedente solar previsto desaparezca — es la opción segura por defecto para electrodomésticos con programa (lavadora, lavavajillas). Márcala como interrumpible solo si de verdad no pasa nada por cortarla a medias.
+- El puerto de solo lectura (ver [Panel de solo lectura](#panel-de-solo-lectura-wallpanel)) no lleva ningún inicio de sesión delante — cualquiera con acceso a tu red local puede verlo (nunca escribir, eso está bloqueado en el servidor). No lo expongas fuera de tu LAN (sin VPN) ni lo redirijas a Internet.

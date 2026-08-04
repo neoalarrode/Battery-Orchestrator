@@ -201,6 +201,8 @@
   .pill-live { background: var(--red-soft); color: var(--red); box-shadow: 0 0 0 1px #fb718533, 0 0 16px -4px #fb718580; }
   .pill-ok { background: var(--green-soft); color: var(--green); box-shadow: 0 0 0 1px #34d39933; }
   .pill-anomaly { background: var(--red-soft); color: var(--red); box-shadow: 0 0 0 1px #fb718533, 0 0 16px -4px #fb718580; }
+  .pill-readonly { background: var(--bg-alt); color: var(--muted); box-shadow: 0 0 0 1px var(--border); }
+  .pill-readonly::before { display: none; }
   .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
   @media (prefers-reduced-motion: no-preference) { .pill-live::before, .pill-anomaly::before { animation: pulse 1.8s ease-in-out infinite; } }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
@@ -341,6 +343,7 @@
   </div>
   <div class="topbar-right">
     <select class="lang-select" id="lang-select" onchange="onLangChange()" aria-label="Idioma / Language"></select>
+    <span id="wallpanel-pill" class="pill pill-readonly" style="display:none" data-i18n="wallpanel_pill">SOLO LECTURA</span>
     <span id="mode-pill" class="pill"></span>
   </div>
 </div>
@@ -349,7 +352,7 @@
   <button class="tab-btn active" data-tab="inicio" data-i18n="tab_estado" onclick="switchTab('inicio')" type="button">Estado actual</button>
   <button class="tab-btn" data-tab="prevision" data-i18n="tab_prevision" onclick="switchTab('prevision')" type="button">Previsión</button>
   <button class="tab-btn" data-tab="salud" data-i18n="tab_salud" onclick="switchTab('salud')" type="button">Salud de batería</button>
-  <button class="tab-btn" data-tab="config" data-i18n="tab_config" onclick="switchTab('config')" type="button">Configuración</button>
+  <button class="tab-btn" id="tab-config-btn" data-tab="config" data-i18n="tab_config" onclick="switchTab('config')" type="button">Configuración</button>
 </nav>
 
 <div class="tab-panel active" data-tab="inicio">
@@ -359,7 +362,7 @@
   <div id="stat-grid" class="stat-grid" style="margin-bottom:16px"></div>
   <div id="status"></div>
   <div class="actions">
-    <button onclick="runNow()" data-i18n="btn_run_now">Ejecutar ciclo ahora</button>
+    <button id="run-now-btn" onclick="runNow()" data-i18n="btn_run_now">Ejecutar ciclo ahora</button>
   </div>
 </div>
 
@@ -823,6 +826,7 @@ es: {
   status_load_error: "No se pudo cargar la configuración ({msg}). Recarga la página; si persiste, revisa que el add-on esté en ejecución.",
 
   mode_sim: "SIMULACIÓN", mode_live: "EN VIVO", health_ok: "SALUDABLE", health_anomaly: "ANÓMALO",
+  wallpanel_pill: "SOLO LECTURA",
 
   anomaly_title: "Consumo anómalo detectado", anomaly_since: "Desde", anomaly_live_now: "Consumo real ahora",
   anomaly_expected: "Esperado para esta hora", anomaly_diff: "Diferencia",
@@ -1016,6 +1020,7 @@ en: {
   status_load_error: "Couldn't load the configuration ({msg}). Reload the page; if it persists, check that the add-on is running.",
 
   mode_sim: "SIMULATION", mode_live: "LIVE", health_ok: "HEALTHY", health_anomaly: "ANOMALY",
+  wallpanel_pill: "READ ONLY",
 
   anomaly_title: "Anomalous consumption detected", anomaly_since: "Since", anomaly_live_now: "Real consumption now",
   anomaly_expected: "Expected for this hour", anomaly_diff: "Difference",
@@ -1183,7 +1188,7 @@ function applyStaticI18n() {
       <option value="auto">${t('lang_auto')}</option>
       <option value="es">${t('lang_es')}</option>
       <option value="en">${t('lang_en')}</option>`;
-    sel.value = (cfg && cfg.general && cfg.general.language) || 'auto';
+    sel.value = (cfg && cfg.general && cfg.general.language) || wallpanelLangPref;
   }
 }
 
@@ -1191,14 +1196,18 @@ async function onLangChange() {
   const chosen = document.getElementById('lang-select').value;
   currentLang = chosen === 'auto' ? detectBrowserLang() : chosen;
   // cfg.general.language se fija ANTES de applyStaticI18n(), porque esta
-  // reconstruye el <select> y fija su valor leyendo justo ese campo.
-  if (cfg) cfg.general.language = chosen;
+  // reconstruye el <select> y fija su valor leyendo justo ese campo. En
+  // modo wallpanel no hay cfg (ver isWallpanel): la eleccion se recuerda
+  // solo para esta sesion, en wallpanelLangPref, sin intentar persistirla.
+  if (cfg) cfg.general.language = chosen; else wallpanelLangPref = chosen;
   applyStaticI18n();
   updatePriorityHelp();
   updatePvInstallTypeHelp();
-  renderBatteries();
-  renderPvArrays();
-  renderDeferrableLoads();
+  if (cfg) {
+    renderBatteries();
+    renderPvArrays();
+    renderDeferrableLoads();
+  }
   if (lastStatus) renderStatus(lastStatus);
   applyLiveToStatTiles();
   const socChartPanel = document.querySelector('.tab-panel[data-tab="prevision"]');
@@ -1223,6 +1232,14 @@ let editingDeferrableLoadId = null;
 let lastStatus = null;
 let lastSavings = null;
 let lastLive = null;
+let wallpanelLangPref = 'auto';
+// Puerto de solo lectura (ver WALLPANEL_PORT en main.py): si la pagina se
+// ha cargado directamente por ese puerto (sin pasar por el Ingress de
+// Home Assistant, que reescribe el origen), se activa el modo wallpanel
+// — sin pestaña de Configuración ni botón de "Ejecutar ciclo ahora". El
+// backend bloquea esas rutas igualmente aunque se fuerce por la API, este
+// flag solo controla que la interfaz no las muestre.
+const isWallpanel = window.location.port === '8098';
 
 function switchTab(name) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
@@ -2256,9 +2273,26 @@ async function refreshStatus() {
   renderStatus(status);
 }
 
+function applyWallpanelMode() {
+  document.getElementById('tab-config-btn').style.display = 'none';
+  document.getElementById('run-now-btn').style.display = 'none';
+  document.getElementById('wallpanel-pill').style.display = '';
+  // por si el panel de Configuración se habia quedado activo (no deberia,
+  // pero por si acaso): forzar la pestaña de "Estado actual".
+  if (document.querySelector('.tab-panel[data-tab="config"]').classList.contains('active')) switchTab('inicio');
+}
+
 (async () => {
   try {
-    await loadConfig();
+    if (isWallpanel) {
+      applyWallpanelMode();
+      // Sin cfg (la configuracion no es accesible por este puerto): el
+      // idioma se resuelve solo del navegador, sin persistirlo.
+      currentLang = detectBrowserLang();
+      applyStaticI18n();
+    } else {
+      await loadConfig();
+    }
     await refreshStatus();
     setInterval(refreshStatus, 15000);
     // "en vivo" aparte del ciclo completo de optimizacion: lecturas

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.8.0
+- Nuevo: panel de solo lectura (wallpanel) — además de Ingress, el add-on expone su propio puerto (8098 por defecto, configurable/desactivable desde la pestaña de red del add-on) para acceder al panel directamente por IP, sin pasar por el login de Home Assistant. Pensado para dejarlo fijo en una tablet de pared con WallPanel/Fully Kiosk. Por ese puerto no aparece la pestaña "Configuración" ni el botón "Ejecutar ciclo ahora", y el propio servidor rechaza (403) cualquier lectura o escritura de la configuración aunque se llame a la API directamente saltándose la interfaz — a diferencia de Ingress, ese puerto no lleva delante el login de Home Assistant.
+
 ## 0.7.2
 - Arreglo: la barra de "Flujo de energía ahora mismo" solo representaba el reparto de la producción SOLAR (a casa / a batería), así que en cuanto había importación de red esta no aparecía en la barra en absoluto — solo como número suelto debajo. Ahora la barra representa el CONSUMO TOTAL activo ahora mismo (casa + lo que se esté cargando en la batería, si procede) y se rellena en proporción a de dónde sale esa energía: solar, batería descargando o red — los tres siempre suman exactamente el total.
 

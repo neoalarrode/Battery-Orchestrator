@@ -77,6 +77,10 @@ solar surplus available"...).
 - **Live status**: SOC, solar and consumption refresh every 5 seconds
   reading straight from Home Assistant, without waiting for the next full
   optimization cycle.
+- **Read-only panel (wallpanel)**: besides Ingress, its own port for
+  pinning the panel on a wall-mounted tablet (WallPanel, Fully Kiosk...)
+  without going through Home Assistant's login — no access to the
+  configuration at all, blocked server-side too, not just hidden in the UI.
 - **Everything configurable from the web UI**: batteries, tariff, solar
   panels, consumption sensor — nothing hardcoded except the base URL of
   the free Forecast.Solar API. Configuration is exportable/importable as

@@ -1,5 +1,5 @@
 name: "Battery Orchestrator"
-version: "0.7.2"
+version: "0.8.0"
 slug: "battery_orchestrator"
 description: "Carga y descarga adaptativa de baterias por precio, sol y consumo real, sin cajas negras"
 url: "https://github.com/neoalarrode/EF-HA-Orchestrator"
@@ -15,5 +15,9 @@ ingress_port: 8099
 panel_icon: mdi:battery-charging-high
 panel_title: "Battery Orchestrator"
 homeassistant_api: true
+ports:
+  8098/tcp: 8098
+ports_description:
+  8098/tcp: "Panel de solo lectura (wallpanel), sin pasar por Ingress. Desactivalo (deja el puerto vacio) si no lo vas a usar."
 options: {}
 schema: {}

@@ -276,7 +276,7 @@
   .flow-source-name { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .1em; font-size: .68rem; color: var(--accent-2); font-weight: 700; }
   .flow-source-value { font-family: var(--font-mono); font-size: 1.05rem; font-weight: 700; font-variant-numeric: tabular-nums; }
   .flow-bar-track { display: flex; height: 10px; border-radius: 6px; overflow: hidden; background: var(--bg-alt); border: 1px solid var(--border); }
-  .flow-bar-seg { height: 100%; transition: width .3s ease; }
+  .flow-bar-seg { height: 100%; transition: width .3s ease; position: relative; overflow: hidden; }
   .flow-endpoints { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 14px; }
   .flow-endpoint { display: flex; align-items: center; gap: 9px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; min-width: 0; }
   .flow-endpoint .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
@@ -291,7 +291,7 @@
 
   /* --- Medidor de potencia contratada --- */
   .meter-track { height: 10px; border-radius: 6px; background: var(--bg-alt); border: 1px solid var(--border); overflow: hidden; margin: 10px 0 6px; }
-  .meter-fill { height: 100%; border-radius: 6px; transition: width .3s ease; }
+  .meter-fill { height: 100%; border-radius: 6px; transition: width .3s ease; position: relative; overflow: hidden; }
   .meter-labels { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: .72rem; color: var(--muted); }
 
   /* --- Baterias individuales (Estado actual) --- */
@@ -299,7 +299,7 @@
   .battery-mini { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; min-width: 0; }
   .battery-mini .bm-name { font-weight: 600; font-size: .85rem; flex: 1 1 auto; min-width: 80px; }
   .battery-mini .bm-bar-track { flex: 2 1 70px; height: 7px; border-radius: 5px; background: var(--border); overflow: hidden; min-width: 50px; }
-  .battery-mini .bm-bar-fill { height: 100%; border-radius: 5px; }
+  .battery-mini .bm-bar-fill { height: 100%; border-radius: 5px; position: relative; overflow: hidden; }
   .battery-mini .bm-pct { font-family: var(--font-mono); font-size: .8rem; font-weight: 700; min-width: 42px; text-align: right; font-variant-numeric: tabular-nums; }
   .battery-mini .bm-status { font-family: var(--font-mono); font-size: .62rem; padding: 3px 8px; border-radius: 20px; white-space: nowrap; }
   .bm-status.charge { background: var(--accent-soft); color: var(--accent); }
@@ -326,7 +326,20 @@
   }
   .health-card .item-name { display: block; margin-bottom: 8px; }
   .health-bar-track { height: 6px; border-radius: 4px; background: var(--border); overflow: hidden; margin: 4px 0 10px; }
-  .health-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 4px; }
+  .health-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 4px; position: relative; overflow: hidden; }
+
+  /* --- Brillo animado en las barras indicadoras, para que no se vean
+     estaticas: un reflejo que las recorre de izquierda a derecha,
+     confinado al propio ancho relleno (no al de la pista completa). --- */
+  @media (prefers-reduced-motion: no-preference) {
+    .flow-bar-seg::after, .meter-fill::after, .battery-mini .bm-bar-fill::after, .health-bar-fill::after {
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.45) 50%, transparent 100%);
+      background-size: 55% 100%; background-repeat: no-repeat; background-position: -55% 0;
+      animation: bar-sheen 2.6s ease-in-out infinite;
+    }
+  }
+  @keyframes bar-sheen { 0% { background-position: -55% 0; } 100% { background-position: 155% 0; } }
 </style>
 </head>
 <body>
@@ -381,6 +394,7 @@
   </div>
   <div class="card">
     <h2 data-i18n="card_batteries_home_title">Baterías</h2>
+    <p class="help" data-i18n="card_batteries_home_hint">Color de la barra: cuánto se queda cada batería por debajo de la media del conjunto — verde cerca de la media, naranja algo por debajo, rojo muy por debajo.</p>
     <div id="battery-breakdown"></div>
   </div>
 </div>
@@ -702,6 +716,7 @@ es: {
   card_flow_sub: "De dónde sale la energía que estás consumiendo ahora mismo, de un vistazo — sin sumar los números sueltos de las otras tarjetas.",
   flow_total_now: "Consumo total ahora mismo",
   flow_bateria: "Batería", flow_red: "Red",
+  flow_charging_note: "Cargando batería: ~{w} W (última orden enviada, sin sensor en vivo para la carga).",
   flow_autoconsumo_import: " — importando de red", flow_autoconsumo_none: " — nada importado de red",
   autoconsumo_suffix: "% autoconsumo",
 
@@ -710,10 +725,14 @@ es: {
   power_in_use: "{w} W en uso", power_limit: "límite {w} W",
 
   card_batteries_home_title: "Baterías",
+  card_batteries_home_hint: "Color de la barra: cuánto se queda cada batería por debajo de la media del conjunto — verde cerca de la media, naranja algo por debajo, rojo muy por debajo.",
   card_next_punta_title: "Próxima punta",
   punta_now: "Estás en punta ahora mismo", punta_in_1h: "En 1 hora", punta_in_nh: "En {n} horas",
-  punta_reserve_current: "Reserva actual", punta_soc_now: "SOC ahora", punta_reserve_target: "Objetivo de reserva",
-  punta_explain: '"Reserva actual" es cuánto de lo que el planificador cree necesario para cubrir toda la punta que queda por delante ya tienes acumulado — el mismo número que usa para decidir si cargar en llano de emergencia.',
+  punta_soc_now: "SOC ahora", punta_reserve_target: "Objetivo de reserva",
+  punta_forecast_accuracy: "Precisión última hora",
+  punta_forecast_detail: "Se esperaba un {predicted}% al cerrar la hora, ha quedado en {actual}% ({delta} puntos).",
+  punta_forecast_pending: "Todavía no ha pasado ninguna hora completa desde que arrancó el add-on — aparecerá en cuanto se cierre la primera.",
+  punta_explain: '"SOC ahora" y "Objetivo de reserva" son cuánto tienes acumulado y cuánto cree el planificador que hace falta para cubrir toda la punta que queda por delante — el mismo número que usa para decidir si cargar en llano de emergencia. "Precisión última hora" es distinto: no mide cuánta batería tienes, sino si lo que ha pasado de verdad se parece a lo que el plan predijo (p.ej. un consumo inesperado puede hacer que la realidad se aleje de la previsión sin que la batería tenga ningún problema).',
   punta_none: "No hay ninguna hora punta en el horizonte de previsión configurado.",
 
   card_soc_forecast_title: "SOC previsto", card_soc_forecast_hint: "nivel agregado de baterías a lo largo del día",
@@ -896,6 +915,7 @@ en: {
   card_flow_sub: "Where the energy you're consuming right now comes from, at a glance — no need to add up the other tiles.",
   flow_total_now: "Total consumption right now",
   flow_bateria: "Battery", flow_red: "Grid",
+  flow_charging_note: "Charging battery: ~{w} W (last command sent, no live sensor for charging).",
   flow_autoconsumo_import: " — importing from grid", flow_autoconsumo_none: " — nothing imported from grid",
   autoconsumo_suffix: "% self-consumption",
 
@@ -904,10 +924,14 @@ en: {
   power_in_use: "{w} W in use", power_limit: "limit {w} W",
 
   card_batteries_home_title: "Batteries",
+  card_batteries_home_hint: "Bar color: how far each battery sits below the group's average — green near the average, amber somewhat below, red well below.",
   card_next_punta_title: "Next peak period",
   punta_now: "You're in peak pricing right now", punta_in_1h: "In 1 hour", punta_in_nh: "In {n} hours",
-  punta_reserve_current: "Current reserve", punta_soc_now: "SOC now", punta_reserve_target: "Reserve target",
-  punta_explain: '"Current reserve" is how much of what the planner thinks is needed to cover all the remaining peak hours you already have banked — the same number it uses to decide whether to charge in mid-peak as an emergency.',
+  punta_soc_now: "SOC now", punta_reserve_target: "Reserve target",
+  punta_forecast_accuracy: "Last-hour accuracy",
+  punta_forecast_detail: "The plan expected {predicted}% by the end of the hour, it ended up at {actual}% ({delta} points).",
+  punta_forecast_pending: "No full hour has passed yet since the add-on started — this will appear once the first one closes.",
+  punta_explain: '"SOC now" and "Reserve target" are how much you have banked and how much the planner thinks is needed to cover all the remaining peak hours — the same number it uses to decide whether to charge in mid-peak as an emergency. "Last-hour accuracy" is different: it doesn\'t measure how much battery you have, it measures whether what actually happened matches what the plan predicted (e.g. unexpected consumption can push reality away from the forecast without the battery having any problem at all).',
   punta_none: "There's no peak-price hour in the configured forecast horizon.",
 
   card_soc_forecast_title: "Forecast SOC", card_soc_forecast_hint: "aggregate battery level through the day",
@@ -1829,8 +1853,8 @@ function renderStatus(status) {
 
   renderHealthPill(status.anomaly);
   renderAnomalyBox(status.anomaly);
-  renderNextPunta(status.next_punta);
-  renderEnergyFlow(status.energy_flow);
+  renderNextPunta(status.next_punta, status.soc_forecast);
+  renderEnergyFlow();
   renderPowerMeter(status.energy_flow);
   renderBatteryBreakdown(status.distribution);
   renderDeferrableStatus();
@@ -1965,57 +1989,98 @@ function renderAnomalyBox(anomaly) {
     </div>`;
 }
 
-function renderNextPunta(nextPunta) {
+function renderNextPunta(nextPunta, socForecast) {
   const host = document.getElementById('next-punta');
   if (!nextPunta) { host.innerHTML = `<p class="empty">${t('punta_none')}</p>`; return; }
   const label = nextPunta.hours_until === 0 ? t('punta_now')
     : nextPunta.hours_until === 1 ? t('punta_in_1h') : t('punta_in_nh', { n: nextPunta.hours_until });
   const dateLocale = currentLang === 'en' ? 'en-GB' : 'es-ES';
   const dt = new Date(nextPunta.dt).toLocaleString(dateLocale, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
-  const pct = Math.min(100, nextPunta.reserve_pct);
-  const colorVar = pct >= 95 ? '--green' : pct >= 60 ? '--amber' : '--red';
+
+  // "Precisión última hora": no es cuanta reserva hay acumulada — es si
+  // lo que ha pasado de verdad se parece a lo que el plan predijo para
+  // el final de la hora que acaba de terminar. P.ej. si se esperaba un
+  // 70% pero un consumo inesperado (aire acondicionado a tope...) lo dejo
+  // en 40%, aqui se nota con un numero bajo y en rojo, no con el % de
+  // bateria en si. Ver forecast_store.py.
+  let accuracyPct = null, accuracyColorVar = '--muted';
+  if (socForecast) {
+    const deviation = Math.abs(socForecast.deviation_pct);
+    accuracyPct = Math.max(0, Math.min(100, Math.round(100 - deviation)));
+    accuracyColorVar = deviation <= 5 ? '--green' : deviation <= 20 ? '--amber' : '--red';
+  }
+  const forecastDetail = socForecast
+    ? t('punta_forecast_detail', {
+        predicted: socForecast.predicted_pct, actual: socForecast.actual_pct,
+        delta: (socForecast.deviation_pct > 0 ? '+' : '') + socForecast.deviation_pct,
+      })
+    : t('punta_forecast_pending');
+
   host.innerHTML = `
     <div class="punta-countdown">${label}</div>
     <p class="help" style="margin-top:2px">${dt}</p>
     <div class="stat-grid" style="margin-top:14px">
-      <div class="stat-tile"><div class="stat-label">${t('punta_reserve_current')}</div><div class="stat-value" style="color:var(${colorVar})">${nextPunta.reserve_pct}%</div></div>
+      <div class="stat-tile"><div class="stat-label">${t('punta_forecast_accuracy')}</div><div class="stat-value" style="color:var(${accuracyColorVar})">${accuracyPct !== null ? accuracyPct + '%' : '—'}</div></div>
       <div class="stat-tile"><div class="stat-label">${t('punta_soc_now')}</div><div class="stat-value">${(nextPunta.current_soc_wh/1000).toFixed(1)} kWh</div></div>
       <div class="stat-tile"><div class="stat-label">${t('punta_reserve_target')}</div><div class="stat-value">${(nextPunta.reserve_target_wh/1000).toFixed(1)} kWh</div></div>
     </div>
-    <div class="health-bar-track" style="margin-top:12px"><div class="health-bar-fill" style="width:${pct}%;background:var(${colorVar})"></div></div>
+    <div class="health-bar-track" style="margin-top:12px"><div class="health-bar-fill" style="width:${accuracyPct !== null ? accuracyPct : 0}%;background:var(${accuracyColorVar})"></div></div>
+    <p class="help">${forecastDetail}</p>
     <p class="help">${t('punta_explain')}</p>`;
 }
 
-function renderEnergyFlow(flow) {
+function renderEnergyFlow() {
   const host = document.getElementById('energy-flow');
   const hint = document.getElementById('autoconsumo-hint');
-  if (!flow) { host.innerHTML = `<p class="empty">${t('status_no_cycle_data')}</p>`; hint.textContent = ''; return; }
 
-  hint.textContent = `${flow.autoconsumo_pct}${t('autoconsumo_suffix')}`;
+  // EN VIVO (leido directo de Home Assistant cada 5s, ver refreshLive) en
+  // vez del ultimo ciclo completo de optimizacion: ese solo se repite
+  // cada `cycle_seconds` y ademas se basa en la MEDIA HISTORICA prevista
+  // para esta hora (load_forecast), no en lo que esta pasando de verdad
+  // ahora mismo — por eso el widget podia parecer "congelado" con
+  // numeros que no cuadraban con la realidad. Si todavia no ha llegado
+  // ningun dato en vivo (justo al cargar la pagina), se usa el ultimo
+  // ciclo como aproximacion de partida, nunca como sustituto permanente.
+  const live = lastLive;
+  const flow = lastStatus && lastStatus.energy_flow;
+  if (!live && !flow) { host.innerHTML = `<p class="empty">${t('status_no_cycle_data')}</p>`; hint.textContent = ''; return; }
 
-  // La barra representa el CONSUMO TOTAL activo ahora mismo — casa +
-  // carga de bateria, si la hay — y se rellena en proporcion a de DONDE
-  // sale esa energia (solar / bateria descargando / red), no de a donde
-  // va. Los tres numeros suman exactamente el total: la carga de bateria
-  // ya viene contada dentro del tramo solar o del tramo red segun de cual
-  // de las dos venga (charge_source), nunca aparte.
-  const chargeW = Math.max(0, flow.battery_net_w || 0);
-  const totalDemand = (flow.load_w || 0) + chargeW;
-  const solarUsed = (flow.solar_to_casa_w || 0) + (flow.solar_to_batt_w || 0);
-  const battUsed = flow.batt_to_casa_w || 0;
-  const gridUsed = flow.grid_w || 0;
+  const liveLoadW = live && live.load_now_w !== null && live.load_now_w !== undefined ? live.load_now_w : (flow ? flow.load_w : 0);
+  const liveSolarW = live && live.pv_now_w !== null && live.pv_now_w !== undefined ? live.pv_now_w : (flow ? flow.solar_w : 0);
+  // El sensor de bateria declarado es de DESCARGA (ver "Sensor de
+  // descarga" en Baterías) — solo da una lectura fiable en vivo mientras
+  // la bateria esta descargando, no cuando carga (ver la nota aparte mas
+  // abajo para la carga).
+  const liveBattDischargeW = live && live.batteries && live.batteries.length
+    ? live.batteries.reduce((sum, b) => sum + (b.power_w || 0), 0)
+    : (flow ? flow.batt_to_casa_w : 0);
+
+  const totalDemand = Math.max(0, Math.round(liveLoadW));
+  const solarUsed = Math.max(0, Math.min(liveSolarW, totalDemand));
+  const battUsed = Math.max(0, Math.min(liveBattDischargeW, totalDemand - solarUsed));
+  const gridUsed = Math.max(0, totalDemand - solarUsed - battUsed);
+
+  const autoconsumoPct = totalDemand > 0 ? Math.max(0, Math.min(100, Math.round(100 * (1 - gridUsed / totalDemand)))) : 100;
+  hint.textContent = `${autoconsumoPct}${t('autoconsumo_suffix')}`;
 
   const solarSeg = totalDemand > 0 ? Math.min(100, 100 * solarUsed / totalDemand) : 0;
   const battSeg = totalDemand > 0 ? Math.min(100 - solarSeg, 100 * battUsed / totalDemand) : 0;
   const gridSeg = totalDemand > 0 ? Math.max(0, 100 - solarSeg - battSeg) : 0;
   const gridColor = gridUsed > 0 ? 'var(--amber)' : 'var(--border)';
 
+  // La carga de bateria (si la hay ahora) no tiene sensor en vivo — se
+  // muestra aparte con la ultima orden mandada (del ciclo completo mas
+  // reciente), para no mezclar dato medido con dato ordenado en la misma barra.
+  const dist = lastStatus && lastStatus.distribution;
+  const chargingNote = dist && dist.action === 'charge' && flow && flow.battery_net_w > 0
+    ? `<p class="help" style="margin-top:10px">${t('flow_charging_note', { w: Math.round(flow.battery_net_w) })}</p>` : '';
+
   host.innerHTML = `
     <div class="flow-source-head">
       <span class="flow-source-name">${t('flow_total_now')}</span>
       <span class="flow-source-value">${totalDemand} W</span>
     </div>
-    <div class="flow-bar-track" role="img" aria-label="${totalDemand}W: ${t('stat_solar')} ${solarUsed}W, ${t('flow_bateria')} ${battUsed}W, ${t('flow_red')} ${gridUsed}W">
+    <div class="flow-bar-track" role="img" aria-label="${totalDemand}W: ${t('stat_solar')} ${Math.round(solarUsed)}W, ${t('flow_bateria')} ${Math.round(battUsed)}W, ${t('flow_red')} ${Math.round(gridUsed)}W">
       <div class="flow-bar-seg" style="width:${solarSeg}%; background:var(--accent)"></div>
       <div class="flow-bar-seg" style="width:${battSeg}%; background:var(--accent-2)"></div>
       <div class="flow-bar-seg" style="width:${gridSeg}%; background:${gridColor}"></div>
@@ -2023,23 +2088,27 @@ function renderEnergyFlow(flow) {
     <div class="flow-endpoints">
       <div class="flow-endpoint">
         <span class="dot" style="background:var(--accent)"></span>
-        <span><div class="flow-endpoint-label">${t('stat_solar')}</div><div class="flow-endpoint-value">${solarUsed} W</div></span>
+        <span><div class="flow-endpoint-label">${t('stat_solar')}</div><div class="flow-endpoint-value">${Math.round(solarUsed)} W</div></span>
       </div>
       <div class="flow-endpoint">
         <span class="dot" style="background:var(--accent-2)"></span>
-        <span><div class="flow-endpoint-label">${t('flow_bateria')}</div><div class="flow-endpoint-value">${battUsed} W</div></span>
+        <span><div class="flow-endpoint-label">${t('flow_bateria')}</div><div class="flow-endpoint-value">${Math.round(battUsed)} W</div></span>
       </div>
       <div class="flow-endpoint">
         <span class="dot" style="background:${gridColor}"></span>
-        <span><div class="flow-endpoint-label">${t('flow_red')}</div><div class="flow-endpoint-value">${gridUsed} W</div></span>
+        <span><div class="flow-endpoint-label">${t('flow_red')}</div><div class="flow-endpoint-value">${Math.round(gridUsed)} W</div></span>
       </div>
     </div>
-    <span class="autoconsumo-chip ${flow.autoconsumo_pct < 100 ? 'low' : ''}"><span class="dot"></span>${flow.autoconsumo_pct}${t('autoconsumo_suffix')}${gridUsed > 0 ? t('flow_autoconsumo_import') : t('flow_autoconsumo_none')}</span>`;
+    <span class="autoconsumo-chip ${autoconsumoPct < 100 ? 'low' : ''}"><span class="dot"></span>${autoconsumoPct}${t('autoconsumo_suffix')}${gridUsed > 0 ? t('flow_autoconsumo_import') : t('flow_autoconsumo_none')}</span>
+    ${chargingNote}`;
 }
 
 function renderPowerMeter(flow) {
   const host = document.getElementById('power-meter');
-  const limit = cfg && cfg.general ? Number(cfg.general.contracted_power_w) || 0 : 0;
+  // Viene del propio status (flow.contracted_power_w), no de cfg — asi
+  // funciona igual desde el puerto wallpanel, que no tiene acceso a la
+  // configuracion completa (ver /api/live y /api/status).
+  const limit = flow ? Number(flow.contracted_power_w) || 0 : 0;
   if (!limit) {
     host.innerHTML = `<p class="empty">${t('power_meter_config_hint')}</p>`;
     return;
@@ -2052,18 +2121,48 @@ function renderPowerMeter(flow) {
     <div class="meter-labels"><span>${t('power_in_use', { w: inUse })}</span><span>${t('power_limit', { w: limit })}</span></div>`;
 }
 
+// Cuanto puede quedarse una bateria por debajo de lo esperado antes de
+// marcarla como desviada — no es una alarma de fallo, solo un aviso
+// visual de que esa bateria va mas atrasada que el resto (podria ser
+// normal, p.ej. una recien añadida) para que se note de un vistazo.
+const BATTERY_DEVIATION_AMBER_PCT = 5;
+const BATTERY_DEVIATION_RED_PCT = 15;
+
 function renderBatteryBreakdown(distribution) {
   const host = document.getElementById('battery-breakdown');
   const entries = distribution && distribution.per_battery ? distribution.per_battery : [];
   if (!entries.length) { host.innerHTML = `<p class="empty">${t('status_no_cycle_data')}</p>`; return; }
   const action = distribution.action;
+
+  // "Lo esperado" para cada bateria es el SOC agregado ponderado por
+  // capacidad (energia real almacenada / capacidad total), NO la media
+  // simple de los porcentajes — con baterias de tamaños muy distintos, la
+  // media simple sesga la comparacion: una pequeña se marcaria "desviada"
+  // solo por serlo, aunque este perfectamente sincronizada de verdad. Si
+  // dos baterias reciben la carga repartida proporcional a su capacidad
+  // (que es como reparte el motor, ver battery_exec.py), ambas deberian
+  // moverse el mismo % a la vez sin importar su tamaño — así que la media
+  // ponderada es el punto de referencia correcto para "sincronizada".
+  const withSoc = entries.filter(e => e.soc_pct !== null && e.soc_pct !== undefined);
+  const totalCapacity = withSoc.reduce((sum, e) => sum + (e.capacity_wh || 0), 0);
+  const expectedSoc = totalCapacity > 0
+    ? withSoc.reduce((sum, e) => sum + e.soc_pct * (e.capacity_wh || 0), 0) / totalCapacity
+    : (withSoc.length ? withSoc.reduce((sum, e) => sum + e.soc_pct, 0) / withSoc.length : null);
+
   const rows = entries.map(e => {
     if (e.soc_pct === null || e.soc_pct === undefined) {
       return `<div class="battery-mini"><div class="bm-name">${e.name}</div><span class="bm-status idle">${t('battery_status_no_data')}</span></div>`;
     }
     const statusClass = action === 'charge' && e.enabled ? 'charge' : action === 'discharge' && e.enabled ? 'discharge' : 'idle';
     const statusText = statusClass === 'charge' ? t('battery_status_charging', { w: e.power_w }) : statusClass === 'discharge' ? t('battery_status_discharge', { w: e.power_w }) : t('battery_status_idle');
-    const barColor = statusClass === 'discharge' ? 'var(--amber)' : 'var(--accent)';
+
+    // Color de la barra = que tan por debajo de lo esperado va esta
+    // bateria (por encima nunca es un problema). Con una sola bateria
+    // declarada no hay con que comparar: siempre verde.
+    const belowExpected = expectedSoc !== null ? expectedSoc - e.soc_pct : 0;
+    const barColor = belowExpected > BATTERY_DEVIATION_RED_PCT ? 'var(--red)'
+      : belowExpected > BATTERY_DEVIATION_AMBER_PCT ? 'var(--amber)' : 'var(--green)';
+
     return `
     <div class="battery-mini">
       <div class="bm-name">${e.name}</div>
@@ -2121,6 +2220,7 @@ async function refreshLive() {
   }
   applyLiveToStatTiles();
   renderDeferrableStatus();
+  renderEnergyFlow();
 }
 
 function applyLiveToStatTiles() {

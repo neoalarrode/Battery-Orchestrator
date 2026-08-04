@@ -17,6 +17,7 @@ import config_store
 import deferrable_exec
 import deferrable_scheduler
 import deferrable_store
+import forecast_store
 import ha_client
 import history_store
 import lifetime_store
@@ -69,6 +70,7 @@ _last_status = {
     "consumption_comparison": None,
     "anomaly": None,
     "deferrable_loads": [],
+    "soc_forecast": None,
     "error": None,
 }
 
@@ -245,6 +247,21 @@ def run_cycle():
             config_store.update_deferrable_load(cfg, load_id, {"done": True})
 
     now_hp = plan[0]
+
+    # Precision de la previsión: la primera vez que se ve esta hora se
+    # guarda que SOC agregado predice el plan para el final de la misma;
+    # cuando la hora cambie, se compara esa prediccion contra el SOC real
+    # medido — asi se puede saber si lo que ha pasado se parece a lo
+    # previsto o no (p.ej. un consumo inesperado que dispare muy por
+    # encima de la previsión de esa hora), en vez de solo mirar cuanta
+    # reserva hay acumulada. Ver forecast_store.py.
+    predicted_end_of_hour_pct = round(100 * now_hp.soc_wh / total_capacity_wh, 1) if total_capacity_wh else current_soc_pct
+    try:
+        soc_forecast = forecast_store.record_and_compare(now, predicted_end_of_hour_pct, current_soc_pct)
+    except Exception as e:
+        log.warning(f"No se pudo actualizar la precision de la previsión: {e}")
+        soc_forecast = None
+
     pv_surplus_now = max(0.0, now_hp.pv_w - now_hp.load_w)
     # Lo que ya se esta autoconsumiendo directo (paneles "hybrid" conectados
     # a una bateria con inversor integrado) no hace falta volver a mandarlo
@@ -306,6 +323,10 @@ def run_cycle():
         "battery_net_w": round(now_hp.charge_w - now_hp.discharge_w),
         "grid_w": round(grid_total_w),
         "autoconsumo_pct": round(autoconsumo_pct, 1),
+        # Va aqui (y no solo en /api/config) para que el medidor de potencia
+        # contratada funcione tambien desde el puerto wallpanel, que no
+        # tiene acceso a la configuracion completa.
+        "contracted_power_w": float(cfg["general"].get("contracted_power_w") or 0),
     }
 
     # Energia (Wh) movida en este ciclo, por bateria. En carga usamos la
@@ -482,6 +503,7 @@ def run_cycle():
             consumption_comparison=consumption_comparison,
             anomaly=anomaly,
             deferrable_loads=deferrable_status,
+            soc_forecast=soc_forecast,
             error=None,
         )
 

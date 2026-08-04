@@ -90,8 +90,13 @@ def plan_distribution(batteries: list[Battery], charge_w: float, discharge_w: fl
     unavailable = [b for b in batteries if socs[b.id] is None]
     available = [b for b in batteries if socs[b.id] is not None]
 
+    # capacity_wh viaja en cada entrada para que quien consuma esto (la
+    # interfaz) pueda comparar el SOC de cada bateria contra la media
+    # ponderada por capacidad, no una media simple — con baterias de
+    # tamaños muy distintos, una media simple sesga la comparacion hacia
+    # las pequeñas.
     per_battery: list[dict] = [
-        {"id": b.id, "name": b.name, "soc_pct": None, "power_w": 0,
+        {"id": b.id, "name": b.name, "soc_pct": None, "power_w": 0, "capacity_wh": b.capacity_wh,
          "enabled": False, "note": "sensor de SOC no disponible, se omite este ciclo"}
         for b in unavailable
     ]
@@ -107,7 +112,7 @@ def plan_distribution(batteries: list[Battery], charge_w: float, discharge_w: fl
         action = "charge"
         per_battery += [
             {"id": b.id, "name": b.name, "soc_pct": socs[b.id], "power_w": round(assigned[b.id]),
-             "enabled": assigned[b.id] > 1, "note": "reparto por capacidad"}
+             "capacity_wh": b.capacity_wh, "enabled": assigned[b.id] > 1, "note": "reparto por capacidad"}
             for b in available
         ]
     elif discharge_w > 0 and available:
@@ -124,12 +129,12 @@ def plan_distribution(batteries: list[Battery], charge_w: float, discharge_w: fl
                 power_w, enabled, note = round(b.max_discharge_w), True, "limite al maximo declarado"
             else:
                 power_w, enabled, note = 0, False, "sin margen (al minimo)"
-            per_battery.append({"id": b.id, "name": b.name, "soc_pct": socs[b.id],
-                                 "power_w": power_w, "enabled": enabled, "note": note})
+            per_battery.append({"id": b.id, "name": b.name, "soc_pct": socs[b.id], "power_w": power_w,
+                                 "capacity_wh": b.capacity_wh, "enabled": enabled, "note": note})
     else:
         action = "idle"
         per_battery += [
-            {"id": b.id, "name": b.name, "soc_pct": socs[b.id], "power_w": 0,
+            {"id": b.id, "name": b.name, "soc_pct": socs[b.id], "power_w": 0, "capacity_wh": b.capacity_wh,
              "enabled": False, "note": "sin accion"}
             for b in available
         ]

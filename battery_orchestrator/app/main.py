@@ -755,9 +755,12 @@ def api_anomaly():
 def api_run_now():
     try:
         run_cycle()
-    except Exception as e:
+    except Exception:
+        # El detalle completo (tipo de excepcion, traceback) va solo al log
+        # del servidor: no se devuelve al cliente para no exponer rutas de
+        # ficheros, nombres de sensores internos, etc. via la respuesta.
         log.exception("Fallo al forzar ciclo")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "No se pudo forzar el ciclo, revisa el log del addon"}), 500
     with _state_lock:
         return jsonify(_last_status)
 

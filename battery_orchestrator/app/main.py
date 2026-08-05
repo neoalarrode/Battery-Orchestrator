@@ -94,6 +94,23 @@ def _battery_from_cfg(b: dict) -> battery_exec.Battery:
     )
 
 
+def _battery_discharge_sensor(b: dict) -> str | None:
+    """
+    Sensor a usar para saber cuanto ha descargado (o esta descargando) esta
+    bateria, coherente con su modo de sensor de potencia — misma logica que
+    ya usa el calculo en vivo de `net_power_w` mas abajo. En modo "combined"
+    el dato relevante esta en `net_power_sensor` (un unico sensor CON SIGNO,
+    p.ej. carga positiva/descarga negativa); en ese modo `power_sensor`
+    normalmente esta vacio, asi que usarlo siempre (como se hacia antes)
+    dejaba fuera del todo la descarga de cualquier bateria en modo
+    "combined" - ni con signo invertido ni sin el, directamente ausente.
+    """
+    mode = b.get("power_sensor_mode") or ("separate" if b.get("power_sensor") or b.get("charge_power_sensor") else "none")
+    if mode == "combined":
+        return b.get("net_power_sensor") or None
+    return b.get("power_sensor") or None
+
+
 def run_cycle():
     """Un ciclo completo: leer estado, planificar, repartir, ejecutar."""
     cfg = config_store.load_config()
@@ -130,7 +147,7 @@ def run_cycle():
     history_days = cfg["general"]["history_days_for_load"]
 
     if load_sensor:
-        battery_discharge_sensors = [b.get("power_sensor") for b in batteries_cfg if b.get("power_sensor")]
+        battery_discharge_sensors = [s for s in (_battery_discharge_sensor(b) for b in batteries_cfg) if s]
         solar_sensors_for_load = [a.get("current_sensor") for a in cfg["pv_arrays"] if a.get("current_sensor")]
         load_forecast = ha_client.true_load_forecast(
             load_sensor, solar_sensors_for_load, battery_discharge_sensors, horizon, days=history_days
@@ -412,8 +429,8 @@ def run_cycle():
         try:
             live_pv = pv_now_actual if pv_now_actual is not None else pv_forecast[0]
             live_discharge = sum(
-                ha_client.get_numeric_state(b.get("power_sensor"), default=0.0) or 0.0
-                for b in batteries_cfg if b.get("power_sensor")
+                abs(ha_client.get_numeric_state(_battery_discharge_sensor(b), default=0.0) or 0.0)
+                for b in batteries_cfg if _battery_discharge_sensor(b)
             )
             live_load_w = live_base_load_w + live_pv + live_discharge
             expected_load_w = load_forecast[0] + deferrable_expected_now_w

@@ -216,6 +216,13 @@ def true_load_forecast(base_consumption_sensor: str, solar_sensors: list[str],
                   restarse ya en el sensor base, los terminos de carga se
                   cancelan matematicamente)
 
+    El sensor de descarga de cada bateria se toma en valor absoluto: algunos
+    modelos lo reportan en negativo mientras descargan (el mismo caso ya
+    detectado y corregido en el calculo en vivo, ver `net_power_w` en
+    main.py) - sin el abs(), una media historica con lecturas negativas
+    RESTARIA de el consumo reconstruido en vez de sumar, hundiendo
+    artificialmente justo las horas en que historicamente hubo descarga.
+
     No hace falta un sensor nuevo en HA: se calcula aqui mismo a partir de
     sensores que ya existen y ya tienen historico acumulado.
     """
@@ -231,7 +238,7 @@ def true_load_forecast(base_consumption_sensor: str, solar_sensors: list[str],
         if not bs:
             continue
         batt = hourly_average_forecast(bs, horizon_hours, days, default=0.0)
-        total = [total[i] + batt[i] for i in range(horizon_hours)]
+        total = [total[i] + abs(batt[i]) for i in range(horizon_hours)]
 
     return total
 

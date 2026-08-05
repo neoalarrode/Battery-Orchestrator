@@ -690,6 +690,7 @@
   <div class="grid2">
     <div>
       <label data-i18n="label_horizon">Horizonte de planificación (horas)</label><input id="g-horizon" type="number">
+      <p class="help" data-i18n="help_horizon">Recomendado 48h o más: con menos, según la hora del día, el plan puede no llegar a ver la punta de mañana y no cargar en la madrugada que toca.</p>
       <label data-i18n="label_cycle">Intervalo entre decisiones (segundos)</label><input id="g-cycle" type="number">
     </div>
     <div>
@@ -857,6 +858,7 @@ es: {
   help_paced_charging: "Menos calor y estrés en la batería: en vez de cargar a tope y luego parar, reparte la potencia a lo largo de las horas que quedan hasta que vaya a hacer falta descargar. Si el tiempo se echa encima, sube sola hasta el máximo — no te va a dejar sin cubrir la punta por ir despacio.",
 
   card_general_title: "General", label_horizon: "Horizonte de planificación (horas)",
+  help_horizon: "Recomendado 48h o más: con menos, según la hora del día, el plan puede no llegar a ver la punta de mañana y no cargar en la madrugada que toca.",
   label_cycle: "Intervalo entre decisiones (segundos)", label_pv_refresh: "Refresco de previsión solar (segundos)",
   help_pv_refresh: "Sepáralo del intervalo de decisión para no agotar la cuota gratuita de la API.",
   label_dry_run: "Modo simulación (no toca las baterías de verdad)", btn_save_config: "Guardar configuración",
@@ -1068,6 +1070,7 @@ en: {
   help_paced_charging: "Less heat and stress on the battery: instead of charging flat-out and then stopping, it spreads the power over the hours left until discharging will be needed. If time runs short, it ramps up on its own to full power — it won't leave the peak period uncovered by going slow.",
 
   card_general_title: "General", label_horizon: "Planning horizon (hours)",
+  help_horizon: "48h or more recommended: with less, depending on the time of day, the plan may not reach far enough to see tomorrow's peak hours and skip charging overnight when it should.",
   label_cycle: "Interval between decisions (seconds)", label_pv_refresh: "Solar forecast refresh (seconds)",
   help_pv_refresh: "Keep it separate from the decision interval so you don't burn through the API's free quota.",
   label_dry_run: "Simulation mode (doesn't touch the real batteries)", btn_save_config: "Save configuration",

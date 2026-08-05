@@ -31,7 +31,7 @@ DEFAULT_CONFIG = {
     "deferrable_loads": [],
     "load_sensor": "",  # consumo base YA SIN carga de baterias (p.ej. "consumo_instantaneo"); + solar + descarga de baterias = consumo real
     "general": {
-        "horizon_hours": 30,
+        "horizon_hours": 48,  # menos de esto y, segun la hora del dia, el plan puede no llegar a ver la punta del dia siguiente y no cargar en la madrugada que toca (ver CHANGELOG v0.11.6)
         "cycle_seconds": 60,
         "pv_refresh_seconds": 1800,
         "dry_run": True,

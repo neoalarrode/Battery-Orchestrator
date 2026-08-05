@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.6
+- Arreglo: horizonte de planificación por defecto demasiado corto (24-30h) — según la hora del día, el plan podía no llegar a ver la punta del día siguiente y decidir "sin acción (no compensa)" en la madrugada que le tocaba cargar, aunque la batería estuviera en el mínimo. Con la reconstrucción de consumo ya corregida (v0.11.3-0.11.5) la batería se agota antes en el día, lo que hacía mucho más visible este límite preexistente. Nuevo valor por defecto para instalaciones nuevas: 48h (cubre el día siguiente completo sea cual sea la hora actual). Las instalaciones existentes mantienen su valor guardado — se recomienda subirlo a 48h o más desde Configuración → General; añadida nota explicativa en ese campo.
+
 ## 0.11.5
 - Arreglo definitivo: la causa raíz real de la energía necesaria prevista demasiado baja no eran los fixes de signo de v0.11.3/v0.11.4 (necesarios pero insuficientes) — era que la reconstrucción de consumo (`true_load_forecast`) construía la lista de sensores de descarga de batería leyendo siempre el campo `power_sensor`, que solo se usa en modo "separado". En modo "Combinado" (un único sensor con signo, seleccionable desde la ficha de cada batería) el dato vive en `net_power_sensor`, y `power_sensor` queda vacío — así que para cualquier batería en modo combinado el término de descarga histórica no se sumaba NUNCA, ni con signo bueno ni malo, sencillamente estaba ausente. Confirmado reproduciendo exactamente los valores reportados (492W, 219W, 50W...) al calcular sin ningún término de batería. Ahora se elige el sensor correcto según el modo de cada batería, igual que ya hacía el cálculo en vivo (`net_power_w`); también corregida la misma lectura en la detección de anomalías de consumo.
 

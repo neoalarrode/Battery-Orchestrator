@@ -98,7 +98,7 @@ def fetch_forecast_solar_api(array_id: str, api_key: str, lat: float, lon: float
     return _hourly_from_watts(_cache[array_id]["watts"], horizon_hours)
 
 
-def _historical_actual_forecast(current_sensor: str, horizon_hours: int, days: int = 21) -> list[float] | None:
+def _historical_actual_forecast(current_sensor: str, horizon_hours: int, days: int = 21) -> tuple[list[float], list[bool]] | None:
     """
     Previsión basada en lo que este mismo array ha generado REALMENTE en el
     pasado (media por hora del dia de los ultimos `days` dias de su sensor de
@@ -107,13 +107,15 @@ def _historical_actual_forecast(current_sensor: str, horizon_hours: int, days: i
     sensor de HA), que no conoce tu ubicación real (sombras, obstáculos,
     orientación...).
 
-    Devuelve None si el sensor todavía no tiene ningún histórico (recién
-    declarado) — en ese caso no hay nada con que corregir y se usa la
-    previsión oficial tal cual, hasta que se acumule algo.
+    Devuelve (valores, fiable_por_hora): `fiable_por_hora[i]` es False para
+    las horas donde todavia no hay suficiente muestra real (sensor recien
+    declarado, o una franja horaria concreta con poco historico todavia) —
+    en esas horas no hay nada fiable con que corregir. Devuelve None directo
+    si no hay ningun historico en absoluto para este sensor.
     """
     if not ha_client.has_recent_history(current_sensor, days=1):
         return None
-    return ha_client.hourly_average_forecast(current_sensor, horizon_hours, days=days, default=0.0)
+    return ha_client.hourly_average_forecast_with_reliability(current_sensor, horizon_hours, days=days, default=0.0)
 
 
 def get_array_forecast(array: dict, horizon_hours: int, refresh_seconds: int) -> list[float]:
@@ -136,14 +138,21 @@ def get_array_forecast(array: dict, horizon_hours: int, refresh_seconds: int) ->
 
     current_sensor = array.get("current_sensor")
     if current_sensor:
-        historical_actual = _historical_actual_forecast(current_sensor, horizon_hours)
-        if historical_actual is not None:
+        historical = _historical_actual_forecast(current_sensor, horizon_hours)
+        if historical is not None:
+            historical_actual, reliable = historical
             # Se hace mas caso a la media real por hora (conoce mejor tu
             # ubicación que cualquier previsión genérica) EXCEPTO cuando la
             # previsión oficial es menor: eso suele indicar que se espera
             # peor tiempo del habitual para esa hora (nubes), y ese matiz
             # día a día sí lo capta la previsión oficial y el histórico no.
-            return [min(historical_actual[i], official[i]) for i in range(horizon_hours)]
+            # Las horas sin suficiente muestra real todavia (`reliable`
+            # False) se dejan tal cual con la previsión oficial, para no
+            # arrastrar una media basada en un puñado de lecturas sueltas.
+            return [
+                min(historical_actual[i], official[i]) if reliable[i] else official[i]
+                for i in range(horizon_hours)
+            ]
     return official
 
 

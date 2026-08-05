@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.2
+- Arreglo: la previsión de consumo (`hourly_average_forecast`, usada tanto para reconstruir el consumo real como para la corrección de previsión solar de v0.11.0) no exigía un mínimo de muestras reales por franja horaria — una sola lectura suelta en una hora concreta (p.ej. una nube pasajera, o un sensor recién dado de alta que apenas ha visto esa franja una vez) bastaba para fijar la "media" de toda esa hora, arrastrando ruido a la previsión. Esto podía hacer que la energía necesaria prevista se hundiese de forma poco realista en horas de sol, porque el consumo de red ya está cerca de cero cuando el sol cubre la casa y una media solar mal calculada no lo compensaba. Ahora una franja horaria necesita al menos 3 muestras reales para considerarse fiable; si no las tiene, se rellena con la media de las franjas que sí las tienen (igual que ya se hacía para horas sin ningún dato). La corrección de previsión solar de v0.11.0 también respeta ahora esta fiabilidad hora a hora, en vez de un chequeo global de "hay algún dato en las últimas 24h".
+
 ## 0.11.1
 - Seguridad: `/api/run_now` devolvía el mensaje de la excepción real al cliente si el ciclo forzado fallaba (alerta CodeQL "Information exposure through an exception") — podía filtrar rutas de fichero o nombres internos. Ahora el detalle completo solo va al log del addon; el cliente recibe un mensaje genérico.
 

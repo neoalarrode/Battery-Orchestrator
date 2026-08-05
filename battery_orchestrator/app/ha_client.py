@@ -109,17 +109,77 @@ def get_history(entity_id: str, days: int) -> list[dict]:
     return data[0] if data else []
 
 
+# Con menos muestras reales que esto en una franja horaria concreta, esa
+# franja no se considera fiable todavia (una lectura suelta -p.ej. una nube
+# pasajera, o un sensor recien dado de alta que solo ha visto esa hora una
+# vez- no debe fijar la media de toda la franja) y se rellena como si no
+# hubiera dato, en vez de arrastrar ese ruido a la previsión.
+MIN_SAMPLES_PER_HOUR = 3
+
+
 def has_recent_history(entity_id: str, days: int = 1) -> bool:
     """
     Comprobacion barata: ¿hay algun punto de historico real para este sensor
-    en los ultimos `days` dias? Se usa para saber si ya se puede calcular una
-    media horaria de verdad (`hourly_average_forecast`) o si el sensor es
-    demasiado nuevo y todavia no hay nada que promediar.
+    en los ultimos `days` dias? Se usa para saber si merece la pena intentar
+    calcular una media horaria (`hourly_average_forecast`) o si el sensor es
+    demasiado nuevo y todavia no hay nada que promediar. OJO: esto NO
+    garantiza que cada hora tenga suficiente muestra - eso lo decide
+    `hourly_average_forecast_with_reliability` franja a franja.
     """
     try:
         return bool(get_history(entity_id, days))
     except requests.RequestException:
         return False
+
+
+def hourly_average_forecast_with_reliability(
+    entity_id: str, horizon_hours: int, days: int = 21, default: float = 0.0
+) -> tuple[list[float], list[bool]]:
+    """
+    Igual que `hourly_average_forecast`, pero ademas devuelve, hora a hora,
+    si ese valor viene de suficiente historico real (>= MIN_SAMPLES_PER_HOUR
+    muestras en esa franja horaria) o si es un relleno (media de las horas
+    que si tienen muestra suficiente, o el valor actual si no hay historico
+    en absoluto). Sirve para que quien consuma esto sepa en que horas puede
+    fiarse del historico y en cuales todavia no.
+    """
+    raw = get_history(entity_id, days)
+    if not raw:
+        for fallback_days in (10, 7, 3, 1):
+            if fallback_days >= days:
+                continue
+            raw = get_history(entity_id, fallback_days)
+            if raw:
+                break
+    if not raw:
+        current = get_numeric_state(entity_id, default=default)
+        return [current] * horizon_hours, [False] * horizon_hours
+
+    buckets: dict[int, list[float]] = {h: [] for h in range(24)}
+    for point in raw:
+        try:
+            val = float(point["state"])
+        except (KeyError, ValueError):
+            continue
+        ts = datetime.fromisoformat(point["last_changed"].replace("Z", "+00:00"))
+        buckets[ts.astimezone().hour].append(val)
+
+    hourly_avg: dict[int, float | None] = {}
+    reliable_by_hour: dict[int, bool] = {}
+    for h, vals in buckets.items():
+        reliable_by_hour[h] = len(vals) >= MIN_SAMPLES_PER_HOUR
+        hourly_avg[h] = statistics.mean(vals) if reliable_by_hour[h] else None
+
+    known = [v for v in hourly_avg.values() if v is not None]
+    fallback = statistics.mean(known) if known else default
+    for h in range(24):
+        if hourly_avg[h] is None:
+            hourly_avg[h] = fallback
+
+    now = datetime.now()
+    values = [hourly_avg[(now.hour + i) % 24] for i in range(horizon_hours)]
+    reliable = [reliable_by_hour[(now.hour + i) % 24] for i in range(horizon_hours)]
+    return values, reliable
 
 
 def hourly_average_forecast(entity_id: str, horizon_hours: int, days: int = 21, default: float = 0.0) -> list[float]:
@@ -133,39 +193,8 @@ def hourly_average_forecast(entity_id: str, horizon_hours: int, days: int = 21, 
     cortas antes de rendirse - asi no depende de que sepas/ajustes ese
     detalle de configuracion tuyo.
     """
-    raw = get_history(entity_id, days)
-    if not raw:
-        for fallback_days in (10, 7, 3, 1):
-            if fallback_days >= days:
-                continue
-            raw = get_history(entity_id, fallback_days)
-            if raw:
-                break
-    if not raw:
-        current = get_numeric_state(entity_id, default=default)
-        return [current] * horizon_hours
-
-    buckets: dict[int, list[float]] = {h: [] for h in range(24)}
-    for point in raw:
-        try:
-            val = float(point["state"])
-        except (KeyError, ValueError):
-            continue
-        ts = datetime.fromisoformat(point["last_changed"].replace("Z", "+00:00"))
-        buckets[ts.astimezone().hour].append(val)
-
-    hourly_avg = {}
-    for h, vals in buckets.items():
-        hourly_avg[h] = statistics.mean(vals) if vals else None
-
-    known = [v for v in hourly_avg.values() if v is not None]
-    fallback = statistics.mean(known) if known else default
-    for h in range(24):
-        if hourly_avg[h] is None:
-            hourly_avg[h] = fallback
-
-    now = datetime.now()
-    return [hourly_avg[(now.hour + i) % 24] for i in range(horizon_hours)]
+    values, _ = hourly_average_forecast_with_reliability(entity_id, horizon_hours, days, default)
+    return values
 
 
 # alias retrocompatible

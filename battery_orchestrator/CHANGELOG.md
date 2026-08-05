@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.4
+- Arreglo: el `abs()` de v0.11.3 se aplicaba sobre la MEDIA ya calculada del sensor de descarga, no sobre cada muestra individual. En sensores bidireccionales (carga positiva/descarga negativa) esto no bastaba: si una franja horaria mezclaba muestras de carga y descarga de distintos días (p.ej. unos días todavía cargando a esa hora, otros ya descargando), esas muestras se cancelaban entre sí ANTES de aplicar el valor absoluto, y el resultado seguía hundiéndose cerca de cero pese al fix anterior. Confirmado con datos reales del usuario: la hora 08:00 daba una media de -8.9W (cancelación) cuando el sensor de descarga dedicado de la misma batería mostraba 165.4W reales en esa franja. Ahora el valor absoluto se aplica a cada muestra antes de promediar, no después.
+
 ## 0.11.3
 - Arreglo: la reconstrucción histórica de consumo (`true_load_forecast`) sumaba la media histórica del sensor de descarga de cada batería tal cual, sin `abs()` — si ese sensor reporta la descarga en negativo (el mismo caso de signo invertido ya detectado y corregido en el cálculo en vivo, ver `net_power_w`), una media histórica negativa RESTABA del consumo reconstruido en vez de sumar, hundiendo artificialmente la energía necesaria prevista justo en las horas donde históricamente hubo descarga (típicamente horas de sol insuficiente). Ahora se toma en valor absoluto, igual que ya se hacía en el cálculo en vivo.
 

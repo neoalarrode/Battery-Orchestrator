@@ -133,7 +133,7 @@ def has_recent_history(entity_id: str, days: int = 1) -> bool:
 
 
 def hourly_average_forecast_with_reliability(
-    entity_id: str, horizon_hours: int, days: int = 21, default: float = 0.0
+    entity_id: str, horizon_hours: int, days: int = 21, default: float = 0.0, abs_values: bool = False
 ) -> tuple[list[float], list[bool]]:
     """
     Igual que `hourly_average_forecast`, pero ademas devuelve, hora a hora,
@@ -142,6 +142,13 @@ def hourly_average_forecast_with_reliability(
     que si tienen muestra suficiente, o el valor actual si no hay historico
     en absoluto). Sirve para que quien consuma esto sepa en que horas puede
     fiarse del historico y en cuales todavia no.
+
+    `abs_values=True` aplica valor absoluto a CADA MUESTRA antes de
+    promediar (no a la media ya calculada) - imprescindible para sensores
+    de potencia bidireccionales con signo (p.ej. carga positiva/descarga
+    negativa en un mismo sensor): promediar primero y aplicar abs() despues
+    deja que las muestras positivas y negativas de una misma franja horaria
+    se CANCELEN entre si, escondiendo el verdadero movimiento de energia.
     """
     raw = get_history(entity_id, days)
     if not raw:
@@ -153,6 +160,8 @@ def hourly_average_forecast_with_reliability(
                 break
     if not raw:
         current = get_numeric_state(entity_id, default=default)
+        if abs_values and current is not None:
+            current = abs(current)
         return [current] * horizon_hours, [False] * horizon_hours
 
     buckets: dict[int, list[float]] = {h: [] for h in range(24)}
@@ -161,6 +170,8 @@ def hourly_average_forecast_with_reliability(
             val = float(point["state"])
         except (KeyError, ValueError):
             continue
+        if abs_values:
+            val = abs(val)
         ts = datetime.fromisoformat(point["last_changed"].replace("Z", "+00:00"))
         buckets[ts.astimezone().hour].append(val)
 
@@ -182,7 +193,9 @@ def hourly_average_forecast_with_reliability(
     return values, reliable
 
 
-def hourly_average_forecast(entity_id: str, horizon_hours: int, days: int = 21, default: float = 0.0) -> list[float]:
+def hourly_average_forecast(
+    entity_id: str, horizon_hours: int, days: int = 21, default: float = 0.0, abs_values: bool = False
+) -> list[float]:
     """
     Previsión simple y explicable para CUALQUIER sensor numerico: para cada
     hora del horizonte, la media de esa MISMA hora-del-dia en los ultimos
@@ -193,7 +206,7 @@ def hourly_average_forecast(entity_id: str, horizon_hours: int, days: int = 21, 
     cortas antes de rendirse - asi no depende de que sepas/ajustes ese
     detalle de configuracion tuyo.
     """
-    values, _ = hourly_average_forecast_with_reliability(entity_id, horizon_hours, days, default)
+    values, _ = hourly_average_forecast_with_reliability(entity_id, horizon_hours, days, default, abs_values)
     return values
 
 
@@ -216,12 +229,16 @@ def true_load_forecast(base_consumption_sensor: str, solar_sensors: list[str],
                   restarse ya en el sensor base, los terminos de carga se
                   cancelan matematicamente)
 
-    El sensor de descarga de cada bateria se toma en valor absoluto: algunos
-    modelos lo reportan en negativo mientras descargan (el mismo caso ya
+    El sensor de descarga de cada bateria se toma en valor absoluto MUESTRA A
+    MUESTRA (no sobre la media ya calculada): algunos modelos usan un unico
+    sensor bidireccional (carga positiva/descarga negativa - el mismo caso ya
     detectado y corregido en el calculo en vivo, ver `net_power_w` en
-    main.py) - sin el abs(), una media historica con lecturas negativas
-    RESTARIA de el consumo reconstruido en vez de sumar, hundiendo
-    artificialmente justo las horas en que historicamente hubo descarga.
+    main.py). Si una franja horaria mezcla muestras de carga y descarga de
+    distintos dias (p.ej. unos dias todavia cargando a esa hora, otros ya
+    descargando), promediar primero y aplicar abs() despues deja que esas
+    muestras se CANCELEN entre si y el resultado se hunda cerca de cero
+    aunque hubiera bastante movimiento de energia real. Por eso el abs() se
+    aplica antes de promediar.
 
     No hace falta un sensor nuevo en HA: se calcula aqui mismo a partir de
     sensores que ya existen y ya tienen historico acumulado.
@@ -237,8 +254,8 @@ def true_load_forecast(base_consumption_sensor: str, solar_sensors: list[str],
     for bs in battery_discharge_sensors:
         if not bs:
             continue
-        batt = hourly_average_forecast(bs, horizon_hours, days, default=0.0)
-        total = [total[i] + abs(batt[i]) for i in range(horizon_hours)]
+        batt = hourly_average_forecast(bs, horizon_hours, days, default=0.0, abs_values=True)
+        total = [total[i] + batt[i] for i in range(horizon_hours)]
 
     return total
 

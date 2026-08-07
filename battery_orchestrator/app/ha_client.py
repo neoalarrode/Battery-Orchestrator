@@ -46,14 +46,17 @@ def get_numeric_state(entity_id: str, default: float | None = 0.0) -> float | No
     Devuelve el valor numerico de una entidad. Si la entidad esta
     'unavailable'/'unknown' o no existe, devuelve `default` (que puede ser
     None para que el llamante decida saltarse esa entidad en vez de
-    asumir un valor inventado).
+    asumir un valor inventado). Un fallo de red/HA pasajero (timeout, 502/503
+    del Supervisor) tambien cae a `default` en vez de tumbar el ciclo entero
+    de planificacion - mejor una hora con un dato por defecto que ninguna
+    orden de carga/descarga hasta que HA vuelva a responder.
     """
     try:
         s = get_state(entity_id)["state"]
         if s.strip().lower() in STALE_STATES:
             return default
         return float(s)
-    except (HAError, ValueError, KeyError):
+    except (HAError, ValueError, KeyError, requests.RequestException):
         return default
 
 
@@ -117,6 +120,20 @@ def get_history(entity_id: str, days: int) -> list[dict]:
 MIN_SAMPLES_PER_HOUR = 3
 
 
+def _safe_get_history(entity_id: str, days: int) -> list[dict]:
+    """
+    Igual que `get_history`, pero absorbe fallos de red/HA (timeouts, 502/503
+    del Supervisor mientras arranca o se reinicia HA...) devolviendo lista
+    vacia en vez de propagar la excepcion - un ciclo de planificacion entero
+    no debe abortar (dejando la bateria sin ninguna orden) solo porque UNA
+    llamada de historico haya fallado de forma pasajera.
+    """
+    try:
+        return get_history(entity_id, days)
+    except requests.RequestException:
+        return []
+
+
 def has_recent_history(entity_id: str, days: int = 1) -> bool:
     """
     Comprobacion barata: ¿hay algun punto de historico real para este sensor
@@ -126,10 +143,7 @@ def has_recent_history(entity_id: str, days: int = 1) -> bool:
     garantiza que cada hora tenga suficiente muestra - eso lo decide
     `hourly_average_forecast_with_reliability` franja a franja.
     """
-    try:
-        return bool(get_history(entity_id, days))
-    except requests.RequestException:
-        return False
+    return bool(_safe_get_history(entity_id, days))
 
 
 def hourly_average_forecast_with_reliability(
@@ -150,12 +164,12 @@ def hourly_average_forecast_with_reliability(
     deja que las muestras positivas y negativas de una misma franja horaria
     se CANCELEN entre si, escondiendo el verdadero movimiento de energia.
     """
-    raw = get_history(entity_id, days)
+    raw = _safe_get_history(entity_id, days)
     if not raw:
         for fallback_days in (10, 7, 3, 1):
             if fallback_days >= days:
                 continue
-            raw = get_history(entity_id, fallback_days)
+            raw = _safe_get_history(entity_id, fallback_days)
             if raw:
                 break
     if not raw:
@@ -269,7 +283,7 @@ def pv_forecast_from_entity(entity_id: str, horizon_hours: int) -> list[float]:
     """
     try:
         state = get_state(entity_id)
-    except HAError:
+    except (HAError, requests.RequestException):
         return [0.0] * horizon_hours
 
     attrs = state.get("attributes", {})

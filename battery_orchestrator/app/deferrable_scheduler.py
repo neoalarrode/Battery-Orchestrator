@@ -182,7 +182,15 @@ def plan_for_load(load: dict, now: datetime, plan_hours: list[datetime],
 
     blocked = set()
     for occ in started:
-        idx = plan_hours.index(datetime.fromisoformat(occ["start"]))
+        start_dt = datetime.fromisoformat(occ["start"])
+        if start_dt not in plan_hours:
+            # Ocurrencia de una hora que ya ha quedado fuera de la ventana
+            # actual de `plan_hours` (p.ej. empezo a medianoche y el addon
+            # no ha podido recalcular en horas, por un reinicio o un fallo
+            # pasajero de HA) - no hay nada que bloquear para las horas de
+            # HOY que quedan por delante, esa hora ya paso.
+            continue
+        idx = plan_hours.index(start_dt)
         blocked.update(range(idx, idx + duration))
 
     pending_count = count - len(started)

@@ -241,10 +241,18 @@ def run_cycle():
         for load in deferrable_loads_cfg:
             if not load.get("enabled", True):
                 continue
-            schedule = deferrable_scheduler.plan_for_load(
-                load, now, plan_hours, pv_forecast, load_forecast,
-                charge_w_by_hour, charge_source_by_hour, prices_by_hour,
-            )
+            try:
+                schedule = deferrable_scheduler.plan_for_load(
+                    load, now, plan_hours, pv_forecast, load_forecast,
+                    charge_w_by_hour, charge_source_by_hour, prices_by_hour,
+                )
+            except Exception:
+                # Un fallo al planificar UNA carga diferible no debe tumbar
+                # el resto del ciclo: la decision de carga/descarga de las
+                # baterias (lo importante) va DESPUES de este bloque y tiene
+                # que seguir ejecutandose pase lo que pase aqui.
+                log.exception(f"Fallo al planificar la carga diferible '{load.get('name', load.get('id'))}'")
+                schedule = None
             if schedule:
                 deferrable_schedules[load["id"]] = schedule
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.11
+Revisión completa del frontend (`index.html`) en busca de bugs. Dos encontrados:
+- Arreglo: el aviso nuevo de v0.11.8 ("encendida a mano fuera de ventana — no se toca") no tenía traducción al inglés — con la interfaz en inglés se veía en español sin traducir en el panel de estado. Añadida su traducción.
+- Arreglo (robustez): el sondeo periódico de `/api/status` cada 15s no atrapaba fallos de red puntuales — a diferencia de `/api/live`, que sí lo hacía a propósito. Un fallo de red quedaba como una promesa rechazada sin capturar en la consola en vez de reintentarse en silencio en el siguiente sondeo. La carga inicial de la página sigue mostrando la tarjeta de error de conexión igual que antes si falla nada más entrar.
+
 ## 0.11.10
 - Mejora (rendimiento/estabilidad): la media histórica por hora del día (`hourly_average_forecast_with_reliability`, usada por la previsión de consumo, la de solar y la corrección estadística) volvía a pedir el histórico completo a Home Assistant en CADA ciclo — con varias baterías + solar + consumo eso son varias peticiones de hasta 21 días de historico, algunas con decenas de miles de puntos, repetidas cada `cycle_seconds` (30-60s típico). Esto pudo contribuir a episodios de inestabilidad del propio Home Assistant. Ahora la parte cara (pedir y recorrer el histórico) se cachea 15 minutos; la alineación al horizonte desde la hora actual se sigue recalculando siempre al vuelo, así que no cambia ningún resultado, solo cuántas veces se pide.
 

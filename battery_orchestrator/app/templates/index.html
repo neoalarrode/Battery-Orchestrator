@@ -1211,6 +1211,7 @@ const LOG_LINE_PATTERNS_EN = [
   [/^\[(.+?)\] ENCENDIDA \((excedente solar|hora barata), ventana (\d{2}:\d{2})-(\d{2}:\d{2})\)$/,
     (m) => `[${m[1]}] ON (${m[2] === 'excedente solar' ? 'solar surplus' : 'cheap hour'}, window ${m[3]}-${m[4]})`],
   [/^\[(.+?)\] apagada \(fuera de ventana programada\)$/, (m) => `[${m[1]}] off (outside its scheduled window)`],
+  [/^\[(.+?)\] encendida a mano fuera de ventana — no se toca$/, (m) => `[${m[1]}] turned on manually outside its window — left as is`],
   [/^\[(.+?)\] interrumpida: el excedente solar previsto ya no esta disponible$/,
     (m) => `[${m[1]}] interrupted: the expected solar surplus is no longer there`],
   [/^\[(.+?)\] sesion finalizada, ~(\d+)Wh medidos$/, (m) => `[${m[1]}] session finished, ~${m[2]}Wh measured`],
@@ -2553,7 +2554,12 @@ function applyWallpanelMode() {
     // el servidor responde o no a /api/config — ver la funcion.
     await loadConfig();
     await refreshStatus();
-    setInterval(refreshStatus, 15000);
+    // A partir de aqui, un fallo puntual de red (ya en marcha, no en la
+    // carga inicial) no debe quedar como una promesa rechazada sin
+    // atrapar — setInterval no tiene quien la capture. Se ignora y se
+    // reintenta solo en el siguiente poll, 15s despues (igual que ya hace
+    // refreshLive() con su propio try/catch interno).
+    setInterval(() => { refreshStatus().catch(() => {}); }, 15000);
     // "en vivo" aparte del ciclo completo de optimizacion: lecturas
     // directas a Home Assistant, mucho mas rapidas de refrescar (5s) que
     // esperar a que se relance el ciclo entero (cycle_seconds, tipicamente 60s).

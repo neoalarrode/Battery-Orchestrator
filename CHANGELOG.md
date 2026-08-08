@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.12
+- Seguridad: `/api/status` (accesible sin autenticación desde el puerto de solo lectura del wallpanel) filtraba el `entity_id` del switch de cada carga diferible, contradiciendo el propio diseño del wallpanel ("ni expone la configuración: nombres de entidades..."). El frontend no usa ese dato desde ahí (la ficha de configuración, que sí lo necesita, lee de `/api/config`, bloqueado en el wallpanel) — se ha quitado de la respuesta. Encontrado en una prueba de intrusión dirigida contra el wallpanel (antes de este arreglo se probaron sistemáticamente spoofing de cabeceras Host/X-Forwarded-*, bypass de método HTTP, normalización de rutas, traversal en la ruta estática y peticiones HTTP en bruto — ninguno de esos vectores logró saltarse la restricción del puerto, que depende del socket real de conexión y no de nada que mande el cliente).
+
 ## 0.11.11
 Revisión completa del frontend (`index.html`) en busca de bugs. Dos encontrados:
 - Arreglo: el aviso nuevo de v0.11.8 ("encendida a mano fuera de ventana — no se toca") no tenía traducción al inglés — con la interfaz en inglés se veía en español sin traducir en el panel de estado. Añadida su traducción.

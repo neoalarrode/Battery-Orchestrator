@@ -500,13 +500,16 @@ def run_cycle():
 
     # Estado de cada carga diferible para el dashboard: lo REAL (potencia
     # que esta consumiendo ahora, si tiene sensor) junto con lo PROGRAMADO
-    # (la ventana decidida, y por que).
+    # (la ventana decidida, y por que). SIN el entity_id del switch: este
+    # endpoint (/api/status) es uno de los accesibles desde el wallpanel
+    # de solo lectura (sin autenticacion de HA delante), y el frontend no
+    # lo necesita de aqui - la ficha de configuracion (que si lo muestra)
+    # lee de /api/config, que el wallpanel tiene bloqueado.
     deferrable_status = [
         {
             "id": load["id"], "name": load["name"], "enabled": load.get("enabled", True),
             "interruptible": load.get("interruptible", False),
             "frequency": load.get("frequency", "daily"),
-            "switch_entity": load["switch_entity"],
             "schedule": deferrable_schedules.get(load["id"]),
             "live_power_w": deferrable_live_power.get(load["id"]),
             "auto_estimated_energy_wh": deferrable_store.get_estimated_energy_wh(load["id"]),

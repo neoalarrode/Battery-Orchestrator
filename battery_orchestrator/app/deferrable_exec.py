@@ -89,12 +89,29 @@ def execute(loads: list[dict], schedules: dict[str, dict], now: datetime,
             energy = deferrable_store.end_session(load_id, now)
             if energy is not None and energy > 1:
                 log_lines.append(f"{prefix}[{name}] sesion finalizada, ~{round(energy)}Wh medidos")
-            line = f"{prefix}[{name}] apagada (fuera de ventana programada)"
-            if not dry_run:
+            if energy is None:
+                # No habia ninguna ventana gestionada por la app activa para
+                # esta carga (`end_session` solo devuelve energia si HABIA
+                # una sesion que la propia app habia empezado). Si aun asi
+                # el switch esta encendido, es que el usuario lo ha
+                # encendido a mano fuera de su ventana programada - se
+                # respeta, no se apaga: la app solo controla lo que ella
+                # misma prendio, nunca un encendido manual ajeno.
                 try:
-                    ha_client.turn_off(switch)
-                except Exception as e:
-                    line += f" — AVISO: no se pudo apagar en Home Assistant ({e})"
+                    manually_on = ha_client.get_state(switch)["state"] == "on"
+                except Exception:
+                    manually_on = False
+                if manually_on:
+                    line = f"{prefix}[{name}] encendida a mano fuera de ventana — no se toca"
+                else:
+                    line = f"{prefix}[{name}] apagada (fuera de ventana programada)"
+            else:
+                line = f"{prefix}[{name}] apagada (fuera de ventana programada)"
+                if not dry_run:
+                    try:
+                        ha_client.turn_off(switch)
+                    except Exception as e:
+                        line += f" — AVISO: no se pudo apagar en Home Assistant ({e})"
 
         log_lines.append(line)
 

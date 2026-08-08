@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.9
+Revisión completa del proyecto en busca de bugs. Cuatro encontrados y corregidos:
+- Arreglo: una carga diferible de frecuencia "once" podía re-programarse (y volver a ejecutarse) justo al terminar su ventana, en vez de marcarse como hecha — el planificador la recalculaba (por el orden de ejecución dentro del ciclo: planificar pasa antes que marcar "done") antes de que el resto del ciclo llegara a marcarla, perdiendo la evidencia de que ya había terminado. Ahora, una vez decidida una ocurrencia "once", se reutiliza siempre tal cual hasta que se marque "done" — nunca se recalcula sola.
+- Arreglo (robustez): el modo de tarifa dinámica PVPC y el endpoint `/api/live` (el que refresca el dashboard cada pocos segundos) no atrapaban fallos de red/HA pasajeros (502/503, timeout) — solo el 404. Mismo tipo de fallo ya corregido en v0.11.7 para el resto de lecturas, pero estos dos puntos se habían quedado fuera.
+- Arreglo: `/api/battery_health` cruzaba los datos de capacidad real y ciclos de vida de cada batería por NOMBRE en vez de por ID — si renombrabas una batería, o dos compartían nombre, los datos se podían atribuir a la batería equivocada. Ahora se cruzan por ID.
+
 ## 0.11.8
 - Arreglo: si encendías a mano una carga diferible (p.ej. el lavavajillas) fuera de su ventana programada, el siguiente ciclo la volvía a apagar — el código apagaba el switch sin más cada vez que "ahora" no caía en ninguna ventana, sin distinguir entre "esta carga la había encendido la propia app y le tocaba apagarla" y "esto lo ha encendido el usuario a mano y no le corresponde a la app tocarlo". Ahora se usa el registro interno de sesión (que ya existía para medir energía) para saber si fue la app quien la encendió: solo apaga lo que ella misma prendió; un encendido manual fuera de ventana se respeta y se deja tal cual.
 

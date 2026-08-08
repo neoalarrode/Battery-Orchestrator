@@ -19,6 +19,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
+import requests
+
 import ha_client
 
 
@@ -89,7 +91,10 @@ def pvpc_sensor_prices(entity_id: str, now: datetime, horizon_hours: int) -> lis
 
     try:
         hourly = _read_pvpc_hourly_prices(entity_id)
-    except ha_client.HAError:
+    except (ha_client.HAError, requests.RequestException):
+        # Sensor no encontrado, o fallo de red/HA pasajero (502/503 del
+        # Supervisor, timeout...) - se cae al precio actual repetido en vez
+        # de tumbar el ciclo entero de planificacion.
         hourly = {}
 
     if not hourly:

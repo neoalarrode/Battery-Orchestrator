@@ -101,6 +101,7 @@ def get_health(battery_id: str, declared_capacity_wh: float) -> dict | None:
     real_capacity_wh = statistics.median(entry["observations"])
     health_pct = min(100.0, real_capacity_wh / declared_capacity_wh * 100)
     return {
+        "id": battery_id,
         "name": entry["name"],
         "declared_capacity_wh": declared_capacity_wh,
         "estimated_capacity_wh": round(real_capacity_wh),
@@ -118,7 +119,7 @@ def get_all_health(batteries: list[dict]) -> list[dict]:
             out.append(h)
         else:
             out.append({
-                "name": b["name"], "declared_capacity_wh": declared,
+                "id": b["id"], "name": b["name"], "declared_capacity_wh": declared,
                 "estimated_capacity_wh": None, "health_pct": None, "observations": 0,
             })
     return out

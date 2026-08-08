@@ -152,9 +152,17 @@ def plan_for_load(load: dict, now: datetime, plan_hours: list[datetime],
         if load.get("done"):
             return None
         if existing and existing.get("occurrences"):
-            occ = existing["occurrences"][0]
-            if datetime.fromisoformat(occ["end"]) > now:
-                return existing  # sigue vigente (ya empezada o por empezar), no recalcular
+            # Ya hay una ocurrencia decidida — vigente (por empezar o en
+            # curso) o recien terminada. En los DOS casos se reutiliza tal
+            # cual, nunca se recalcula sola: si se recalculara justo al
+            # terminar (comprobando si "end <= now"), pasaria ANTES de que
+            # el resto del ciclo llegue a marcarla "done" (eso ocurre
+            # despues, en deferrable_exec.execute()), y esa marca mira la
+            # PRIMERA ocurrencia del schedule que haya en ese momento — si
+            # aqui ya la hubieramos sustituido por una nueva, la original
+            # nunca se marcaria "done" y la carga se re-programaria sin fin
+            # en vez de ejecutarse una sola vez.
+            return existing
         picks = _pick_blocks(surplus_w, prices_by_hour, 0, horizon, duration, min_power_w, count=1)
         if not picks:
             return None

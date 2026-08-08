@@ -65,6 +65,7 @@ def get_health(battery_id: str, capacity_wh: float) -> dict | None:
     # un "ciclo completo" mueve 2x la capacidad (una carga + una descarga completas)
     equivalent_cycles = total_throughput_wh / (2 * capacity_wh)
     return {
+        "id": battery_id,
         "name": entry["name"],
         "since": entry["since"],
         "charged_kwh": round(entry["charged_wh"] / 1000, 2),
@@ -81,7 +82,7 @@ def get_all_health(batteries: list[dict]) -> list[dict]:
             out.append(h)
         else:
             out.append({
-                "name": b["name"], "since": None, "charged_kwh": 0.0,
+                "id": b["id"], "name": b["name"], "since": None, "charged_kwh": 0.0,
                 "discharged_kwh": 0.0, "equivalent_cycles": 0.0,
             })
     return out

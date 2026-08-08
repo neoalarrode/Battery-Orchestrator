@@ -7,6 +7,7 @@ import threading
 import time
 from datetime import datetime
 
+import requests
 from flask import Flask, Response, jsonify, request, send_from_directory
 from werkzeug.serving import make_server
 
@@ -728,7 +729,7 @@ def api_live():
     for load in cfg.get("deferrable_loads", []):
         try:
             switch_state = ha_client.get_state(load["switch_entity"])["state"]
-        except ha_client.HAError:
+        except (ha_client.HAError, requests.RequestException):
             switch_state = None
         power_sensor = load.get("power_sensor")
         power = ha_client.get_numeric_state(power_sensor, default=None) if power_sensor else None
@@ -751,11 +752,14 @@ def api_live():
 @app.get("/api/battery_health")
 def api_battery_health():
     cfg = config_store.load_config()
-    cycles = {h["name"]: h for h in lifetime_store.get_all_health(cfg["batteries"])}
+    # Cruzado por id, NO por nombre: dos baterias pueden compartir nombre, o
+    # una puede haberse renombrado, y en ambos casos cruzar por nombre
+    # atribuiria la salud/ciclos de una bateria a otra distinta.
+    cycles = {h["id"]: h for h in lifetime_store.get_all_health(cfg["batteries"])}
     capacity = capacity_store.get_all_health(cfg["batteries"])
     combined = []
     for c in capacity:
-        cyc = cycles.get(c["name"], {})
+        cyc = cycles.get(c["id"], {})
         combined.append({
             **c,
             "equivalent_cycles": cyc.get("equivalent_cycles", 0.0),

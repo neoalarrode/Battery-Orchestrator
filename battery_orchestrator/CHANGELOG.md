@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.10
+- Mejora (rendimiento/estabilidad): la media histórica por hora del día (`hourly_average_forecast_with_reliability`, usada por la previsión de consumo, la de solar y la corrección estadística) volvía a pedir el histórico completo a Home Assistant en CADA ciclo — con varias baterías + solar + consumo eso son varias peticiones de hasta 21 días de historico, algunas con decenas de miles de puntos, repetidas cada `cycle_seconds` (30-60s típico). Esto pudo contribuir a episodios de inestabilidad del propio Home Assistant. Ahora la parte cara (pedir y recorrer el histórico) se cachea 15 minutos; la alineación al horizonte desde la hora actual se sigue recalculando siempre al vuelo, así que no cambia ningún resultado, solo cuántas veces se pide.
+
 ## 0.11.9
 Revisión completa del proyecto en busca de bugs. Cuatro encontrados y corregidos:
 - Arreglo: una carga diferible de frecuencia "once" podía re-programarse (y volver a ejecutarse) justo al terminar su ventana, en vez de marcarse como hecha — el planificador la recalculaba (por el orden de ejecución dentro del ciclo: planificar pasa antes que marcar "done") antes de que el resto del ciclo llegara a marcarla, perdiendo la evidencia de que ya había terminado. Ahora, una vez decidida una ocurrencia "once", se reutiliza siempre tal cual hasta que se marque "done" — nunca se recalcula sola.

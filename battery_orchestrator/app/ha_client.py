@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import statistics
+import time
 from datetime import datetime, timedelta, timezone
 
 import requests
@@ -146,24 +147,28 @@ def has_recent_history(entity_id: str, days: int = 1) -> bool:
     return bool(_safe_get_history(entity_id, days))
 
 
-def hourly_average_forecast_with_reliability(
-    entity_id: str, horizon_hours: int, days: int = 21, default: float = 0.0, abs_values: bool = False
-) -> tuple[list[float], list[bool]]:
-    """
-    Igual que `hourly_average_forecast`, pero ademas devuelve, hora a hora,
-    si ese valor viene de suficiente historico real (>= MIN_SAMPLES_PER_HOUR
-    muestras en esa franja horaria) o si es un relleno (media de las horas
-    que si tienen muestra suficiente, o el valor actual si no hay historico
-    en absoluto). Sirve para que quien consuma esto sepa en que horas puede
-    fiarse del historico y en cuales todavia no.
+# Cuanto se reutiliza la media por hora-del-dia ya calculada antes de
+# volver a pedir el historico a HA. Estas medias apenas cambian de un ciclo
+# a otro (se basan en dias enteros de historico); pedirlas enteras cada
+# `cycle_seconds` (tipicamente 30-60s) es puro peso extra sobre el recorder
+# de HA sin ganar nada en precision. Se cachea SOLO la parte cara (pedir y
+# recorrer el historico), nunca el resultado ya alineado a "ahora" - la
+# alineacion cambia cada hora y tiene que calcularse fresca siempre, o un
+# resultado cacheado se quedaria "atrasado" una hora justo al cruzar el
+# limite entre dos horas dentro de la ventana de cache.
+_HISTORY_CACHE_SECONDS = 900  # 15 min
+_hourly_avg_cache: dict[tuple, tuple[float, dict[int, float], dict[int, bool]]] = {}
 
-    `abs_values=True` aplica valor absoluto a CADA MUESTRA antes de
-    promediar (no a la media ya calculada) - imprescindible para sensores
-    de potencia bidireccionales con signo (p.ej. carga positiva/descarga
-    negativa en un mismo sensor): promediar primero y aplicar abs() despues
-    deja que las muestras positivas y negativas de una misma franja horaria
-    se CANCELEN entre si, escondiendo el verdadero movimiento de energia.
-    """
+
+def _hourly_avg_by_hour_of_day(
+    entity_id: str, days: int, default: float, abs_values: bool
+) -> tuple[dict[int, float], dict[int, bool]]:
+    cache_key = (entity_id, days, default, abs_values)
+    cached = _hourly_avg_cache.get(cache_key)
+    now_ts = time.time()
+    if cached is not None and (now_ts - cached[0]) < _HISTORY_CACHE_SECONDS:
+        return cached[1], cached[2]
+
     raw = _safe_get_history(entity_id, days)
     if not raw:
         for fallback_days in (10, 7, 3, 1):
@@ -176,7 +181,10 @@ def hourly_average_forecast_with_reliability(
         current = get_numeric_state(entity_id, default=default)
         if abs_values and current is not None:
             current = abs(current)
-        return [current] * horizon_hours, [False] * horizon_hours
+        hourly_avg = {h: current for h in range(24)}
+        reliable_by_hour = {h: False for h in range(24)}
+        _hourly_avg_cache[cache_key] = (now_ts, hourly_avg, reliable_by_hour)
+        return hourly_avg, reliable_by_hour
 
     buckets: dict[int, list[float]] = {h: [] for h in range(24)}
     for point in raw:
@@ -201,6 +209,33 @@ def hourly_average_forecast_with_reliability(
         if hourly_avg[h] is None:
             hourly_avg[h] = fallback
 
+    _hourly_avg_cache[cache_key] = (now_ts, hourly_avg, reliable_by_hour)
+    return hourly_avg, reliable_by_hour
+
+
+def hourly_average_forecast_with_reliability(
+    entity_id: str, horizon_hours: int, days: int = 21, default: float = 0.0, abs_values: bool = False
+) -> tuple[list[float], list[bool]]:
+    """
+    Igual que `hourly_average_forecast`, pero ademas devuelve, hora a hora,
+    si ese valor viene de suficiente historico real (>= MIN_SAMPLES_PER_HOUR
+    muestras en esa franja horaria) o si es un relleno (media de las horas
+    que si tienen muestra suficiente, o el valor actual si no hay historico
+    en absoluto). Sirve para que quien consuma esto sepa en que horas puede
+    fiarse del historico y en cuales todavia no.
+
+    `abs_values=True` aplica valor absoluto a CADA MUESTRA antes de
+    promediar (no a la media ya calculada) - imprescindible para sensores
+    de potencia bidireccionales con signo (p.ej. carga positiva/descarga
+    negativa en un mismo sensor): promediar primero y aplicar abs() despues
+    deja que las muestras positivas y negativas de una misma franja horaria
+    se CANCELEN entre si, escondiendo el verdadero movimiento de energia.
+
+    La parte cara (pedir el historico a HA y recorrerlo) se cachea
+    `_HISTORY_CACHE_SECONDS`; la alineacion al horizonte desde la hora
+    ACTUAL se recalcula siempre al vuelo, nunca desde cache.
+    """
+    hourly_avg, reliable_by_hour = _hourly_avg_by_hour_of_day(entity_id, days, default, abs_values)
     now = datetime.now()
     values = [hourly_avg[(now.hour + i) % 24] for i in range(horizon_hours)]
     reliable = [reliable_by_hour[(now.hour + i) % 24] for i in range(horizon_hours)]

@@ -39,6 +39,23 @@ def get_state(entity_id: str):
     return r.json()
 
 
+def get_all_states() -> list[dict]:
+    """
+    Todos los estados de HA de una vez (para descubrir entidades por
+    atributo, p.ej. las zonas de Climate Orchestrator - ver
+    climate_link.py - en vez de tener que declararlas una a una a mano).
+    Lista vacia si HA no responde, nunca propaga la excepcion: quien
+    descubre algo a partir de esto ya sabe tratar "no hay nada todavia"
+    igual que "no se pudo preguntar ahora".
+    """
+    try:
+        r = requests.get(f"{BASE_URL}/states", headers=HEADERS, timeout=TIMEOUT)
+        r.raise_for_status()
+        return r.json()
+    except requests.RequestException:
+        return []
+
+
 STALE_STATES = {"unavailable", "unknown", "none", ""}
 
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.13
+- Nuevo: integración automática con **Climate Orchestrator** (si está instalado), sin ninguna configuración manual en ningún lado:
+  - Publica `sensor.battery_orchestrator_grid_signal` (entity_id fijo) con el precio/tramo actual, el excedente solar ahora mismo, el margen de potencia contratada y la previsión hora a hora — para que Climate Orchestrator pueda ajustar su prioridad "ahorro" con datos económicos reales, no solo meteorología.
+  - Descubre solo las zonas de Climate Orchestrator (por un atributo marcador en sus propias entidades `climate.*`, sin declarar ningún `entity_id` a mano) y suma su consumo en vivo a lo "esperado" del detector de anomalías — así una calefacción trabajando de verdad un día de frío no se confunde con un consumo fuera de lo normal.
+  - Nueva tarjeta "Climate Orchestrator" en el dashboard (oculta si no se detecta ninguna zona) mostrando las zonas detectadas y su consumo en vivo.
+
 ## 0.11.12
 - Seguridad: `/api/status` (accesible sin autenticación desde el puerto de solo lectura del wallpanel) filtraba el `entity_id` del switch de cada carga diferible, contradiciendo el propio diseño del wallpanel ("ni expone la configuración: nombres de entidades..."). El frontend no usa ese dato desde ahí (la ficha de configuración, que sí lo necesita, lee de `/api/config`, bloqueado en el wallpanel) — se ha quitado de la respuesta. Encontrado en una prueba de intrusión dirigida contra el wallpanel (antes de este arreglo se probaron sistemáticamente spoofing de cabeceras Host/X-Forwarded-*, bypass de método HTTP, normalización de rutas, traversal en la ruta estática y peticiones HTTP en bruto — ninguno de esos vectores logró saltarse la restricción del puerto, que depende del socket real de conexión y no de nada que mande el cliente).
 

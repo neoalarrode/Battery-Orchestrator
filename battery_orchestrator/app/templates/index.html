@@ -412,6 +412,11 @@
   <div id="deferrable-status"></div>
 </div>
 
+<div class="card" id="climate-orchestrator-card" style="display:none">
+  <h2><span data-i18n="card_climate_title">Climate Orchestrator</span> <span class="hint" data-i18n="card_climate_hint">detectado automáticamente, sin configurar nada aquí</span></h2>
+  <div id="climate-orchestrator-status"></div>
+</div>
+
 </div>
 
 <div class="tab-panel" data-tab="prevision">
@@ -909,6 +914,11 @@ es: {
   deferrable_disabled: "desactivada", deferrable_scheduled: "Programado",
   deferrable_interruptible_badge: "interrumpible",
 
+  card_climate_title: "Climate Orchestrator",
+  card_climate_hint: "detectado automáticamente, sin configurar nada aquí",
+  climate_zones_detected_one: "{n} zona detectada · {w} W ahora mismo",
+  climate_zones_detected_n: "{n} zonas detectadas · {w} W ahora mismo",
+
   add_deferrable_toggle: "+ Añadir carga diferible",
   label_switch_entity: "Switch que enciende/apaga",
   label_power_sensor_optional: "Sensor de consumo (W, opcional)",
@@ -1120,6 +1130,11 @@ en: {
   deferrable_on: "On", deferrable_off: "Off", deferrable_unknown: "No live data",
   deferrable_disabled: "disabled", deferrable_scheduled: "Scheduled",
   deferrable_interruptible_badge: "interruptible",
+
+  card_climate_title: "Climate Orchestrator",
+  card_climate_hint: "auto-detected, nothing to configure here",
+  climate_zones_detected_one: "{n} zone detected · {w} W right now",
+  climate_zones_detected_n: "{n} zones detected · {w} W right now",
 
   add_deferrable_toggle: "+ Add deferrable load",
   label_switch_entity: "Switch to turn on/off",
@@ -1952,6 +1967,7 @@ function renderStatus(status) {
   renderPowerMeter(status.energy_flow);
   renderBatteryBreakdown(status.distribution);
   renderDeferrableStatus();
+  renderClimateOrchestratorStatus(status.climate_orchestrator);
 
   const dateLocale = currentLang === 'en' ? 'en-GB' : 'es-ES';
   const tbody = document.querySelector('#plan-table tbody');
@@ -2338,6 +2354,34 @@ function renderDeferrableStatus() {
     </div>`;
   }).join('');
   host.innerHTML = `<div class="battery-row">${rows}</div>`;
+}
+
+// Sin config manual en este lado: Climate Orchestrator se detecta solo
+// (ver climate_link.py) — la tarjeta entera se queda oculta hasta que
+// aparezca al menos una zona, para no mostrar una tarjeta vacia a quien
+// no lo tenga instalado.
+function renderClimateOrchestratorStatus(climateData) {
+  const card = document.getElementById('climate-orchestrator-card');
+  const host = document.getElementById('climate-orchestrator-status');
+  const zones = (climateData && climateData.zones) || [];
+  if (!zones.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  const n = zones.length;
+  const totalW = Math.round(climateData.total_w || 0);
+  const summary = n === 1
+    ? t('climate_zones_detected_one', { n, w: totalW })
+    : t('climate_zones_detected_n', { n, w: totalW });
+
+  const rows = zones.map(z => `
+    <div class="battery-mini">
+      <div class="bm-name">${z.name}</div>
+      <span class="bm-status ${z.power_w > 0 ? 'charge' : 'idle'}">${Math.round(z.power_w)} W</span>
+    </div>`).join('');
+
+  host.innerHTML = `
+    <p class="help" style="margin-bottom:10px">${summary}</p>
+    <div class="battery-row">${rows}</div>`;
 }
 
 async function refreshLive() {

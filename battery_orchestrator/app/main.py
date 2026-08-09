@@ -14,6 +14,7 @@ from werkzeug.serving import make_server
 import anomaly_store
 import battery_exec
 import capacity_store
+import climate_link
 import config_store
 import deferrable_exec
 import deferrable_scheduler
@@ -72,6 +73,7 @@ _last_status = {
     "anomaly": None,
     "deferrable_loads": [],
     "soc_forecast": None,
+    "climate_orchestrator": None,
     "error": None,
 }
 
@@ -161,6 +163,13 @@ def run_cycle():
     # interrumpible como para la deteccion de anomalias mas abajo, en vez de
     # pedirsela dos veces a Home Assistant.
     live_base_load_w = ha_client.get_numeric_state(load_sensor, default=None) if load_sensor else None
+
+    # Climate Orchestrator, si esta instalado, se detecta solo (ver
+    # climate_link.py: por convencion de atributo sobre sus propios
+    # sensores, nada que declarar a mano aqui). Sin el instalado, esto
+    # devuelve {"total_w": 0.0, "zones": []} sin más, en nada distinto de
+    # como se comportaba la app antes de que existiera este modulo.
+    climate_live = climate_link.read_live_power_w()
 
     # Baterias con sensor de SOC caido no cuentan para la planificacion
     # agregada de esta pasada (se excluyen tambien de la ejecucion real
@@ -431,8 +440,10 @@ def run_cycle():
     # esperaba para esta hora. Solo se puede calcular si hay sensor de
     # consumo configurado. A lo esperado se le suma el consumo estimado de
     # las cargas diferibles que la propia app tiene encendidas ahora mismo
-    # (deferrable_expected_now_w) — asi no se confunde una lavadora que
-    # ACABAMOS de encender nosotros mismos con un consumo fuera de lo normal.
+    # (deferrable_expected_now_w) y el de las zonas de Climate Orchestrator
+    # activas (climate_live) — asi no se confunde una lavadora que ACABAMOS
+    # de encender nosotros mismos, o la calefaccion trabajando de verdad un
+    # dia atipico de frio, con un consumo fuera de lo normal.
     anomaly = None
     if load_sensor and live_base_load_w is not None:
         try:
@@ -442,7 +453,7 @@ def run_cycle():
                 for b in batteries_cfg if _battery_discharge_sensor(b)
             )
             live_load_w = live_base_load_w + live_pv + live_discharge
-            expected_load_w = load_forecast[0] + deferrable_expected_now_w
+            expected_load_w = load_forecast[0] + deferrable_expected_now_w + climate_live["total_w"]
             anomaly = anomaly_store.update(now, live_load_w, expected_load_w)
             if anomaly["changed"]:
                 if anomaly["status"] == "anomaly":
@@ -483,6 +494,39 @@ def run_cycle():
         )
     except Exception as e:  # no tumbar el ciclo si HA no responde
         log.warning(f"No se pudo publicar el sensor de estado: {e}")
+
+    # Señal para quien quiera coordinarse con el precio/sol de la casa
+    # (hoy, Climate Orchestrator — ver diseño de integracion) SIN que haga
+    # falta declarar nada a mano en ningun lado: entity_id fijo, siempre
+    # el mismo, para que se pueda encontrar sola. Son datos ya calculados
+    # por el propio planificador — esto solo los empaqueta, no inventa
+    # ningun numero nuevo. "forecast" reutiliza el mismo plan hora a hora
+    # que ya se le manda al frontend, asi que quien lo lea puede anticiparse
+    # igual que ya hace este addon con la punta.
+    try:
+        contracted_power_w = float(cfg["general"].get("contracted_power_w") or 0)
+        headroom_w = max(0.0, contracted_power_w - now_hp.load_w) if contracted_power_w else None
+        forecast = [
+            {
+                "dt": hp.dt.isoformat(), "price": hp.price, "tier": hp.tier,
+                "solar_surplus_w": round(max(0.0, hp.pv_w - hp.load_w)),
+            }
+            for hp in plan
+        ]
+        ha_client.publish_sensor(
+            "sensor.battery_orchestrator_grid_signal",
+            now_hp.price,
+            {
+                "unit_of_measurement": "EUR/kWh",
+                "tier": now_hp.tier,
+                "solar_surplus_now_w": round(pv_surplus_now),
+                "contracted_headroom_w": round(headroom_w) if headroom_w is not None else None,
+                "forecast": forecast,
+                "friendly_name": "Battery Orchestrator Grid Signal",
+            },
+        )
+    except Exception as e:  # no tumbar el ciclo si HA no responde
+        log.warning(f"No se pudo publicar la señal de red: {e}")
 
     # Tabla completa del dia: lo que YA paso hoy (del historico, real) +
     # lo previsto desde ahora en adelante (el plan recien calculado).
@@ -534,6 +578,7 @@ def run_cycle():
             anomaly=anomaly,
             deferrable_loads=deferrable_status,
             soc_forecast=soc_forecast,
+            climate_orchestrator=climate_live,
             error=None,
         )
 

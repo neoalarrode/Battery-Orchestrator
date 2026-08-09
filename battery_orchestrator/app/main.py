@@ -79,6 +79,28 @@ _last_status = {
 
 ANOMALY_NOTIFICATION_ID = "battery_orchestrator_anomaly"
 
+# Los sensores que este addon publica en HA (mas abajo) no necesitan
+# actualizarse cada `cycle_seconds` (30-60s tipico) para ser utiles: ni el
+# precio/tramo ni el estado cambian de verdad a ese ritmo. Publicarlos sin
+# mas en cada ciclo escribe una fila nueva en el recorder de HA cada vez
+# (aunque el valor no haya cambiado) y, en el caso de
+# "sensor.battery_orchestrator_grid_signal", dispara una reevaluacion
+# reactiva en CADA zona de Climate Orchestrator que lo escuche - en una
+# instalacion con muchas entidades esto es carga real y evitable. Se
+# publica como mucho cada PUBLISH_MIN_INTERVAL_SECONDS, salvo la PRIMERA
+# vez (para no dejar al resto de HA sin dato ninguno mientras arranca).
+PUBLISH_MIN_INTERVAL_SECONDS = 120
+_last_published_at: dict[str, float] = {}
+
+
+def _publish_sensor_throttled(entity_id: str, state, attributes: dict) -> None:
+    now_ts = time.time()
+    last = _last_published_at.get(entity_id)
+    if last is not None and (now_ts - last) < PUBLISH_MIN_INTERVAL_SECONDS:
+        return
+    ha_client.publish_sensor(entity_id, state, attributes)
+    _last_published_at[entity_id] = now_ts
+
 
 def _battery_from_cfg(b: dict) -> battery_exec.Battery:
     return battery_exec.Battery(
@@ -193,7 +215,7 @@ def run_cycle():
             }
             for i in range(horizon)
         ]
-        ha_client.publish_sensor(
+        _publish_sensor_throttled(
             "sensor.battery_orchestrator_grid_signal",
             price_now,
             {
@@ -525,7 +547,7 @@ def run_cycle():
         anomaly = anomaly_store.get_status()
 
     try:
-        ha_client.publish_sensor(
+        _publish_sensor_throttled(
             "sensor.battery_orchestrator_status",
             now_hp.reason,
             {

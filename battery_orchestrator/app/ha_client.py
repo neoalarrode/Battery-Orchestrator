@@ -152,16 +152,35 @@ def _safe_get_history(entity_id: str, days: int) -> list[dict]:
         return []
 
 
+_has_history_cache: dict[tuple, tuple[float, bool]] = {}
+HAS_HISTORY_CACHE_SECONDS = 1800  # 30 min
+
+
 def has_recent_history(entity_id: str, days: int = 1) -> bool:
     """
-    Comprobacion barata: ¿hay algun punto de historico real para este sensor
-    en los ultimos `days` dias? Se usa para saber si merece la pena intentar
+    Comprobacion de si hay algun punto de historico real para este sensor
+    en los ultimos `days` dias. Se usa para saber si merece la pena intentar
     calcular una media horaria (`hourly_average_forecast`) o si el sensor es
     demasiado nuevo y todavia no hay nada que promediar. OJO: esto NO
     garantiza que cada hora tenga suficiente muestra - eso lo decide
     `hourly_average_forecast_with_reliability` franja a franja.
+
+    Cacheada `HAS_HISTORY_CACHE_SECONDS`: "¿tiene ya historico?" no puede
+    cambiar mas que de False a True (nunca al reves, en uso normal), asi
+    que no hace falta volver a pedir el historico entero de un sensor -
+    potencialmente con muchisimos puntos si reporta muy a menudo, como un
+    sensor de potencia solar - en cada ciclo de 30-60s solo para esta
+    comprobacion booleana. Sin cache, esto llegaba a pedir el historico
+    completo del sensor solar decenas de miles de veces al dia.
     """
-    return bool(_safe_get_history(entity_id, days))
+    cache_key = (entity_id, days)
+    now_ts = time.time()
+    cached = _has_history_cache.get(cache_key)
+    if cached is not None and (now_ts - cached[0]) < HAS_HISTORY_CACHE_SECONDS:
+        return cached[1]
+    result = bool(_safe_get_history(entity_id, days))
+    _has_history_cache[cache_key] = (now_ts, result)
+    return result
 
 
 # Cuanto se reutiliza la media por hora-del-dia ya calculada antes de

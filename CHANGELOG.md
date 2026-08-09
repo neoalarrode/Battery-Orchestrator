@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.19
+Segunda pasada de optimización tras seguir reportándose cuelgues intermitentes de HA Core en una Raspberry Pi 5 (v0.11.18 no bastó por sí sola):
+- Arreglo: `has_recent_history()` (usada por la corrección de previsión solar, ver v0.11.0) pedía el histórico completo del sensor solar — potencialmente decenas de miles de puntos en sensores que reportan muy a menudo — en CADA ciclo, solo para una comprobación booleana ("¿tiene ya histórico?") que en la práctica casi nunca cambia. Ahora se cachea 30 min.
+- Mejora: `sensor.battery_orchestrator_status` y `sensor.battery_orchestrator_grid_signal` se publicaban en cada ciclo (cada 30-60s típico) — cada publicación escribe una fila nueva en el recorder de HA, y `grid_signal` además dispara una reevaluación reactiva en cada zona de Climate Orchestrator que lo escuche. Ninguno de los dos necesita esa frecuencia (ni el precio/tramo ni el estado cambian tan rápido). Ahora se publican como mucho cada 2 minutos.
+
 ## 0.11.18
 - Arreglo importante de rendimiento: `climate_link.read_live_power_w()` (la lectura de consumo de Climate Orchestrator, ver v0.11.13) pedía `/api/states` — el volcado COMPLETO de todas las entidades de la instalación — en CADA ciclo (cada `cycle_seconds`, 30s en instalaciones típicas), no solo cuando tocaba redescubrir zonas. En una instalación con miles de entidades, eso es carga real e innecesaria sobre HA Core cada 30 segundos sin parar. Reportado por el usuario: HA Core quedándose colgado/sin red intermitentemente desde que se implantó esta integración, sin reinicios visibles — encaja exactamente con este patrón. Ahora el volcado completo solo se pide cuando la caché de descubrimiento caduca (cada 5 min); la lectura fresca de cada zona en cada ciclo se hace con `/api/states/<entity_id>` (una sola entidad, barata), nunca repitiendo el volcado entero.
 

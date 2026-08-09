@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.20
+Tercera pasada de optimización: el usuario seguía reportando cuelgues intermitentes tras la v0.11.19 y preguntó si se podía pedir EXPRESAMENTE solo las entidades de Climate Orchestrator en vez de filtrar sobre un volcado más genérico.
+- Mejora: el descubrimiento de zonas de Climate Orchestrator (`climate_link._discover_zone_ids`, cada 5 min) ya no pide `/api/states` entero ni siquiera en ese ciclo de 5 min — ahora usa la API de plantillas de HA (`POST /api/template`, nuevo `ha_client.render_template`) con `integration_entities('climate_orchestrator')`, una función nativa de HA que consulta directamente el registro de entidades y devuelve SOLO lo que pertenece a esa integración — es HA Core quien resuelve la pertenencia, nunca se serializan ni transmiten las demás entidades de la instalación para descartarlas aquí. Más preciso además que el filtro anterior por atributo (`states.climate` + `climate_orchestrator_zone`): eso habría incluido cualquier otro termostato instalado si compartiera por casualidad el dominio "climate", esto va derecho al registro de entidades de la integración correcta. Si la plantilla fallase por lo que sea (HA muy antiguo, error puntual), sigue existiendo la red de seguridad del volcado completo + atributo, igual que antes — nunca deja de funcionar el descubrimiento, solo cambia el coste del camino normal.
+
 ## 0.11.19
 Segunda pasada de optimización tras seguir reportándose cuelgues intermitentes de HA Core en una Raspberry Pi 5 (v0.11.18 no bastó por sí sola):
 - Arreglo: `has_recent_history()` (usada por la corrección de previsión solar, ver v0.11.0) pedía el histórico completo del sensor solar — potencialmente decenas de miles de puntos en sensores que reportan muy a menudo — en CADA ciclo, solo para una comprobación booleana ("¿tiene ya histórico?") que en la práctica casi nunca cambia. Ahora se cachea 30 min.

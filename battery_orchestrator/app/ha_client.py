@@ -56,6 +56,26 @@ def get_all_states() -> list[dict]:
         return []
 
 
+def render_template(template: str) -> str | None:
+    """
+    Pide a HA que renderice una plantilla Jinja2 EL MISMO (POST
+    /api/template) — HA solo serializa lo que la plantilla pida, nunca el
+    volcado completo de /api/states. Se usa para descubrir las zonas de
+    Climate Orchestrator filtrando por dominio "climate" DENTRO de HA en
+    vez de traerse las ~2000+ entidades de toda la instalacion para
+    filtrarlas aqui (ver climate_link.py) - mismo resultado, fraccion del
+    coste, tanto de red como de CPU/memoria en el lado de HA Core.
+    Devuelve None si HA no responde (quien lo use ya sabe caer a "no hay
+    nada todavia", igual que con `get_all_states`).
+    """
+    try:
+        r = requests.post(f"{BASE_URL}/template", headers=HEADERS, json={"template": template}, timeout=TIMEOUT)
+        r.raise_for_status()
+        return r.text
+    except requests.RequestException:
+        return None
+
+
 STALE_STATES = {"unavailable", "unknown", "none", ""}
 
 

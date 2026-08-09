@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.16
+- Arreglo: cuando el plan decidía "sin acción" (o al empezar a cargar), la app apagaba directamente el switch de descarga de la batería, sin mirar si había un `discharge_power_limit_entity` declarado — a diferencia del caso "descarga bloqueada", que sí lo prioriza. Reportado por el usuario: en algunos modelos (switch de "tarea de descarga" separado del límite de potencia real, típico en EcoFlow) apagar ese switch no corta la salida de verdad, y la batería seguía descargando de verdad pese a que el plan decía "sin acción". Ahora "sin acción" y "cargar" usan el mismo criterio que "bloqueada": limite de potencia a 0 si está declarado, el switch solo como respaldo si no hay límite.
+
 ## 0.11.15
 - Arreglo: `sensor.battery_orchestrator_grid_signal` (la señal para Climate Orchestrator) se calculaba DESPUÉS de la comprobación de disponibilidad de las baterías — si todas tenían el sensor de SOC caído en ese ciclo (p.ej. justo tras reiniciar Home Assistant, mientras integraciones en la nube como EcoFlow todavía reconectan), el ciclo cortaba antes de llegar a publicarla, dejando a Climate Orchestrator sin dato hasta que las baterías volvieran. Confirmado en producción: tras un reinicio de HA, el sensor desapareció (los estados publicados a mano no sobreviven un reinicio de HA Core) y no volvía porque las baterías tardaron varios minutos en reconectar. Precio/tramo/sol no dependen de que las baterías respondan — ahora se calcula y publica ANTES de esa comprobación, con los mismos datos (`prices_tiers`/`pv_forecast`/`load_forecast`) ya disponibles en ese punto.
 

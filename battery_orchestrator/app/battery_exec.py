@@ -169,7 +169,14 @@ def execute(batteries: list[Battery], distribution: dict, dry_run: bool = True) 
         if action == "charge" and entry["enabled"]:
             line = f"[{b.name}] CARGAR a {power:.0f} W ({entry['note']}, SOC {soc_txt})"
             def apply():
-                ha_client.turn_off(b.discharge_switch)
+                # Ver el comentario en la rama "sin accion" mas abajo: en
+                # algunos modelos apagar el switch de descarga no basta,
+                # hace falta el limite de potencia a 0 para que de verdad
+                # deje de salir energia mientras se carga.
+                if b.discharge_power_limit_entity:
+                    ha_client.set_number(b.discharge_power_limit_entity, 0)
+                else:
+                    ha_client.turn_off(b.discharge_switch)
                 ha_client.turn_on(b.charge_switch)
                 if b.charge_power_limit_entity:
                     ha_client.set_number(b.charge_power_limit_entity, power)
@@ -191,7 +198,19 @@ def execute(batteries: list[Battery], distribution: dict, dry_run: bool = True) 
             line = f"[{b.name}] sin accion (SOC {soc_txt})"
             def apply():
                 ha_client.turn_off(b.charge_switch)
-                ha_client.turn_off(b.discharge_switch)
+                # Igual que en "descarga BLOQUEADA" mas arriba: en algunos
+                # modelos (p.ej. EcoFlow, con un switch de "tarea de
+                # descarga" separado del limite de potencia real) apagar
+                # ESE switch no corta de verdad la salida — el equipo puede
+                # seguir descargando solo para sostener la carga conectada,
+                # como un SAI. El limite de potencia a 0 SI corta de verdad;
+                # el switch solo se usa como respaldo si no hay limite
+                # declarado. Confirmado por el usuario: bateria en "sin
+                # accion" seguia descargando de verdad con el switch apagado.
+                if b.discharge_power_limit_entity:
+                    ha_client.set_number(b.discharge_power_limit_entity, 0)
+                else:
+                    ha_client.turn_off(b.discharge_switch)
 
         if not dry_run:
             try:

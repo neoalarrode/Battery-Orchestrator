@@ -5,7 +5,7 @@ import logging
 import os
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import requests
 from flask import Flask, Response, jsonify, request, send_from_directory
@@ -170,6 +170,54 @@ def run_cycle():
     # devuelve {"total_w": 0.0, "zones": []} sin más, en nada distinto de
     # como se comportaba la app antes de que existiera este modulo.
     climate_live = climate_link.read_live_power_w()
+
+    # Señal para quien quiera coordinarse con el precio/sol de la casa (hoy,
+    # Climate Orchestrator) SIN que haga falta declarar nada a mano en
+    # ningun lado: entity_id fijo, siempre el mismo, para que se pueda
+    # encontrar sola. DELIBERADAMENTE aqui, ANTES de la comprobacion de
+    # baterias que sigue: precio/sol no dependen de que las baterias
+    # respondan, y esta señal se queda "pegada" (nadie la vuelve a publicar)
+    # si se calcula despues de un `return` anticipado por baterias caidas —
+    # justo el caso mas tipico de que haga falta (un hipo de conectividad
+    # tras reiniciar HA, por ejemplo), asi que no puede depender de ellas.
+    try:
+        contracted_power_w = float(cfg["general"].get("contracted_power_w") or 0)
+        price_now, tier_now = prices_tiers[0]
+        solar_surplus_now = max(0.0, pv_forecast[0] - load_forecast[0])
+        headroom_w = max(0.0, contracted_power_w - load_forecast[0]) if contracted_power_w else None
+        forecast = [
+            {
+                "dt": (now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=i)).isoformat(),
+                "price": prices_tiers[i][0], "tier": prices_tiers[i][1],
+                "solar_surplus_w": round(max(0.0, pv_forecast[i] - load_forecast[i])),
+            }
+            for i in range(horizon)
+        ]
+        ha_client.publish_sensor(
+            "sensor.battery_orchestrator_grid_signal",
+            price_now,
+            {
+                "unit_of_measurement": "EUR/kWh",
+                "tier": tier_now,
+                "solar_surplus_now_w": round(solar_surplus_now),
+                "contracted_headroom_w": round(headroom_w) if headroom_w is not None else None,
+                "forecast": forecast,
+                # Sensor general de consumo de la casa YA declarado aqui
+                # (ver "Consumo de la casa" en Configuración) — se publica
+                # para que Climate Orchestrator, si esta instalado, pueda
+                # APRENDER solo el consumo de sus actuadores (correlacion
+                # contra este mismo sensor, ver su power_model.py) sin que
+                # el usuario tenga que declarar el mismo sensor otra vez en
+                # ese otro proyecto. Nunca una estimacion inventada por
+                # ningun lado: si no hay load_sensor declarado aqui
+                # tampoco, esto va vacio y Climate Orchestrator sigue
+                # pidiendo su propio sensor a mano, como hoy.
+                "home_power_sensor": load_sensor or None,
+                "friendly_name": "Battery Orchestrator Grid Signal",
+            },
+        )
+    except Exception as e:  # no tumbar el ciclo si HA no responde
+        log.warning(f"No se pudo publicar la señal de red: {e}")
 
     # Baterias con sensor de SOC caido no cuentan para la planificacion
     # agregada de esta pasada (se excluyen tambien de la ejecucion real
@@ -494,50 +542,6 @@ def run_cycle():
         )
     except Exception as e:  # no tumbar el ciclo si HA no responde
         log.warning(f"No se pudo publicar el sensor de estado: {e}")
-
-    # Señal para quien quiera coordinarse con el precio/sol de la casa
-    # (hoy, Climate Orchestrator — ver diseño de integracion) SIN que haga
-    # falta declarar nada a mano en ningun lado: entity_id fijo, siempre
-    # el mismo, para que se pueda encontrar sola. Son datos ya calculados
-    # por el propio planificador — esto solo los empaqueta, no inventa
-    # ningun numero nuevo. "forecast" reutiliza el mismo plan hora a hora
-    # que ya se le manda al frontend, asi que quien lo lea puede anticiparse
-    # igual que ya hace este addon con la punta.
-    try:
-        contracted_power_w = float(cfg["general"].get("contracted_power_w") or 0)
-        headroom_w = max(0.0, contracted_power_w - now_hp.load_w) if contracted_power_w else None
-        forecast = [
-            {
-                "dt": hp.dt.isoformat(), "price": hp.price, "tier": hp.tier,
-                "solar_surplus_w": round(max(0.0, hp.pv_w - hp.load_w)),
-            }
-            for hp in plan
-        ]
-        ha_client.publish_sensor(
-            "sensor.battery_orchestrator_grid_signal",
-            now_hp.price,
-            {
-                "unit_of_measurement": "EUR/kWh",
-                "tier": now_hp.tier,
-                "solar_surplus_now_w": round(pv_surplus_now),
-                "contracted_headroom_w": round(headroom_w) if headroom_w is not None else None,
-                "forecast": forecast,
-                # Sensor general de consumo de la casa YA declarado aqui
-                # (ver "Consumo de la casa" en Configuración) — se publica
-                # para que Climate Orchestrator, si esta instalado, pueda
-                # APRENDER solo el consumo de sus actuadores (correlacion
-                # contra este mismo sensor, ver su power_model.py) sin que
-                # el usuario tenga que declarar el mismo sensor otra vez en
-                # ese otro proyecto. Nunca una estimacion inventada por
-                # ningun lado: si no hay load_sensor declarado aqui
-                # tampoco, esto va vacio y Climate Orchestrator sigue
-                # pidiendo su propio sensor a mano, como hoy.
-                "home_power_sensor": load_sensor or None,
-                "friendly_name": "Battery Orchestrator Grid Signal",
-            },
-        )
-    except Exception as e:  # no tumbar el ciclo si HA no responde
-        log.warning(f"No se pudo publicar la señal de red: {e}")
 
     # Tabla completa del dia: lo que YA paso hoy (del historico, real) +
     # lo previsto desde ahora en adelante (el plan recien calculado).

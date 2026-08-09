@@ -166,17 +166,21 @@ def execute(batteries: list[Battery], distribution: dict, dry_run: bool = True) 
             log_lines.append(("[SIMULACION] " if dry_run else "") + line)
             continue
 
+        # Semantica confirmada por el usuario para estos equipos (p.ej.
+        # EcoFlow): cargar = switch de carga ON, switch de descarga OFF (a
+        # secas); descargar = al reves. Pero "bloqueada"/"sin accion" NO es
+        # "descarga OFF" sin mas: el switch de descarga se deja ACTIVO y es
+        # el LIMITE de potencia a 0 el que de verdad corta la salida — en
+        # estos modelos el switch de "tarea de descarga" es solo eso, una
+        # tarea, no el interruptor fisico; con el limite a 0 sin el switch
+        # activo puede no aplicarse, y con el switch apagado sin más el
+        # equipo puede seguir descargando igual (como un SAI) para sostener
+        # la carga conectada. Confirmado en real: bateria en "sin accion"
+        # seguia descargando con el switch simplemente apagado.
         if action == "charge" and entry["enabled"]:
             line = f"[{b.name}] CARGAR a {power:.0f} W ({entry['note']}, SOC {soc_txt})"
             def apply():
-                # Ver el comentario en la rama "sin accion" mas abajo: en
-                # algunos modelos apagar el switch de descarga no basta,
-                # hace falta el limite de potencia a 0 para que de verdad
-                # deje de salir energia mientras se carga.
-                if b.discharge_power_limit_entity:
-                    ha_client.set_number(b.discharge_power_limit_entity, 0)
-                else:
-                    ha_client.turn_off(b.discharge_switch)
+                ha_client.turn_off(b.discharge_switch)
                 ha_client.turn_on(b.charge_switch)
                 if b.charge_power_limit_entity:
                     ha_client.set_number(b.charge_power_limit_entity, power)
@@ -191,6 +195,7 @@ def execute(batteries: list[Battery], distribution: dict, dry_run: bool = True) 
             line = f"[{b.name}] descarga BLOQUEADA a 0W ({entry['note']}, SOC {soc_txt})"
             def apply():
                 if b.discharge_power_limit_entity:
+                    ha_client.turn_on(b.discharge_switch)
                     ha_client.set_number(b.discharge_power_limit_entity, 0)
                 else:
                     ha_client.turn_off(b.discharge_switch)
@@ -198,16 +203,8 @@ def execute(batteries: list[Battery], distribution: dict, dry_run: bool = True) 
             line = f"[{b.name}] sin accion (SOC {soc_txt})"
             def apply():
                 ha_client.turn_off(b.charge_switch)
-                # Igual que en "descarga BLOQUEADA" mas arriba: en algunos
-                # modelos (p.ej. EcoFlow, con un switch de "tarea de
-                # descarga" separado del limite de potencia real) apagar
-                # ESE switch no corta de verdad la salida — el equipo puede
-                # seguir descargando solo para sostener la carga conectada,
-                # como un SAI. El limite de potencia a 0 SI corta de verdad;
-                # el switch solo se usa como respaldo si no hay limite
-                # declarado. Confirmado por el usuario: bateria en "sin
-                # accion" seguia descargando de verdad con el switch apagado.
                 if b.discharge_power_limit_entity:
+                    ha_client.turn_on(b.discharge_switch)
                     ha_client.set_number(b.discharge_power_limit_entity, 0)
                 else:
                     ha_client.turn_off(b.discharge_switch)

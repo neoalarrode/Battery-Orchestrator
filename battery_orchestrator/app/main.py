@@ -522,6 +522,17 @@ def run_cycle():
                 "solar_surplus_now_w": round(pv_surplus_now),
                 "contracted_headroom_w": round(headroom_w) if headroom_w is not None else None,
                 "forecast": forecast,
+                # Sensor general de consumo de la casa YA declarado aqui
+                # (ver "Consumo de la casa" en Configuración) — se publica
+                # para que Climate Orchestrator, si esta instalado, pueda
+                # APRENDER solo el consumo de sus actuadores (correlacion
+                # contra este mismo sensor, ver su power_model.py) sin que
+                # el usuario tenga que declarar el mismo sensor otra vez en
+                # ese otro proyecto. Nunca una estimacion inventada por
+                # ningun lado: si no hay load_sensor declarado aqui
+                # tampoco, esto va vacio y Climate Orchestrator sigue
+                # pidiendo su propio sensor a mano, como hoy.
+                "home_power_sensor": load_sensor or None,
                 "friendly_name": "Battery Orchestrator Grid Signal",
             },
         )

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.14
+- Arreglo: la integración con Climate Orchestrator (v0.11.13) trataba una zona activa (calentando/enfriando de verdad) pero sin sensor/potencia declarada en Climate Orchestrator igual que una zona inactiva — 0W en los dos casos, escondiendo justo el caso que más importa. Ahora se distinguen con `hvac_action` (atributo estándar de cualquier `climate.*`): inactiva sigue siendo 0W real; activa-sin-dato se marca "desconocida", nunca se suma como si fuera cero, y se avisa en la tarjeta del dashboard con el nombre de la zona.
+- Nuevo: Battery Orchestrator publica también su `load_sensor` (el sensor general de consumo de la casa, ya declarado en "Consumo de la casa") en `sensor.battery_orchestrator_grid_signal`, para que Climate Orchestrator pueda **aprender solo** el consumo de sus actuadores (su `power_model.py` ya sabía hacerlo, correlacionando transiciones on/off contra un sensor general) sin que el usuario tenga que declarar el mismo sensor dos veces en dos integraciones distintas.
+
 ## 0.11.13
 - Nuevo: integración automática con **Climate Orchestrator** (si está instalado), sin ninguna configuración manual en ningún lado:
   - Publica `sensor.battery_orchestrator_grid_signal` (entity_id fijo) con el precio/tramo actual, el excedente solar ahora mismo, el margen de potencia contratada y la previsión hora a hora — para que Climate Orchestrator pueda ajustar su prioridad "ahorro" con datos económicos reales, no solo meteorología.

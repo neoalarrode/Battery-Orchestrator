@@ -918,6 +918,8 @@ es: {
   card_climate_hint: "detectado automáticamente, sin configurar nada aquí",
   climate_zones_detected_one: "{n} zona detectada · {w} W ahora mismo",
   climate_zones_detected_n: "{n} zonas detectadas · {w} W ahora mismo",
+  climate_power_unknown: "consumo desconocido",
+  climate_unknown_power_warning: "{zones}: activa ahora mismo pero sin sensor, potencia aprendida ni estimada declarada en Climate Orchestrator — su consumo no se está teniendo en cuenta.",
 
   add_deferrable_toggle: "+ Añadir carga diferible",
   label_switch_entity: "Switch que enciende/apaga",
@@ -1135,6 +1137,8 @@ en: {
   card_climate_hint: "auto-detected, nothing to configure here",
   climate_zones_detected_one: "{n} zone detected · {w} W right now",
   climate_zones_detected_n: "{n} zones detected · {w} W right now",
+  climate_power_unknown: "power draw unknown",
+  climate_unknown_power_warning: "{zones}: active right now but no sensor, learned or estimated power declared in Climate Orchestrator — its consumption isn't being accounted for.",
 
   add_deferrable_toggle: "+ Add deferrable load",
   label_switch_entity: "Switch to turn on/off",
@@ -2376,12 +2380,23 @@ function renderClimateOrchestratorStatus(climateData) {
   const rows = zones.map(z => `
     <div class="battery-mini">
       <div class="bm-name">${z.name}</div>
-      <span class="bm-status ${z.power_w > 0 ? 'charge' : 'idle'}">${Math.round(z.power_w)} W</span>
+      <span class="bm-status ${z.unknown ? 'idle' : (z.power_w > 0 ? 'charge' : 'idle')}">${z.unknown ? t('climate_power_unknown') : Math.round(z.power_w) + ' W'}</span>
     </div>`).join('');
+
+  // Zona activa (calentando/enfriando de verdad) pero sin sensor, potencia
+  // aprendida ni estimada declarada en Climate Orchestrator: su consumo NO
+  // se esta sumando a lo esperado (nunca se inventa un numero) — se avisa
+  // para que se sepa que falta declarar algo ahi, en vez de fallar en
+  // silencio.
+  const unknownNames = climateData.unknown_zone_names || [];
+  const unknownWarning = unknownNames.length
+    ? `<p class="help warn" style="margin-top:10px">${t('climate_unknown_power_warning', { zones: unknownNames.join(', ') })}</p>`
+    : '';
 
   host.innerHTML = `
     <p class="help" style="margin-bottom:10px">${summary}</p>
-    <div class="battery-row">${rows}</div>`;
+    <div class="battery-row">${rows}</div>
+    ${unknownWarning}`;
 }
 
 async function refreshLive() {

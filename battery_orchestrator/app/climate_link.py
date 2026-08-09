@@ -17,11 +17,16 @@ normal de Home Assistant:
 
 El descubrimiento (la LISTA de zonas) se cachea unos minutos - las zonas
 no aparecen/desaparecen tan rapido como para justificar re-preguntar
-/api/states entero en cada ciclo de 30-60s. La LECTURA de "zone_power_w"
-de esas zonas, en cambio, nunca se cachea: se pide fresca en cada ciclo
-(es la potencia AHORA MISMO, no una media historica) - y ademas viene
-GRATIS en la misma respuesta de /api/states del descubrimiento cuando
-este no esta en cache, asi que no cuesta ninguna peticion de mas.
+/api/states ENTERO en cada ciclo de 30-60s. Esto es imprescindible, no
+solo una optimizacion: /api/states devuelve TODAS las entidades de la
+instalacion (miles, en una casa con muchos dispositivos) serializadas
+entera en cada respuesta - pedirla en cada ciclo machaca a HA Core con
+una carga real e innecesaria cada 30-60s sin parar, y puede llegar a
+notarse como lentitud/perdida de red intermitente en el propio HA (visto
+en produccion). La LECTURA de "zone_power_w" de esas zonas SI se pide
+fresca en cada ciclo (es la potencia AHORA MISMO, no una media
+historica), pero UNA A UNA (/api/states/<entity_id>, barata: solo esa
+entidad), nunca repitiendo el volcado completo.
 """
 
 from __future__ import annotations
@@ -72,11 +77,17 @@ def _entry_from_state(state: dict) -> dict:
 _discovery_cache: tuple[float, list[str]] | None = None  # (timestamp, [entity_id, ...])
 
 
-def _discover_zone_ids(all_states: list[dict]) -> list[str]:
+def _discover_zone_ids() -> list[str]:
+    """
+    SOLO esta funcion pide /api/states entero (el volcado caro de toda la
+    instalacion) - y solo cuando la cache ha caducado (cada
+    DISCOVERY_CACHE_SECONDS, 5 min), nunca en cada ciclo.
+    """
     global _discovery_cache
     now_ts = time.time()
     if _discovery_cache is not None and (now_ts - _discovery_cache[0]) < DISCOVERY_CACHE_SECONDS:
         return _discovery_cache[1]
+    all_states = ha_client.get_all_states()
     ids = [s["entity_id"] for s in all_states if s.get("attributes", {}).get(ZONE_MARKER_ATTR)]
     _discovery_cache = (now_ts, ids)
     return ids
@@ -84,8 +95,11 @@ def _discover_zone_ids(all_states: list[dict]) -> list[str]:
 
 def read_live_power_w() -> dict:
     """
-    Descubre las zonas de Climate Orchestrator (cacheado) y lee su
-    "zone_power_w" AHORA MISMO (siempre fresco, nunca cacheado).
+    Descubre las zonas de Climate Orchestrator (cacheado, ver
+    `_discover_zone_ids`) y lee su "zone_power_w" AHORA MISMO (siempre
+    fresco, nunca cacheado) - pero pidiendo cada zona SUELTA
+    (/api/states/<entity_id>), nunca el volcado completo de la instalacion
+    otra vez.
 
     Devuelve {"total_w", "zones": [{"name","power_w","unknown"}, ...],
     "unknown_zone_names": [...]}. "total_w" SOLO suma zonas con dato
@@ -97,26 +111,18 @@ def read_live_power_w() -> dict:
     sin ninguna marcada todavia) - nunca None, quien lo usa lo suma
     directo sin comprobar nada.
     """
-    all_states = ha_client.get_all_states()
-    zone_ids = _discover_zone_ids(all_states)
+    zone_ids = _discover_zone_ids()
     if not zone_ids:
         return {"total_w": 0.0, "zones": [], "unknown_zone_names": []}
 
-    # Si el descubrimiento vino de cache (no de esta misma llamada a
-    # /api/states), los ids conocidos pueden no estar en `all_states` -
-    # se piden sueltos solo esos, nunca los 300+ estados de una casa entera
-    # de nuevo si ya los tenemos.
-    by_id = {s["entity_id"]: s for s in all_states}
     detail = []
     unknown_names = []
     total = 0.0
     for entity_id in zone_ids:
-        state = by_id.get(entity_id)
-        if state is None:
-            try:
-                state = ha_client.get_state(entity_id)
-            except Exception:
-                continue
+        try:
+            state = ha_client.get_state(entity_id)
+        except Exception:
+            continue
         entry = _entry_from_state(state)
         detail.append({"name": entry["name"], "power_w": entry["power_w"], "unknown": entry["unknown"]})
         if entry["unknown"]:

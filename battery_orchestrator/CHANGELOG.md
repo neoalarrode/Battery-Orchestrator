@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.18
+- Arreglo importante de rendimiento: `climate_link.read_live_power_w()` (la lectura de consumo de Climate Orchestrator, ver v0.11.13) pedía `/api/states` — el volcado COMPLETO de todas las entidades de la instalación — en CADA ciclo (cada `cycle_seconds`, 30s en instalaciones típicas), no solo cuando tocaba redescubrir zonas. En una instalación con miles de entidades, eso es carga real e innecesaria sobre HA Core cada 30 segundos sin parar. Reportado por el usuario: HA Core quedándose colgado/sin red intermitentemente desde que se implantó esta integración, sin reinicios visibles — encaja exactamente con este patrón. Ahora el volcado completo solo se pide cuando la caché de descubrimiento caduca (cada 5 min); la lectura fresca de cada zona en cada ciclo se hace con `/api/states/<entity_id>` (una sola entidad, barata), nunca repitiendo el volcado entero.
+
 ## 0.11.17
 - Corrección sobre la v0.11.16 (nunca llegó a instalarse): la semántica correcta, confirmada por el usuario, es que el switch de descarga debe quedar ACTIVO tanto en "bloqueada" como en "sin acción" — es el límite de potencia a 0 el que corta la salida de verdad, no el switch (en estos modelos, p.ej. EcoFlow, ese switch es una "tarea", no el interruptor físico; con el switch apagado el equipo puede seguir descargando igual, como un SAI, para sostener la carga conectada). "Cargar" queda como estaba siempre (switch de descarga a secas en OFF, sin tocar el límite) — el cambio de la 0.11.16 ahí estaba equivocado. Reportado por el usuario: batería en "sin acción" seguía descargando de verdad con el switch simplemente apagado.
 

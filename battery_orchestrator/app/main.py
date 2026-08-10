@@ -186,12 +186,14 @@ def run_cycle():
     # pedirsela dos veces a Home Assistant.
     live_base_load_w = ha_client.get_numeric_state(load_sensor, default=None) if load_sensor else None
 
-    # Climate Orchestrator, si esta instalado, se detecta solo (ver
-    # climate_link.py: por convencion de atributo sobre sus propios
-    # sensores, nada que declarar a mano aqui). Sin el instalado, esto
-    # devuelve {"total_w": 0.0, "zones": []} sin más, en nada distinto de
-    # como se comportaba la app antes de que existiera este modulo.
-    climate_live = climate_link.read_live_power_w()
+    # Climate Orchestrator, si esta instalado: la lista de zonas NUNCA se
+    # descubre sola aqui (ver climate_link.py) — se guarda en config.json
+    # cuando el usuario pulsa "Buscar zonas" en la configuracion
+    # (`/api/climate/discover`), y este ciclo solo lee su potencia
+    # AHORA MISMO a partir de esa lista ya conocida. Sin zonas guardadas
+    # (Climate Orchestrator no instalado, o boton nunca pulsado), esto
+    # devuelve {"total_w": 0.0, "zones": []} sin pedir nada a HA.
+    climate_live = climate_link.read_live_power_w(cfg.get("climate_orchestrator_zones") or [])
 
     # Señal para quien quiera coordinarse con el precio/sol de la casa (hoy,
     # Climate Orchestrator) SIN que haga falta declarar nada a mano en
@@ -877,6 +879,30 @@ def api_run_now():
         return jsonify({"error": "No se pudo forzar el ciclo, revisa el log del addon"}), 500
     with _state_lock:
         return jsonify(_last_status)
+
+
+@app.post("/api/climate/discover")
+def api_climate_discover():
+    """
+    Boton "Buscar zonas de Climate Orchestrator" en la configuracion — el
+    UNICO sitio desde donde se llama a `climate_link.discover_zone_ids()`
+    en toda la app. Guarda el resultado en config.json
+    (`climate_orchestrator_zones`) para que `run_cycle()` lo use tal cual
+    en cada ciclo sin volver a descubrir nada por su cuenta (ver
+    climate_link.py). Sin Climate Orchestrator instalado, esto
+    simplemente guarda una lista vacia — no es un error, es el resultado
+    correcto de "no hay nada que encontrar".
+    """
+    try:
+        zone_ids = climate_link.discover_zone_ids()
+    except Exception:
+        log.exception("Fallo al buscar zonas de Climate Orchestrator")
+        return jsonify({"error": "No se pudo buscar zonas, revisa el log del addon"}), 500
+    cfg = config_store.load_config()
+    cfg["climate_orchestrator_zones"] = zone_ids
+    cfg["climate_orchestrator_zones_discovered_at"] = datetime.now().isoformat()
+    config_store.save_config(cfg)
+    return jsonify({"zones": zone_ids, "count": len(zone_ids)})
 
 
 @app.get("/")

@@ -1,58 +1,44 @@
 """
-Enlace automatico con Climate Orchestrator (si esta instalado) — sin
-configuracion manual en ningun lado, por convencion sobre una entidad
-normal de Home Assistant:
+Enlace con Climate Orchestrator (si esta instalado) — sin sondeo
+automatico: el usuario pulsa "Buscar zonas" en la configuracion (ver
+`/api/climate/discover` en main.py) y esa lista de entity_id se guarda
+en config.json (`climate_orchestrator_zones`); a partir de ahi la app
+NUNCA vuelve a preguntar "que zonas hay" por su cuenta, ni por sondeo
+periodico ni cacheado — solo cuando el usuario lo pide expresamente. Esto
+es a proposito, no una limitacion: incluso un descubrimiento cacheado
+cada 5 min es una carga real y evitable sobre HA Core (se vio en
+produccion, RPi5), y las zonas de una instalacion no cambian con
+frecuencia como para justificar preguntarlo solo.
 
   - Cada zona de Climate Orchestrator es una entidad climate.* que YA
     expone, entre sus atributos, "zone_power_w" (la potencia que esa
     zona esta consumiendo ahora mismo) — no hace falta que Climate
-    Orchestrator publique nada nuevo aparte. Aqui se DESCUBRE el
-    conjunto de zonas pidiendole a HA, EXPRESAMENTE, "que entidades
-    pertenecen a la integracion climate_orchestrator" (funcion nativa de
-    plantillas `integration_entities()`, ver `_DISCOVERY_TEMPLATE` mas
-    abajo) — no un rastreo por dominio "climate" entero (que traeria
-    tambien cualquier otro termostato instalado, de cualquier otra
-    integracion) ni por un atributo que haya que confiar en que nadie
-    mas reutilice por casualidad: va derecho al registro de entidades de
-    HA, la fuente de verdad de "esto es de Climate Orchestrator o no lo
-    es". Nunca hace falta que el usuario declare "que zonas tiene" en
-    ningun sitio.
-  - Sin Climate Orchestrator instalado (o sin ninguna zona todavia), la
-    busqueda simplemente no encuentra nada: se cae al mismo
-    comportamiento que sin este modulo en absoluto, nunca un error.
-
-El descubrimiento (la LISTA de zonas) se cachea unos minutos - las zonas
-no aparecen/desaparecen tan rapido como para justificar re-preguntar por
-ellas en cada ciclo de 30-60s. Y aun cacheado cada 5 min, NUNCA se pide
-/api/states ENTERO (el volcado de TODAS las entidades de la instalacion,
-miles en una casa con muchos dispositivos): se usa la API de plantillas
-de HA (POST /api/template, ver `ha_client.render_template`) para que sea
-el propio HA Core quien resuelva la pertenencia a la integracion ANTES
-de contestar - la respuesta es solo los pocos entity_id que hacen falta,
-nunca miles de entidades serializadas para descartarlas aqui. Esto es
-imprescindible, no solo una optimizacion: incluso una vez cada 5 min, un
-volcado completo repetido sin parar machaca a HA Core con una carga real
-e innecesaria, y puede llegar a notarse como lentitud/perdida de red
-intermitente en el propio HA (visto en produccion). La LECTURA de
-"zone_power_w" de esas zonas SI se pide fresca en cada ciclo (es la
-potencia AHORA MISMO, no una media historica), pero UNA A UNA
-(/api/states/<entity_id>, barata: solo esa entidad), nunca repitiendo el
-volcado completo ni la plantilla (esa solo hace falta para la LISTA, que
-ya esta cacheada). Si la plantilla fallase por lo que sea, la red de
-seguridad (`get_all_states` + el atributo "climate_orchestrator_zone")
-SI sigue usando ese atributo — de ahi que Climate Orchestrator lo siga
-marcando, aunque el camino normal ya no dependa de el.
+    Orchestrator publique nada nuevo aparte.
+  - El DESCUBRIMIENTO (`discover_zone_ids`, solo se llama al pulsar el
+    boton) le pide a HA, EXPRESAMENTE, "que entidades pertenecen a la
+    integracion climate_orchestrator" (funcion nativa de plantillas
+    `integration_entities()`, ver `_DISCOVERY_TEMPLATE` mas abajo) — no
+    un rastreo por dominio "climate" entero (que traeria tambien
+    cualquier otro termostato instalado, de cualquier otra integracion):
+    va derecho al registro de entidades de HA, la fuente de verdad de
+    "esto es de Climate Orchestrator o no lo es".
+  - La LECTURA de "zone_power_w" (`read_live_power_w`, SI se llama en
+    cada ciclo) nunca vuelve a descubrir nada: recibe la lista YA
+    guardada como parametro y solo pide, UNA A UNA, el estado fresco de
+    cada entidad ya conocida (/api/states/<entity_id>, barata: solo esa
+    entidad) — nunca un volcado ni una plantilla en el camino normal.
+  - Sin Climate Orchestrator instalado (o sin haber pulsado nunca el
+    boton), la lista guardada esta vacia: se cae al mismo comportamiento
+    que sin este modulo en absoluto, nunca un error.
 """
 
 from __future__ import annotations
 
 import json
-import time
 
 import ha_client
 
-DISCOVERY_CACHE_SECONDS = 300  # 5 min
-ZONE_MARKER_ATTR = "climate_orchestrator_zone"  # se sigue usando como comprobacion extra, ver mas abajo
+ZONE_MARKER_ATTR = "climate_orchestrator_zone"  # red de seguridad del descubrimiento manual, ver discover_zone_ids
 CLIMATE_ORCHESTRATOR_DOMAIN = "climate_orchestrator"
 
 # Jinja2, renderizada POR HA (no aqui): `integration_entities()` es una
@@ -106,25 +92,19 @@ def _entry_from_state(state: dict) -> dict:
     }
 
 
-_discovery_cache: tuple[float, list[str]] | None = None  # (timestamp, [entity_id, ...])
-
-
-def _discover_zone_ids() -> list[str]:
+def discover_zone_ids() -> list[str]:
     """
-    Pide la LISTA de zonas via la API de plantillas (filtrada por HA,
-    ver `_DISCOVERY_TEMPLATE` arriba) - y solo cuando la cache ha
-    caducado (cada DISCOVERY_CACHE_SECONDS, 5 min), nunca en cada ciclo.
+    Pide la LISTA de zonas via la API de plantillas (filtrada por HA, ver
+    `_DISCOVERY_TEMPLATE` arriba) — de UN SOLO USO, llamada SOLO desde
+    `/api/climate/discover` cuando el usuario pulsa el boton en la
+    configuracion. Nunca se llama sola, ni con temporizador ni con cache:
+    quien quiera una lista fresca tiene que pedirla expresamente.
 
     Si la plantilla falla por lo que sea (HA muy antiguo, permiso
     denegado, respuesta rara) cae al volcado completo de /api/states como
-    red de seguridad - MUCHO mas caro, pero solo ocurre en ese caso raro,
-    nunca en el camino normal, y sigue sin fallar el descubrimiento.
+    red de seguridad — MUCHO mas caro, pero se paga solo esta vez (una
+    pulsacion de boton), nunca en el camino normal de cada ciclo.
     """
-    global _discovery_cache
-    now_ts = time.time()
-    if _discovery_cache is not None and (now_ts - _discovery_cache[0]) < DISCOVERY_CACHE_SECONDS:
-        return _discovery_cache[1]
-
     ids: list[str] | None = None
     rendered = ha_client.render_template(_DISCOVERY_TEMPLATE)
     if rendered is not None:
@@ -139,17 +119,19 @@ def _discover_zone_ids() -> list[str]:
         all_states = ha_client.get_all_states()
         ids = [s["entity_id"] for s in all_states if s.get("attributes", {}).get(ZONE_MARKER_ATTR)]
 
-    _discovery_cache = (now_ts, ids)
     return ids
 
 
-def read_live_power_w() -> dict:
+def read_live_power_w(zone_ids: list[str]) -> dict:
     """
-    Descubre las zonas de Climate Orchestrator (cacheado, ver
-    `_discover_zone_ids`) y lee su "zone_power_w" AHORA MISMO (siempre
-    fresco, nunca cacheado) - pero pidiendo cada zona SUELTA
-    (/api/states/<entity_id>), nunca el volcado completo de la instalacion
-    otra vez.
+    Lee "zone_power_w" AHORA MISMO (siempre fresco, nunca cacheado) de
+    las zonas YA CONOCIDAS (`zone_ids`, la lista guardada en config.json
+    tras pulsar "Buscar zonas" — ver `discover_zone_ids` y
+    `/api/climate/discover`) — pidiendo cada zona SUELTA
+    (/api/states/<entity_id>, barata: solo esa entidad). NUNCA descubre
+    nada por su cuenta: si `zone_ids` esta vacia (Climate Orchestrator no
+    instalado, o el usuario todavia no ha pulsado el boton), esto no pide
+    nada a HA en absoluto.
 
     Devuelve {"total_w", "zones": [{"name","power_w","unknown"}, ...],
     "unknown_zone_names": [...]}. "total_w" SOLO suma zonas con dato
@@ -157,11 +139,9 @@ def read_live_power_w() -> dict:
     declarado - ver `_entry_from_state`); las zonas "unknown" se listan
     aparte para poder avisar de que su consumo no se esta teniendo en
     cuenta, en vez de fingir que es cero. "zones": [] y "total_w": 0.0 si
-    no hay ninguna zona detectada (Climate Orchestrator no instalado, o
-    sin ninguna marcada todavia) - nunca None, quien lo usa lo suma
-    directo sin comprobar nada.
+    `zone_ids` esta vacia — nunca None, quien lo usa lo suma directo sin
+    comprobar nada.
     """
-    zone_ids = _discover_zone_ids()
     if not zone_ids:
         return {"total_w": 0.0, "zones": [], "unknown_zone_names": []}
 

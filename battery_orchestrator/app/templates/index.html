@@ -658,6 +658,14 @@
   <p class="help" data-i18n="help_forecast_note">La previsión se calcula como la media real de esa hora del día en los últimos N días — sin aprendizaje automático opaco, puedes verificarla tú mismo.</p>
 </div>
 
+<div class="card" id="climate-discovery-card">
+  <h2 data-i18n="card_climate_discovery_title">Climate Orchestrator</h2>
+  <p class="help" data-i18n="help_climate_discovery">Las zonas NO se buscan solas: pulsa el botón cuando quieras (al instalar Climate Orchestrator, o si añades/quitas alguna zona) — así no hay ningún sondeo periódico de fondo.</p>
+  <div class="actions"><button onclick="discoverClimateZones()" id="climate-discover-btn" data-i18n="btn_discover_climate_zones">Buscar zonas de Climate Orchestrator</button></div>
+  <p class="help" id="climate-discovery-result"></p>
+  <div id="climate-discovery-zones"></div>
+</div>
+
 <div class="card">
   <h2 data-i18n="card_security_title">Seguridad y límites</h2>
   <div class="grid2">
@@ -846,6 +854,17 @@ es: {
   help_load_sensor: 'Tiene que ser un sensor que <strong>ya reste la carga de las baterías</strong> (como tu <code>consumo_instantaneo</code>) — <strong>no</strong> el medidor de red en bruto (como <code>em3</code>), que sí la incluye. La app le suma automáticamente la producción solar y la descarga de baterías (los sensores que hayas indicado al dar de alta cada una) para reconstruir el consumo real completo, sea cual sea la fuente que lo esté cubriendo en cada momento.',
   btn_save: "Guardar",
   help_forecast_note: "La previsión se calcula como la media real de esa hora del día en los últimos N días — sin aprendizaje automático opaco, puedes verificarla tú mismo.",
+
+  card_climate_discovery_title: "Climate Orchestrator",
+  help_climate_discovery: "Las zonas NO se buscan solas: pulsa el botón cuando quieras (al instalar Climate Orchestrator, o si añades/quitas alguna zona) — así no hay ningún sondeo periódico de fondo.",
+  btn_discover_climate_zones: "Buscar zonas de Climate Orchestrator",
+  climate_discovery_searching: "Buscando…",
+  climate_discovery_found_one: "{n} zona encontrada y guardada.",
+  climate_discovery_found_n: "{n} zonas encontradas y guardadas.",
+  climate_discovery_found_none: "No se ha encontrado ninguna zona — ¿está instalado Climate Orchestrator?",
+  climate_discovery_error: "No se pudo buscar (error {status}).",
+  climate_discovery_last: "Última búsqueda: {date}",
+  climate_discovery_zones_monitored: "Zonas monitorizadas ahora mismo:",
 
   card_security_title: "Seguridad y límites", label_contracted_power: "Potencia contratada (W)",
   help_contracted_power: "0 = sin límite. Evita que la carga de baterías + consumo de la casa disparen el ICP.",
@@ -1065,6 +1084,17 @@ en: {
   help_load_sensor: 'It has to be a sensor that <strong>already subtracts battery charging</strong> (like your instantaneous-consumption sensor) — <strong>not</strong> a raw grid meter, which does include it. The app automatically adds solar production and battery discharge (the sensors you declared for each battery) to reconstruct full real consumption, whatever is covering it at each moment.',
   btn_save: "Save",
   help_forecast_note: "The forecast is calculated as the real average for that hour of day over the last N days — no opaque machine learning, you can verify it yourself.",
+
+  card_climate_discovery_title: "Climate Orchestrator",
+  help_climate_discovery: "Zones are NOT searched for on their own: press the button whenever you like (after installing Climate Orchestrator, or if you add/remove a zone) — there's no background polling at all.",
+  btn_discover_climate_zones: "Find Climate Orchestrator zones",
+  climate_discovery_searching: "Searching…",
+  climate_discovery_found_one: "{n} zone found and saved.",
+  climate_discovery_found_n: "{n} zones found and saved.",
+  climate_discovery_found_none: "No zones found — is Climate Orchestrator installed?",
+  climate_discovery_error: "Couldn't search (error {status}).",
+  climate_discovery_last: "Last search: {date}",
+  climate_discovery_zones_monitored: "Zones monitored right now:",
 
   card_security_title: "Safety & limits", label_contracted_power: "Contracted power (W)",
   help_contracted_power: "0 = no limit. Keeps battery charging + home consumption from tripping your main breaker.",
@@ -1382,6 +1412,7 @@ async function loadConfig() {
   toggleTariffMode();
 
   document.getElementById('load-sensor').value = cfg.load_sensor || '';
+  renderClimateDiscoveryState(cfg.climate_orchestrator_zones || [], cfg.climate_orchestrator_zones_discovered_at || null);
   document.getElementById('g-contracted').value = cfg.general.contracted_power_w || 0;
   document.getElementById('g-horizon').value = cfg.general.horizon_hours;
   document.getElementById('g-cycle').value = cfg.general.cycle_seconds;
@@ -2397,6 +2428,48 @@ function renderClimateOrchestratorStatus(climateData) {
     <p class="help" style="margin-bottom:10px">${summary}</p>
     <div class="battery-row">${rows}</div>
     ${unknownWarning}`;
+}
+
+// Boton "Buscar zonas de Climate Orchestrator" (configuracion) — de un
+// solo uso, nunca sondeo de fondo. Muestra la lista guardada (ya sea de
+// una busqueda anterior al cargar la pagina, o recien encontrada al
+// pulsar el boton) para que se vea claramente que sensores esta
+// monitorizando la app sin tener que ir al dashboard.
+function renderClimateDiscoveryState(zoneIds, discoveredAt) {
+  const host = document.getElementById('climate-discovery-zones');
+  if (!zoneIds.length) { host.innerHTML = ''; return; }
+  const rows = zoneIds.map(id => `<div class="battery-mini"><div class="bm-name">${id}</div></div>`).join('');
+  const lastLine = discoveredAt
+    ? `<p class="help">${t('climate_discovery_last', { date: new Date(discoveredAt).toLocaleString() })}</p>` : '';
+  host.innerHTML = `
+    <p class="help" style="margin-top:10px">${t('climate_discovery_zones_monitored')}</p>
+    <div class="battery-row">${rows}</div>
+    ${lastLine}`;
+}
+
+async function discoverClimateZones() {
+  const btn = document.getElementById('climate-discover-btn');
+  const result = document.getElementById('climate-discovery-result');
+  btn.disabled = true;
+  result.textContent = t('climate_discovery_searching');
+  try {
+    const res = await fetch('api/climate/discover', { method: 'POST' });
+    if (!res.ok) {
+      result.textContent = t('climate_discovery_error', { status: res.status });
+      return;
+    }
+    const data = await res.json();
+    const zones = data.zones || [];
+    result.textContent = zones.length === 0 ? t('climate_discovery_found_none')
+      : zones.length === 1 ? t('climate_discovery_found_one', { n: zones.length })
+      : t('climate_discovery_found_n', { n: zones.length });
+    renderClimateDiscoveryState(zones, new Date().toISOString());
+    refreshStatus();  // para que la tarjeta del dashboard (si hay zonas) se actualice ya, sin esperar al proximo poll
+  } catch (err) {
+    result.textContent = t('climate_discovery_error', { status: '?' });
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function refreshLive() {

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.22
+**Arreglo crítico**: el diagrama de "flujo de energía ahora mismo" (y, con él, el medidor de margen de potencia contratada) se construía con los números del PLANIFICADOR (la media histórica prevista para esta hora), no con datos en vivo — a pesar de llamarse "ahora mismo". Si el consumo real se desviaba de la previsión (p.ej. un electrodoméstico encendido a mano), el flujo mostrado y, más grave, el margen de potencia contratada quedaban desfasados de la realidad — pudiendo hacer pensar que sobraba margen cuando no era así, justo el caso que ese medidor existe para evitar.
+- Ahora `solar_w`, `load_w`, `battery_net_w` y el resto del flujo se calculan con lectura EN VIVO de los sensores (mismos datos que ya usa `/api/live`) — la carga/descarga total de baterías también se suma en vivo (nuevo `_live_battery_charge_discharge_w`, misma lógica de `power_sensor_mode` que ya usaba `/api/live` por batería). La previsión del planificador solo se usa como red de seguridad si un sensor concreto no responde en ese instante, nunca por defecto.
+- La FUENTE de la carga (solar vs red) sigue viniendo de la decisión real que ya tomó el planificador este ciclo (`charge_source`) — eso no se puede medir con un sensor genérico —, pero el vatiaje que se le atribuye ya es el real, no el previsto.
+
 ## 0.11.21
 Cuarto y último paso sobre el descubrimiento de zonas de Climate Orchestrator: se elimina el sondeo automático por completo (aunque fuera cacheado y ya muy barato, ver v0.11.20) y se sustituye por un botón manual.
 - Cambio: `climate_link.py` ya no descubre zonas por su cuenta en ningún momento — ni con temporizador ni cacheado. La lista de `entity_id` se guarda en `config.json` (`climate_orchestrator_zones`) y solo se actualiza cuando el usuario pulsa el nuevo botón **"Buscar zonas de Climate Orchestrator"** en la Configuración (nuevo endpoint `POST /api/climate/discover`). Cada ciclo (`run_cycle`) lee esa lista ya guardada y solo pide, entidad a entidad, su potencia AHORA MISMO — nunca vuelve a preguntar "qué zonas hay" por sí solo.

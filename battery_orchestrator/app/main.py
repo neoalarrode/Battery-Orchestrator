@@ -136,6 +136,48 @@ def _battery_discharge_sensor(b: dict) -> str | None:
     return b.get("power_sensor") or None
 
 
+def _live_battery_charge_discharge_w(batteries_cfg: list[dict]) -> tuple[float, float, bool]:
+    """
+    Carga y descarga TOTAL de todas las baterias AHORA MISMO, leido en vivo
+    de HA (nunca de la previsión del planificador) — misma logica de
+    power_sensor_mode que ya usa `/api/live` para cada bateria por separado,
+    aqui sumada para reconstruir el flujo de energia real de la instalacion
+    completa (ver `run_cycle`, "energy_flow"). Bateria sin ningun sensor de
+    potencia declarado simplemente no aporta nada a la suma — nunca un cero
+    inventado que esconda que falta ese dato.
+
+    El tercer valor (`any_data`) distingue "ninguna bateria tiene sensor
+    declarado" (no hay dato de verdad, 0.0 seria un cero inventado) de
+    "las baterias SI tienen sensor y ahora mismo miden 0W" (0.0 real) —
+    quien llama necesita saber cual de los dos casos es para decidir si
+    cae a la previsión del planificador o no.
+    """
+    total_charge_w = 0.0
+    total_discharge_w = 0.0
+    any_data = False
+    for b in batteries_cfg:
+        mode = b.get("power_sensor_mode") or ("separate" if b.get("power_sensor") or b.get("charge_power_sensor") else "none")
+        net_power = None
+        if mode == "combined" and b.get("net_power_sensor"):
+            net_power = ha_client.get_numeric_state(b.get("net_power_sensor"), default=None)
+        elif mode == "separate":
+            charge = (
+                ha_client.get_numeric_state(b.get("charge_power_sensor"), default=None)
+                if b.get("charge_power_sensor") else None
+            )
+            power = ha_client.get_numeric_state(b.get("power_sensor"), default=None) if b.get("power_sensor") else None
+            if charge is not None or power is not None:
+                net_power = abs(charge or 0.0) - abs(power or 0.0)
+        if net_power is None:
+            continue
+        any_data = True
+        if net_power > 0:
+            total_charge_w += net_power
+        else:
+            total_discharge_w += abs(net_power)
+    return total_charge_w, total_discharge_w, any_data
+
+
 def run_cycle():
     """Un ciclo completo: leer estado, planificar, repartir, ejecutar."""
     cfg = config_store.load_config()
@@ -409,26 +451,49 @@ def run_cycle():
             next_tariff_change = {"hours_until": i, "dt": plan[i].dt.isoformat(), "tier": plan[i].tier}
             break
 
-    # Flujo de energia ahora mismo, para el diagrama de "Estado actual" —
-    # los mismos numeros que ya usa el planificador, solo reordenados para
-    # mostrar de donde sale la potencia y a donde va.
-    solar_to_casa_w = min(now_hp.pv_w, now_hp.load_w)
-    solar_to_batt_w = now_hp.charge_w if now_hp.charge_source == "solar" else 0.0
-    grid_to_batt_w = now_hp.charge_w if now_hp.charge_source == "grid" else 0.0
-    batt_to_casa_w = now_hp.discharge_w
-    grid_to_casa_w = max(0.0, now_hp.load_w - solar_to_casa_w - batt_to_casa_w)
+    # Flujo de energia AHORA MISMO, para el diagrama de "Estado actual" Y
+    # el medidor de potencia contratada — CRITICO que sean datos EN VIVO,
+    # no la previsión del planificador (`now_hp` es la media histórica de
+    # esta hora, no lo que está pasando de verdad este segundo): si el
+    # margen de potencia contratada se calculase con la previsión en vez
+    # de con la carga real (p.ej. una lavadora encendida a mano que la
+    # previsión no podía saber), puede parecer que sobra margen cuando en
+    # realidad no lo hay — justo el caso que este medidor existe para
+    # evitar. Se usa el dato en vivo siempre que existe, con la previsión
+    # como red de seguridad SOLO si el sensor no responde ahora mismo
+    # (mismo patrón "vivo con fallback a previsión" que ya usa pv_source.py
+    # para la hora actual) — nunca al revés.
+    live_charge_w, live_discharge_w, live_battery_data_ok = _live_battery_charge_discharge_w(batteries_cfg)
+    flow_pv_w = pv_now_actual if pv_now_actual is not None else now_hp.pv_w
+    flow_load_w = live_base_load_w if live_base_load_w is not None else now_hp.load_w
+    flow_charge_w = live_charge_w if live_battery_data_ok else now_hp.charge_w
+    flow_discharge_w = live_discharge_w if live_battery_data_ok else now_hp.discharge_w
+    # La FUENTE de la carga (solar vs red) no se puede medir en vivo con un
+    # sensor generico — es una decision que ya tomó el planificador este
+    # mismo ciclo (`now_hp.charge_source`) y que `battery_exec.execute` ya
+    # aplicó de verdad; se reutiliza esa atribución tal cual, solo con el
+    # VATIAJE corregido a la lectura en vivo.
+    solar_to_casa_w = min(flow_pv_w, flow_load_w)
+    solar_to_batt_w = flow_charge_w if now_hp.charge_source == "solar" else 0.0
+    grid_to_batt_w = flow_charge_w if now_hp.charge_source == "grid" else 0.0
+    batt_to_casa_w = flow_discharge_w
+    grid_to_casa_w = max(0.0, flow_load_w - solar_to_casa_w - batt_to_casa_w)
     grid_total_w = grid_to_casa_w + grid_to_batt_w
-    energy_needed_now_w = now_hp.load_w + now_hp.charge_w
+    energy_needed_now_w = flow_load_w + flow_charge_w
     autoconsumo_pct = 100.0
     if energy_needed_now_w > 0:
         autoconsumo_pct = max(0.0, min(100.0, 100.0 * (1 - grid_total_w / energy_needed_now_w)))
     energy_flow = {
-        "solar_w": round(now_hp.pv_w),
-        "load_w": round(now_hp.load_w),
+        # TODOS estos en vivo (ver flow_pv_w/flow_load_w/flow_charge_w/
+        # flow_discharge_w mas arriba) — antes usaban `now_hp` (la
+        # previsión del planificador para esta hora), que no es lo mismo
+        # que "ahora mismo" de verdad.
+        "solar_w": round(flow_pv_w),
+        "load_w": round(flow_load_w),
         "solar_to_casa_w": round(solar_to_casa_w),
         "solar_to_batt_w": round(solar_to_batt_w),
         "batt_to_casa_w": round(batt_to_casa_w),
-        "battery_net_w": round(now_hp.charge_w - now_hp.discharge_w),
+        "battery_net_w": round(flow_charge_w - flow_discharge_w),
         "grid_w": round(grid_total_w),
         "autoconsumo_pct": round(autoconsumo_pct, 1),
         # Va aqui (y no solo en /api/config) para que el medidor de potencia

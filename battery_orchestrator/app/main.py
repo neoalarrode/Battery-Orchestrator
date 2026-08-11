@@ -835,6 +835,13 @@ def api_live():
 
     battery_live = []
     total_capacity_wh, current_soc_wh = 0.0, 0.0
+    # Suma en vivo de carga/descarga de TODAS las baterias, reutilizando el
+    # mismo `net_power` que ya se calcula por bateria mas abajo en este
+    # mismo bucle (nunca una segunda ronda de llamadas a HA por lo mismo)
+    # — hace falta para "energy_flow" al final de esta funcion, ver ahi.
+    live_charge_w = 0.0
+    live_discharge_w = 0.0
+    live_battery_data_ok = False
     for b in cfg["batteries"]:
         soc = ha_client.get_numeric_state(b["soc_sensor"], default=None)
         power = ha_client.get_numeric_state(b.get("power_sensor"), default=None) if b.get("power_sensor") else None
@@ -862,6 +869,12 @@ def api_live():
                 net_power = abs(charge or 0.0) - abs(power or 0.0)
 
         battery_live.append({"id": b["id"], "name": b["name"], "soc_pct": soc, "power_w": power, "net_power_w": net_power})
+        if net_power is not None:
+            live_battery_data_ok = True
+            if net_power > 0:
+                live_charge_w += net_power
+            else:
+                live_discharge_w += abs(net_power)
         if soc is not None:
             cap = float(b.get("capacity_wh", 0))
             total_capacity_wh += cap
@@ -876,6 +889,44 @@ def api_live():
 
     load_sensor = cfg.get("load_sensor")
     load_now_w = ha_client.get_numeric_state(load_sensor, default=None) if load_sensor else None
+
+    # Flujo de energia y margen de potencia contratada, calculados AQUI
+    # (no en run_cycle) para que se refresquen cada vez que se pide
+    # /api/live — cada 5s desde el dashboard (ver refreshLive en
+    # index.html), sin esperar al proximo ciclo completo de optimizacion
+    # (`cycle_seconds`, hasta 60s). La atribucion solar/red de la carga de
+    # baterias tambien se calcula en vivo aqui (si el excedente solar
+    # AHORA MISMO cubre lo que se esta cargando, se atribuye a solar; el
+    # resto a red) en vez de depender de la decision que tomo el
+    # planificador en su ultimo ciclo — mas preciso y sin ninguna
+    # dependencia del ciclo.
+    energy_flow_live = None
+    if load_now_w is not None:
+        solar_w = pv_now_w or 0.0
+        solar_to_casa_w = min(solar_w, load_now_w)
+        solar_surplus_w = max(0.0, solar_w - load_now_w)
+        charge_w = live_charge_w if live_battery_data_ok else 0.0
+        discharge_w = live_discharge_w if live_battery_data_ok else 0.0
+        solar_to_batt_w = min(solar_surplus_w, charge_w)
+        grid_to_batt_w = max(0.0, charge_w - solar_to_batt_w)
+        batt_to_casa_w = discharge_w
+        grid_to_casa_w = max(0.0, load_now_w - solar_to_casa_w - batt_to_casa_w)
+        grid_total_w = grid_to_casa_w + grid_to_batt_w
+        energy_needed_w = load_now_w + charge_w
+        autoconsumo_pct = 100.0
+        if energy_needed_w > 0:
+            autoconsumo_pct = max(0.0, min(100.0, 100.0 * (1 - grid_total_w / energy_needed_w)))
+        energy_flow_live = {
+            "solar_w": round(solar_w),
+            "load_w": round(load_now_w),
+            "solar_to_casa_w": round(solar_to_casa_w),
+            "solar_to_batt_w": round(solar_to_batt_w),
+            "batt_to_casa_w": round(batt_to_casa_w),
+            "battery_net_w": round(charge_w - discharge_w),
+            "grid_w": round(grid_total_w),
+            "autoconsumo_pct": round(autoconsumo_pct, 1),
+            "contracted_power_w": float(cfg["general"].get("contracted_power_w") or 0),
+        }
 
     deferrable_live = []
     for load in cfg.get("deferrable_loads", []):
@@ -898,6 +949,7 @@ def api_live():
         "pv_now_w": pv_now_w,
         "load_now_w": load_now_w,
         "deferrable_loads": deferrable_live,
+        "energy_flow": energy_flow_live,
     })
 
 

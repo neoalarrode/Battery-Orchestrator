@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.23
+Continuación directa de la v0.11.22: aquel arreglo hizo que `energy_flow` usara datos en vivo, pero seguía viviendo dentro de `/api/status` — que solo se actualiza una vez por `run_cycle()` (hasta `cycle_seconds`, 60s típico), no cada vez que el dashboard lo pide. El medidor de margen de potencia contratada (`renderPowerMeter`) solo se refrescaba con ese ritmo, en vez de al segundo.
+- **Arreglo**: `energy_flow` (red, solar, entrada/salida de baterías) ahora también se calcula DENTRO de `/api/live` — el endpoint que el dashboard sondea cada 5s de verdad, sin esperar a ningún ciclo. La atribución solar/red de la carga de baterías se calcula igualmente en vivo (si el excedente solar ahora mismo cubre lo que se está cargando, se atribuye a solar; el resto a red), sin depender de la decisión del último ciclo del planificador.
+- El medidor de margen y la barra de flujo ya usan preferentemente `/api/live`; `/api/status` se queda como aproximación de partida solo hasta que llega el primer dato en vivo (p.ej. justo al cargar la página).
+
 ## 0.11.22
 **Arreglo crítico**: el diagrama de "flujo de energía ahora mismo" (y, con él, el medidor de margen de potencia contratada) se construía con los números del PLANIFICADOR (la media histórica prevista para esta hora), no con datos en vivo — a pesar de llamarse "ahora mismo". Si el consumo real se desviaba de la previsión (p.ej. un electrodoméstico encendido a mano), el flujo mostrado y, más grave, el margen de potencia contratada quedaban desfasados de la realidad — pudiendo hacer pensar que sobraba margen cuando no era así, justo el caso que ese medidor existe para evitar.
 - Ahora `solar_w`, `load_w`, `battery_net_w` y el resto del flujo se calculan con lectura EN VIVO de los sensores (mismos datos que ya usa `/api/live`) — la carga/descarga total de baterías también se suma en vivo (nuevo `_live_battery_charge_discharge_w`, misma lógica de `power_sensor_mode` que ya usaba `/api/live` por batería). La previsión del planificador solo se usa como red de seguridad si un sensor concreto no responde en ese instante, nunca por defecto.

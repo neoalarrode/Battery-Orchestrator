@@ -1999,7 +1999,7 @@ function renderStatus(status) {
   renderAnomalyBox(status.anomaly);
   renderNextPunta(status.next_punta, status.soc_forecast);
   renderEnergyFlow();
-  renderPowerMeter(status.energy_flow);
+  renderPowerMeter();
   renderBatteryBreakdown(status.distribution);
   renderDeferrableStatus();
   renderClimateOrchestratorStatus(status.climate_orchestrator);
@@ -2282,9 +2282,16 @@ function renderEnergyFlow() {
     ${chargingNote}`;
 }
 
-function renderPowerMeter(flow) {
+function renderPowerMeter() {
   const host = document.getElementById('power-meter');
-  // Viene del propio status (flow.contracted_power_w), no de cfg — asi
+  // EN VIVO (ver refreshLive, cada 5s) con el ultimo ciclo completo
+  // (`lastStatus.energy_flow`) solo como aproximacion de partida antes de
+  // que llegue el primer dato en vivo — mismo criterio que renderEnergyFlow,
+  // este medidor es justo el que mas importa tener al segundo: existe para
+  // avisar de que el ICP puede saltar, y la potencia contratada no espera
+  // al proximo ciclo de optimizacion.
+  const flow = (lastLive && lastLive.energy_flow) || (lastStatus && lastStatus.energy_flow);
+  // Viene del propio flow (flow.contracted_power_w), no de cfg — asi
   // funciona igual desde el puerto wallpanel, que no tiene acceso a la
   // configuracion completa (ver /api/live y /api/status).
   const limit = flow ? Number(flow.contracted_power_w) || 0 : 0;
@@ -2481,6 +2488,7 @@ async function refreshLive() {
   applyLiveToStatTiles();
   renderDeferrableStatus();
   renderEnergyFlow();
+  renderPowerMeter();
 }
 
 // El sensor de consumo declarado ("Sensor de consumo de red") es la base

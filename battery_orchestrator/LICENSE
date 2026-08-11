@@ -1,0 +1,38 @@
+Copyright (c) 2026 Eric Larrode. Todos los derechos reservados.
+
+Este repositorio y todo su contenido (código fuente, documentación,
+configuración, imágenes y cualquier otro archivo incluido en él) se publica
+únicamente para que pueda instalarse y usarse como complemento ("add-on") de
+Home Assistant a través de este repositorio.
+
+No se concede ningún permiso para copiar, reproducir, distribuir,
+sublicenciar, publicar, modificar, crear obras derivadas, ni reutilizar este
+código —total o parcialmente— en otro proyecto, producto o servicio, con o
+sin fines comerciales, sin autorización previa y por escrito del autor.
+
+El hecho de que el código sea visible públicamente en este repositorio no
+implica ninguna licencia de uso más allá de lo indicado arriba. Todos los
+derechos que no se conceden expresamente quedan reservados.
+
+Para solicitar autorización de uso, contacta con el autor a través de
+GitHub (@neoalarrode).
+---
+
+Copyright (c) 2026 Eric Larrode. All rights reserved.
+
+This repository and all of its contents (source code, documentation,
+configuration, images, and any other file included in it) is published
+solely so that it can be installed and used as a Home Assistant add-on
+through this repository.
+
+No permission is granted to copy, reproduce, distribute, sublicense,
+publish, modify, create derivative works from, or otherwise reuse this
+code — in whole or in part — in any other project, product, or service,
+whether commercial or not, without the author's prior written authorization.
+
+The fact that the code is publicly visible in this repository does not
+imply any license to use it beyond what is stated above. All rights not
+expressly granted are reserved.
+
+To request permission to use this code, contact the author via GitHub
+(@neoalarrode).

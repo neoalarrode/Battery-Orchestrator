@@ -114,3 +114,10 @@ Step-by-step setup instructions in [DOCS.en.md](DOCS.en.md).
 Actively used and developed — see [CHANGELOG.md](CHANGELOG.md). Always
 starts in simulation mode: you'll see exactly what the add-on would do
 without touching your real batteries, until you trust its decisions.
+
+## License
+
+© 2026 Eric Larrode. All rights reserved — see [LICENSE](LICENSE).
+The code is visible so it can be installed as an add-on, but its use,
+copying, or modification outside this repository is not authorized
+without explicit permission.

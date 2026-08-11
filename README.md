@@ -115,3 +115,10 @@ En uso activo y en desarrollo — ver [CHANGELOG.md](CHANGELOG.md).
 Empieza siempre en modo simulación: verás exactamente lo que haría el
 add-on sin tocar tus baterías de verdad, hasta que confíes en sus
 decisiones.
+
+## Licencia
+
+© 2026 Eric Larrode. Todos los derechos reservados — ver [LICENSE](LICENSE).
+El código es visible para poder instalarlo como add-on, pero no está
+autorizado su uso, copia ni modificación fuera de este repositorio sin
+permiso expreso.

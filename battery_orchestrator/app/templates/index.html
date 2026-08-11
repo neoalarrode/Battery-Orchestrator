@@ -283,6 +283,17 @@
   .flow-endpoints { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 14px; }
   .flow-endpoint { display: flex; align-items: center; gap: 9px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; min-width: 0; }
   .flow-endpoint .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  /* Bateria CARGANDO dentro del flujo de "ahora mismo" (ver renderEnergyFlow)
+     — parpadeo suave para que se note actividad de un vistazo, no solo un
+     numero estatico igual que el resto de puntos. Descargando: punto fijo,
+     igual que Solar/Red activos — el parpadeo es EXCLUSIVO de "cargando". */
+  .flow-endpoint .dot.dot-pulse { animation: dot-pulse 1.6s ease-in-out infinite; }
+  @keyframes dot-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+  /* Fuente a 0W ahora mismo (ver renderEnergyFlow) — recuadro entero
+     atenuado, no solo el numero, para que se note de un vistazo cual de
+     las tres esta realmente aportando algo y cual no. */
+  .flow-endpoint.off { opacity: .45; }
+  .flow-endpoint.off .dot { background: var(--border) !important; }
   .flow-endpoint-label { font-family: var(--font-mono); font-size: .64rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
   .flow-endpoint-value { font-family: var(--font-mono); font-size: .86rem; font-weight: 700; font-variant-numeric: tabular-nums; }
   .autoconsumo-chip {
@@ -751,6 +762,8 @@ es: {
   flow_charging_note: "Cargando batería: ~{w} W (última orden enviada, sin sensor en vivo para la carga).",
   flow_charging_note_live_solar: "Cargando batería: {w} W, con excedente solar (en vivo).",
   flow_charging_note_live_grid: "Cargando batería: {w} W, desde red (en vivo).",
+  flow_charging_note_live_mixed: "Cargando batería: {w} W — {solar_w} W de excedente solar y {grid_w} W desde red (en vivo).",
+  flow_battery_charging_value: "Cargando {w} W",
   flow_autoconsumo_import: " — importando de red", flow_autoconsumo_none: " — nada importado de red",
   autoconsumo_suffix: "% autoconsumo",
 
@@ -981,6 +994,8 @@ en: {
   flow_charging_note: "Charging battery: ~{w} W (last command sent, no live sensor for charging).",
   flow_charging_note_live_solar: "Charging battery: {w} W, from solar surplus (live).",
   flow_charging_note_live_grid: "Charging battery: {w} W, from grid (live).",
+  flow_charging_note_live_mixed: "Charging battery: {w} W — {solar_w} W from solar surplus and {grid_w} W from grid (live).",
+  flow_battery_charging_value: "Charging {w} W",
   flow_autoconsumo_import: " — importing from grid", flow_autoconsumo_none: " — nothing imported from grid",
   autoconsumo_suffix: "% self-consumption",
 
@@ -2185,49 +2200,42 @@ function renderEnergyFlow() {
   const host = document.getElementById('energy-flow');
   const hint = document.getElementById('autoconsumo-hint');
 
-  // EN VIVO (leido directo de Home Assistant cada 5s, ver refreshLive) en
-  // vez del ultimo ciclo completo de optimizacion: ese solo se repite
-  // cada `cycle_seconds` y ademas se basa en la MEDIA HISTORICA prevista
-  // para esta hora (load_forecast), no en lo que esta pasando de verdad
-  // ahora mismo — por eso el widget podia parecer "congelado" con
-  // numeros que no cuadraban con la realidad. Si todavia no ha llegado
-  // ningun dato en vivo (justo al cargar la pagina), se usa el ultimo
-  // ciclo como aproximacion de partida, nunca como sustituto permanente.
-  const live = lastLive;
-  const flow = lastStatus && lastStatus.energy_flow;
-  if (!live && !flow) { host.innerHTML = `<p class="empty">${t('status_no_cycle_data')}</p>`; hint.textContent = ''; return; }
+  // UNA SOLA fuente de verdad: `energy_flow`, calculado en el backend
+  // (ver main.py `/api/live` — cada 5s, con `/api/status` solo como
+  // aproximacion de partida hasta que llega el primer dato en vivo,
+  // mismo criterio que renderPowerMeter). Antes esta funcion recalculaba
+  // sus propios numeros en el navegador a partir de sensores sueltos,
+  // EXCLUYENDO la carga de bateria del total ("no es consumo") — asi el
+  // "CONSUMO TOTAL AHORA MISMO" nunca coincidia con el "en uso" del
+  // medidor de potencia contratada (que SI la incluye, porque tira de la
+  // red igual). Ahora los dos widgets suman EXACTAMENTE lo mismo, porque
+  // los dos leen del mismo `flow`.
+  const flow = (lastLive && lastLive.energy_flow) || (lastStatus && lastStatus.energy_flow);
+  if (!flow) { host.innerHTML = `<p class="empty">${t('status_no_cycle_data')}</p>`; hint.textContent = ''; return; }
 
-  // El sensor de consumo ("load_now_w") es la base YA SIN la carga de
-  // baterías (ver "Consumo de la casa" en Configuración) — en la práctica
-  // viene a ser el flujo neto de red para consumo (positivo importando,
-  // NEGATIVO si hay excedente exportándose). El consumo TOTAL real se
-  // reconstruye sumandole el solar y la descarga de baterías, igual que
-  // hace ha_client.true_load_forecast() con el histórico — sin recortar
-  // el signo, porque si hay excedente exportado ese negativo es justo lo
-  // que cancela la parte de la producción solar que NO se ha consumido
-  // (si se recorta a 0, la barra cuenta como "consumido" solar que en
-  // realidad se ha exportado sin usar).
-  const liveGridSigned = live && live.load_now_w !== null && live.load_now_w !== undefined
-    ? live.load_now_w : (flow ? flow.grid_w : 0);
-  const liveSolarW = live && live.pv_now_w !== null && live.pv_now_w !== undefined ? live.pv_now_w : (flow ? flow.solar_w : 0);
-  // batteryLiveSplit() ya sabe leer tanto el sensor clasico de solo
-  // descarga como el con signo (combinado o separado, ver Baterías →
-  // Sensor de potencia) — aqui solo se usa la parte de descarga, la de
-  // carga se trata aparte mas abajo (no forma parte del consumo, es
-  // energia que se esta guardando, no gastando).
-  const battSplit = batteryLiveSplit();
-  const liveBattDischargeW = live && live.batteries && live.batteries.length
-    ? battSplit.dischargeW
-    : (flow ? flow.batt_to_casa_w : 0);
+  // "AHORA MISMO" = consumo de la casa + SOLO la carga de bateria que sale
+  // de la red facturable. La carga con sol sobrante no pasa por el punto de
+  // conexion contratado (es autoconsumo puro), asi que no debe inflar ni el
+  // total de este widget ni el "en uso" del medidor de potencia contratada
+  // — de ahi que `flow.grid_w` (backend) YA excluya esa parte, y este total
+  // tiene que cuadrar exactamente con el.
+  const chargingW = Math.max(0, Math.round(flow.battery_net_w || 0));
+  const solarToChargeW = Math.max(0, Math.min(chargingW, Math.round(flow.solar_to_batt_w || 0)));
+  const gridToChargeW = Math.max(0, chargingW - solarToChargeW);
 
-  // El total ya viene bien (con el export cancelado, si lo hay) por
-  // construccion; el reparto por segmentos SI hay que caparlo a lo que de
-  // verdad hace falta, para no mostrar mas solar "consumido" del que cabe
-  // en el total (el resto seria justo el excedente exportado).
-  const totalDemand = Math.max(0, Math.round(liveGridSigned + liveSolarW + liveBattDischargeW));
-  const battUsed = Math.max(0, Math.min(Math.round(liveBattDischargeW), totalDemand));
-  const solarUsed = Math.max(0, Math.min(Math.round(liveSolarW), totalDemand - battUsed));
+  const solarUsed = Math.max(0, Math.round(flow.solar_to_casa_w || 0));  // la carga con sol NO cuenta aqui: no es "consumo", es sol que ya era gratis
+  const battUsed = Math.max(0, Math.round(flow.batt_to_casa_w || 0));  // solo DESCARGA cuenta como fuente — la carga es un destino, no una fuente
+  const totalDemand = Math.max(0, Math.round(flow.load_w || 0)) + gridToChargeW;
   const gridUsed = Math.max(0, totalDemand - solarUsed - battUsed);
+  // El endpoint de "Bateria" SIEMPRE muestra la potencia de carga completa
+  // (venga de sol o de red) con el punto parpadeando mientras carga — esto
+  // es independiente de que solo la parte de red cuente en el total de
+  // arriba. Punto fijo si esta descargando; ver estado "apagado" mas abajo
+  // para cuando ni carga ni descarga.
+  const battCharging = chargingW > 0 && battUsed === 0;
+  const battOff = !battCharging && battUsed === 0;
+  const solarOff = solarUsed === 0;
+  const gridOff = gridUsed === 0;
 
   const autoconsumoPct = totalDemand > 0 ? Math.max(0, Math.min(100, Math.round(100 * (1 - gridUsed / totalDemand)))) : 100;
   hint.textContent = `${autoconsumoPct}${t('autoconsumo_suffix')}`;
@@ -2237,21 +2245,16 @@ function renderEnergyFlow() {
   const gridSeg = totalDemand > 0 ? Math.max(0, 100 - solarSeg - battSeg) : 0;
   const gridColor = gridUsed > 0 ? 'var(--amber)' : 'var(--border)';
 
-  // La carga de bateria se muestra APARTE de la barra (no es "consumo",
-  // es energia que se esta guardando, no gastando). Con un sensor con
-  // signo declarado se ve el valor en vivo de verdad, y de paso se puede
-  // saber si esa carga viene de excedente solar o de red: si no hay nada
-  // de red en juego (gridUsed ~0) mientras se carga, tiene que ser sol.
-  // Sin sensor con signo, se cae a la ultima orden mandada (del ciclo
-  // completo mas reciente) como aproximacion, igual que antes.
-  const dist = lastStatus && lastStatus.distribution;
+  // La carga de bateria SI forma parte del total de arriba, pero se marca
+  // aparte para poder ver de un vistazo cuanta potencia esta yendo a
+  // guardarse en vez de gastarse ahora — y, si viene de red, sumandolo al
+  // aviso (no solo mencionandolo).
   let chargingNote = '';
-  if (battSplit.hasNet && battSplit.chargeW > 0) {
-    const fromSolar = gridUsed <= 10;
-    const key = fromSolar ? 'flow_charging_note_live_solar' : 'flow_charging_note_live_grid';
-    chargingNote = `<p class="help" style="margin-top:10px">${t(key, { w: Math.round(battSplit.chargeW) })}</p>`;
-  } else if (!battSplit.hasNet && dist && dist.action === 'charge' && flow && flow.battery_net_w > 0) {
-    chargingNote = `<p class="help" style="margin-top:10px">${t('flow_charging_note', { w: Math.round(flow.battery_net_w) })}</p>`;
+  if (chargingW > 0) {
+    const key = gridToChargeW <= 0 ? 'flow_charging_note_live_solar'
+      : solarToChargeW <= 0 ? 'flow_charging_note_live_grid'
+      : 'flow_charging_note_live_mixed';
+    chargingNote = `<p class="help" style="margin-top:10px">${t(key, { w: chargingW, grid_w: gridToChargeW, solar_w: solarToChargeW })}</p>`;
   }
 
   host.innerHTML = `
@@ -2259,23 +2262,23 @@ function renderEnergyFlow() {
       <span class="flow-source-name">${t('flow_total_now')}</span>
       <span class="flow-source-value">${totalDemand} W</span>
     </div>
-    <div class="flow-bar-track" role="img" aria-label="${totalDemand}W: ${t('stat_solar')} ${Math.round(solarUsed)}W, ${t('flow_bateria')} ${Math.round(battUsed)}W, ${t('flow_red')} ${Math.round(gridUsed)}W">
+    <div class="flow-bar-track" role="img" aria-label="${totalDemand}W: ${t('stat_solar')} ${solarUsed}W, ${t('flow_bateria')} ${battUsed}W, ${t('flow_red')} ${gridUsed}W">
       <div class="flow-bar-seg" style="width:${solarSeg}%; background:var(--accent)"></div>
       <div class="flow-bar-seg" style="width:${battSeg}%; background:var(--accent-2)"></div>
       <div class="flow-bar-seg" style="width:${gridSeg}%; background:${gridColor}"></div>
     </div>
     <div class="flow-endpoints">
-      <div class="flow-endpoint">
+      <div class="flow-endpoint ${solarOff ? 'off' : ''}">
         <span class="dot" style="background:var(--accent)"></span>
-        <span><div class="flow-endpoint-label">${t('stat_solar')}</div><div class="flow-endpoint-value">${Math.round(solarUsed)} W</div></span>
+        <span><div class="flow-endpoint-label">${t('stat_solar')}</div><div class="flow-endpoint-value">${solarUsed} W</div></span>
       </div>
-      <div class="flow-endpoint">
-        <span class="dot" style="background:var(--accent-2)"></span>
-        <span><div class="flow-endpoint-label">${t('flow_bateria')}</div><div class="flow-endpoint-value">${Math.round(battUsed)} W</div></span>
+      <div class="flow-endpoint ${battOff ? 'off' : ''}">
+        <span class="dot ${battCharging ? 'dot-pulse' : ''}" style="background:var(--accent-2)"></span>
+        <span><div class="flow-endpoint-label">${t('flow_bateria')}</div><div class="flow-endpoint-value">${battCharging ? t('flow_battery_charging_value', { w: chargingW }) : battUsed + ' W'}</div></span>
       </div>
-      <div class="flow-endpoint">
+      <div class="flow-endpoint ${gridOff ? 'off' : ''}">
         <span class="dot" style="background:${gridColor}"></span>
-        <span><div class="flow-endpoint-label">${t('flow_red')}</div><div class="flow-endpoint-value">${Math.round(gridUsed)} W</div></span>
+        <span><div class="flow-endpoint-label">${t('flow_red')}</div><div class="flow-endpoint-value">${gridUsed} W</div></span>
       </div>
     </div>
     <span class="autoconsumo-chip ${autoconsumoPct < 100 ? 'low' : ''}"><span class="dot"></span>${autoconsumoPct}${t('autoconsumo_suffix')}${gridUsed > 0 ? t('flow_autoconsumo_import') : t('flow_autoconsumo_none')}</span>

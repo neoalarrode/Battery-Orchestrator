@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.25
+Nuevo: **vertido a red en vivo**, en la tarjeta "Consumo de la casa" de la configuración. Sigue el mismo patrón "separado vs unificado" que ya usan las baterías para su sensor de potencia:
+- Modo **separado**: un sensor dedicado de vertido (opcional — si no lo tienes o no lo quieres, simplemente no se muestra).
+- Modo **unificado**: un único sensor con signo del punto de conexión a red (positivo importando, negativo vertiendo), del que se deriva el vertido sin necesitar un segundo sensor.
+- El vertido se muestra como una caja aparte en el flujo de energía "ahora mismo" (con el mismo estado "apagado" si es 0W) — **nunca cuenta dentro del "consumo total"** ni afecta al margen de potencia contratada, porque el excedente vertido no pasa por la línea contratada.
+
 ## 0.11.24
 Tercer paso sobre el flujo de energía: los datos ya eran en vivo (v0.11.22/23), pero "CONSUMO TOTAL AHORA MISMO" excluía a propósito la carga de baterías (no se contaba como "consumo"), mientras que el medidor de margen de potencia contratada SÍ la incluye — dos widgets en la misma pantalla con dos totales distintos que nunca cuadraban entre sí, aunque cada uno fuera correcto por su propia definición.
 - **Arreglo**: `renderEnergyFlow()` (la barra de "ahora mismo") ya no recalcula sus propios números a partir de sensores sueltos en el navegador — lee directamente el mismo `energy_flow` que ya usa el medidor de potencia contratada, la misma fuente única de verdad. El total ahora SÍ incluye la carga de baterías, pero SOLO la parte que sale de la red facturable: la carga con excedente solar no pasa por el punto de conexión contratado (es autoconsumo puro), así que no cuenta como "consumo" ni infla el margen de potencia contratada — igual que ya hacía `flow.grid_w` en el backend, ahora el widget cuadra con él en vez de sumar de más.

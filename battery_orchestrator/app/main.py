@@ -178,6 +178,28 @@ def _live_battery_charge_discharge_w(batteries_cfg: list[dict]) -> tuple[float, 
     return total_charge_w, total_discharge_w, any_data
 
 
+def _live_export_w(cfg: dict) -> float | None:
+    """
+    Vertido a red AHORA MISMO, leido en vivo — mismo patron "separado vs
+    unificado" que ya usa `power_sensor_mode` para las baterias (ver
+    `_live_battery_charge_discharge_w`). Nunca cuenta como "consumo de la
+    casa" ni afecta a `contracted_power_w`/grid_w, porque el excedente
+    vertido no pasa por la linea contratada — es puramente informativo
+    para el widget de "Consumo de la casa".
+
+    `None` significa "no hay dato de verdad" (sin sensor declarado, o el
+    sensor no responde ahora mismo) — nunca un cero inventado; quien llama
+    debe tratarlo como "vertido no disponible", no como "0W de verdad".
+    """
+    mode = cfg.get("export_sensor_mode") or ("combined" if cfg.get("net_grid_sensor") else "separate" if cfg.get("export_sensor") else "none")
+    if mode == "combined" and cfg.get("net_grid_sensor"):
+        net = ha_client.get_numeric_state(cfg.get("net_grid_sensor"), default=None)
+        return max(0.0, -net) if net is not None else None
+    if mode == "separate" and cfg.get("export_sensor"):
+        return ha_client.get_numeric_state(cfg.get("export_sensor"), default=None)
+    return None
+
+
 def run_cycle():
     """Un ciclo completo: leer estado, planificar, repartir, ejecutar."""
     cfg = config_store.load_config()
@@ -500,6 +522,11 @@ def run_cycle():
         # contratada funcione tambien desde el puerto wallpanel, que no
         # tiene acceso a la configuracion completa.
         "contracted_power_w": float(cfg["general"].get("contracted_power_w") or 0),
+        # Vertido a red — puramente informativo, ver `_live_export_w`: NO
+        # cuenta en `load_w`/`grid_w` ni en el margen de potencia contratada,
+        # justo porque el excedente vertido no pasa por esa linea. `None`
+        # si no hay sensor de vertido declarado (no un 0 inventado).
+        "vertido_w": (lambda v: round(v) if v is not None else None)(_live_export_w(cfg)),
     }
 
     # Energia (Wh) movida en este ciclo, por bateria. En carga usamos la
@@ -926,6 +953,9 @@ def api_live():
             "grid_w": round(grid_total_w),
             "autoconsumo_pct": round(autoconsumo_pct, 1),
             "contracted_power_w": float(cfg["general"].get("contracted_power_w") or 0),
+            # Ver `_live_export_w` / comentario homologo en run_cycle: solo
+            # informativo, no forma parte de load_w/grid_w ni del margen.
+            "vertido_w": (lambda v: round(v) if v is not None else None)(_live_export_w(cfg)),
         }
 
     deferrable_live = []

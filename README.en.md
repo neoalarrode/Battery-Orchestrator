@@ -117,7 +117,7 @@ without touching your real batteries, until you trust its decisions.
 
 ## License
 
-© 2026 Eric Larrode. All rights reserved — see [LICENSE](LICENSE).
+© 2026 Eric Larrodé. All rights reserved — see [LICENSE](LICENSE).
 The code is visible so it can be installed as an add-on, but its use,
 copying, or modification outside this repository is not authorized
 without explicit permission.

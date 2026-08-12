@@ -665,6 +665,25 @@
   <input id="load-sensor" placeholder="sensor.consumo_instantaneo">
   <p class="help" data-i18n-html="help_load_sensor">Tiene que ser un sensor que <strong>ya reste la carga de las baterías</strong> (como tu <code>consumo_instantaneo</code>) — <strong>no</strong> el medidor de red en bruto (como <code>em3</code>), que sí la incluye. La app le suma automáticamente la producción solar y la descarga de baterías (los sensores que hayas indicado al dar de alta cada una) para reconstruir el consumo real completo, sea cual sea la fuente que lo esté cubriendo en cada momento.</p>
 
+  <label data-i18n="label_export_sensor_mode">Sensor de vertido a red (opcional)</label>
+  <select id="export-sensor-mode" onchange="toggleExportSensorMode()">
+    <option value="none" data-i18n="opt_export_mode_none">Ninguno</option>
+    <option value="separate" data-i18n="opt_export_mode_separate">Sensor separado (solo vertido)</option>
+    <option value="combined" data-i18n="opt_export_mode_combined">Sensor unificado de red (con signo: + importando, − vertiendo)</option>
+  </select>
+
+  <div id="export-separate-fields">
+    <label data-i18n="label_export_sensor">Sensor de vertido</label>
+    <input id="export-sensor" placeholder="sensor.vertido_a_red">
+    <p class="help" data-i18n="help_export_sensor">Potencia que se está exportando a la red ahora mismo (siempre positiva o cero). Déjalo vacío si no tienes este sensor o no quieres usarlo — el vertido en vivo simplemente no se mostrará.</p>
+  </div>
+  <div id="export-combined-fields" style="display:none">
+    <label data-i18n="label_net_grid_sensor">Sensor neto de red</label>
+    <input id="net-grid-sensor" placeholder="sensor.potencia_red">
+    <p class="help" data-i18n="help_net_grid_sensor">Un único sensor con signo del punto de conexión a red — positivo mientras importas, negativo mientras viertes excedente (p.ej. el típico "grid power" de muchos inversores/medidores). Con este basta para calcular el vertido en vivo, no hace falta el sensor separado.</p>
+  </div>
+  <p class="help" data-i18n="help_export_general">El vertido en vivo se muestra aparte en el flujo de energía — nunca cuenta como "consumo de la casa" ni afecta al margen de potencia contratada, porque no pasa por la línea contratada.</p>
+
   <div class="actions"><button onclick="saveConfig()" data-i18n="btn_save">Guardar</button></div>
   <p class="help" data-i18n="help_forecast_note">La previsión se calcula como la media real de esa hora del día en los últimos N días — sin aprendizaje automático opaco, puedes verificarla tú mismo.</p>
 </div>
@@ -758,7 +777,7 @@ es: {
   card_flow_title: "Flujo de energía ahora mismo",
   card_flow_sub: "De dónde sale la energía que estás consumiendo ahora mismo, de un vistazo — sin sumar los números sueltos de las otras tarjetas.",
   flow_total_now: "Consumo total ahora mismo",
-  flow_bateria: "Batería", flow_red: "Red",
+  flow_bateria: "Batería", flow_red: "Red", flow_vertido: "Vertido",
   flow_charging_note: "Cargando batería: ~{w} W (última orden enviada, sin sensor en vivo para la carga).",
   flow_charging_note_live_solar: "Cargando batería: {w} W, con excedente solar (en vivo).",
   flow_charging_note_live_grid: "Cargando batería: {w} W, desde red (en vivo).",
@@ -865,6 +884,14 @@ es: {
 
   card_consumption_title: "Consumo de la casa", label_load_sensor: "Sensor de consumo de red",
   help_load_sensor: 'Tiene que ser un sensor que <strong>ya reste la carga de las baterías</strong> (como tu <code>consumo_instantaneo</code>) — <strong>no</strong> el medidor de red en bruto (como <code>em3</code>), que sí la incluye. La app le suma automáticamente la producción solar y la descarga de baterías (los sensores que hayas indicado al dar de alta cada una) para reconstruir el consumo real completo, sea cual sea la fuente que lo esté cubriendo en cada momento.',
+  label_export_sensor_mode: "Sensor de vertido a red (opcional)",
+  opt_export_mode_none: "Ninguno", opt_export_mode_separate: "Sensor separado (solo vertido)",
+  opt_export_mode_combined: "Sensor unificado de red (con signo: + importando, − vertiendo)",
+  label_export_sensor: "Sensor de vertido",
+  help_export_sensor: "Potencia que se está exportando a la red ahora mismo (siempre positiva o cero). Déjalo vacío si no tienes este sensor o no quieres usarlo — el vertido en vivo simplemente no se mostrará.",
+  label_net_grid_sensor: "Sensor neto de red",
+  help_net_grid_sensor: 'Un único sensor con signo del punto de conexión a red — positivo mientras importas, negativo mientras viertes excedente (p.ej. el típico "grid power" de muchos inversores/medidores). Con este basta para calcular el vertido en vivo, no hace falta el sensor separado.',
+  help_export_general: 'El vertido en vivo se muestra aparte en el flujo de energía — nunca cuenta como "consumo de la casa" ni afecta al margen de potencia contratada, porque no pasa por la línea contratada.',
   btn_save: "Guardar",
   help_forecast_note: "La previsión se calcula como la media real de esa hora del día en los últimos N días — sin aprendizaje automático opaco, puedes verificarla tú mismo.",
 
@@ -990,7 +1017,7 @@ en: {
   card_flow_title: "Energy flow right now",
   card_flow_sub: "Where the energy you're consuming right now comes from, at a glance — no need to add up the other tiles.",
   flow_total_now: "Total consumption right now",
-  flow_bateria: "Battery", flow_red: "Grid",
+  flow_bateria: "Battery", flow_red: "Grid", flow_vertido: "Export",
   flow_charging_note: "Charging battery: ~{w} W (last command sent, no live sensor for charging).",
   flow_charging_note_live_solar: "Charging battery: {w} W, from solar surplus (live).",
   flow_charging_note_live_grid: "Charging battery: {w} W, from grid (live).",
@@ -1097,6 +1124,14 @@ en: {
 
   card_consumption_title: "Home consumption", label_load_sensor: "Grid consumption sensor",
   help_load_sensor: 'It has to be a sensor that <strong>already subtracts battery charging</strong> (like your instantaneous-consumption sensor) — <strong>not</strong> a raw grid meter, which does include it. The app automatically adds solar production and battery discharge (the sensors you declared for each battery) to reconstruct full real consumption, whatever is covering it at each moment.',
+  label_export_sensor_mode: "Grid export sensor (optional)",
+  opt_export_mode_none: "None", opt_export_mode_separate: "Separate sensor (export only)",
+  opt_export_mode_combined: "Unified grid sensor (signed: + importing, − exporting)",
+  label_export_sensor: "Export sensor",
+  help_export_sensor: "Power currently being exported to the grid (always positive or zero). Leave it empty if you don't have this sensor or don't want to use it — live export just won't be shown.",
+  label_net_grid_sensor: "Net grid sensor",
+  help_net_grid_sensor: 'A single signed sensor at the grid connection point — positive while importing, negative while exporting surplus (e.g. the typical "grid power" many inverters/meters expose). This one is enough to compute live export, no need for the separate sensor.',
+  help_export_general: 'Live export is shown separately in the energy flow — it never counts as "home consumption" nor affects the contracted power margin, since it never touches the contracted line.',
   btn_save: "Save",
   help_forecast_note: "The forecast is calculated as the real average for that hour of day over the last N days — no opaque machine learning, you can verify it yourself.",
 
@@ -1427,6 +1462,14 @@ async function loadConfig() {
   toggleTariffMode();
 
   document.getElementById('load-sensor').value = cfg.load_sensor || '';
+  document.getElementById('export-sensor').value = cfg.export_sensor || '';
+  document.getElementById('net-grid-sensor').value = cfg.net_grid_sensor || '';
+  // El modo puede venir explicito (export_sensor_mode) o, en instalaciones
+  // previas a esta funcion, inferirse de que campo tenga algo relleno —
+  // mismo criterio que ya usa el modo de sensor de potencia de baterias.
+  const exportMode = cfg.export_sensor_mode || (cfg.net_grid_sensor ? 'combined' : cfg.export_sensor ? 'separate' : 'none');
+  document.getElementById('export-sensor-mode').value = exportMode;
+  toggleExportSensorMode();
   renderClimateDiscoveryState(cfg.climate_orchestrator_zones || [], cfg.climate_orchestrator_zones_discovered_at || null);
   document.getElementById('g-contracted').value = cfg.general.contracted_power_w || 0;
   document.getElementById('g-horizon').value = cfg.general.horizon_hours;
@@ -1511,6 +1554,12 @@ function toggleBatteryPowerSensorMode() {
   const mode = document.getElementById('b-power-mode').value;
   document.getElementById('b-power-separate-fields').style.display = mode === 'separate' ? 'block' : 'none';
   document.getElementById('b-power-combined-fields').style.display = mode === 'combined' ? 'block' : 'none';
+}
+
+function toggleExportSensorMode() {
+  const mode = document.getElementById('export-sensor-mode').value;
+  document.getElementById('export-separate-fields').style.display = mode === 'separate' ? 'block' : 'none';
+  document.getElementById('export-combined-fields').style.display = mode === 'combined' ? 'block' : 'none';
 }
 
 function batteryPowerSensorSummary(b) {
@@ -1916,6 +1965,10 @@ async function saveConfig() {
   cfg.tariff.pvpc_sensor = document.getElementById('t-pvpc-sensor').value;
 
   cfg.load_sensor = document.getElementById('load-sensor').value;
+  const exportMode = document.getElementById('export-sensor-mode').value;
+  cfg.export_sensor_mode = exportMode;
+  cfg.export_sensor = exportMode === 'separate' ? (document.getElementById('export-sensor').value.trim() || null) : null;
+  cfg.net_grid_sensor = exportMode === 'combined' ? (document.getElementById('net-grid-sensor').value.trim() || null) : null;
   cfg.general.contracted_power_w = parseFloat(document.getElementById('g-contracted').value) || 0;
   cfg.general.horizon_hours = parseInt(document.getElementById('g-horizon').value, 10);
   cfg.general.cycle_seconds = parseInt(document.getElementById('g-cycle').value, 10);
@@ -2257,6 +2310,20 @@ function renderEnergyFlow() {
     chargingNote = `<p class="help" style="margin-top:10px">${t(key, { w: chargingW, grid_w: gridToChargeW, solar_w: solarToChargeW })}</p>`;
   }
 
+  // Vertido a red: SOLO informativo, ver _live_export_w en main.py — nunca
+  // entra en totalDemand/solarSeg/battSeg/gridSeg de arriba, ni en el
+  // margen de potencia contratada (renderPowerMeter), porque el excedente
+  // vertido no pasa por la linea contratada. `null`/`undefined` = sin
+  // sensor de vertido configurado, no se muestra la caja en absoluto.
+  const vertidoConfigured = flow.vertido_w !== null && flow.vertido_w !== undefined;
+  const vertidoW = vertidoConfigured ? Math.max(0, Math.round(flow.vertido_w)) : 0;
+  const vertidoOff = vertidoConfigured && vertidoW === 0;
+  const vertidoEndpoint = vertidoConfigured ? `
+      <div class="flow-endpoint ${vertidoOff ? 'off' : ''}">
+        <span class="dot" style="background:var(--green)"></span>
+        <span><div class="flow-endpoint-label">${t('flow_vertido')}</div><div class="flow-endpoint-value">${vertidoW} W</div></span>
+      </div>` : '';
+
   host.innerHTML = `
     <div class="flow-source-head">
       <span class="flow-source-name">${t('flow_total_now')}</span>
@@ -2279,7 +2346,7 @@ function renderEnergyFlow() {
       <div class="flow-endpoint ${gridOff ? 'off' : ''}">
         <span class="dot" style="background:${gridColor}"></span>
         <span><div class="flow-endpoint-label">${t('flow_red')}</div><div class="flow-endpoint-value">${gridUsed} W</div></span>
-      </div>
+      </div>${vertidoEndpoint}
     </div>
     <span class="autoconsumo-chip ${autoconsumoPct < 100 ? 'low' : ''}"><span class="dot"></span>${autoconsumoPct}${t('autoconsumo_suffix')}${gridUsed > 0 ? t('flow_autoconsumo_import') : t('flow_autoconsumo_none')}</span>
     ${chargingNote}`;

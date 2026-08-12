@@ -32,6 +32,9 @@ DEFAULT_CONFIG = {
     "climate_orchestrator_zones": [],  # entity_id de las zonas de Climate Orchestrator (ver climate_link.py) — SOLO se rellena al pulsar "Buscar zonas" en la configuracion, nunca por sondeo automatico
     "climate_orchestrator_zones_discovered_at": None,  # ISO 8601 de la ultima vez que se pulso el boton, o None si nunca — solo informativo para la interfaz
     "load_sensor": "",  # consumo base YA SIN carga de baterias (p.ej. "consumo_instantaneo"); + solar + descarga de baterias = consumo real
+    "export_sensor_mode": "none",  # "none" | "separate" | "combined" — vertido a red en vivo, ver _live_export_w en main.py; puramente informativo, no afecta consumo/margen
+    "export_sensor": "",  # modo "separate": potencia de vertido dedicada (siempre >= 0), opcional
+    "net_grid_sensor": "",  # modo "combined": sensor unico con signo del punto de conexion a red (+ importando, - vertiendo)
     "general": {
         "horizon_hours": 48,  # menos de esto y, segun la hora del dia, el plan puede no llegar a ver la punta del dia siguiente y no cargar en la madrugada que toca (ver CHANGELOG v0.11.6)
         "cycle_seconds": 60,

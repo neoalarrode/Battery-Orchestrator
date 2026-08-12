@@ -695,6 +695,56 @@ def run_cycle():
     except Exception as e:  # no tumbar el ciclo si HA no responde
         log.warning(f"No se pudo publicar el sensor de estado: {e}")
 
+    # Sensores AGREGADOS (todas las baterias juntas, no uno por bateria) —
+    # pensados especificamente para poder darlos de alta en el Panel de
+    # Energia oficial de HA (Ajustes -> Paneles -> Energia -> Baterias):
+    # ese panel pide UN sensor de energia entrante y UN sensor de energia
+    # saliente para "la bateria" en conjunto, con device_class "energy" y
+    # state_class "total_increasing" (nunca decrece) — justo lo que ya
+    # llevaba la cuenta `lifetime_store` para "ciclos equivalentes", aqui
+    # solo sumado entre baterias y expuesto en kWh. SOC y potencia van
+    # aparte, por si se quieren en una tarjeta normal del dashboard.
+    try:
+        totals = lifetime_store.get_aggregate_totals([b.id for b in batteries])
+        _publish_sensor_throttled(
+            "sensor.battery_orchestrator_soc",
+            current_soc_pct,
+            {
+                "device_class": "battery", "state_class": "measurement",
+                "unit_of_measurement": "%", "friendly_name": "Battery Orchestrator SOC",
+            },
+        )
+        _publish_sensor_throttled(
+            "sensor.battery_orchestrator_energy_charged",
+            round(totals["charged_wh"] / 1000, 3),
+            {
+                "device_class": "energy", "state_class": "total_increasing",
+                "unit_of_measurement": "kWh", "since": totals["since"],
+                "friendly_name": "Battery Orchestrator Energía cargada",
+            },
+        )
+        _publish_sensor_throttled(
+            "sensor.battery_orchestrator_energy_discharged",
+            round(totals["discharged_wh"] / 1000, 3),
+            {
+                "device_class": "energy", "state_class": "total_increasing",
+                "unit_of_measurement": "kWh", "since": totals["since"],
+                "friendly_name": "Battery Orchestrator Energía descargada",
+            },
+        )
+        _publish_sensor_throttled(
+            "sensor.battery_orchestrator_power",
+            round(flow_charge_w - flow_discharge_w),
+            {
+                "device_class": "power", "state_class": "measurement",
+                "unit_of_measurement": "W", "friendly_name": "Battery Orchestrator Potencia",
+                # Mismo criterio de signo que "battery_net_w" en energy_flow:
+                # positivo cargando, negativo descargando.
+            },
+        )
+    except Exception as e:
+        log.warning(f"No se pudieron publicar los sensores agregados: {e}")
+
     # Tabla completa del dia: lo que YA paso hoy (del historico, real) +
     # lo previsto desde ahora en adelante (el plan recien calculado).
     today_history = [{**entry, "historical": True} for entry in history_store.get_today(now)]

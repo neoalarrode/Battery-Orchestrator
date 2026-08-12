@@ -74,6 +74,27 @@ def get_health(battery_id: str, capacity_wh: float) -> dict | None:
     }
 
 
+def get_aggregate_totals(battery_ids: list[str]) -> dict:
+    """
+    Suma charged_wh/discharged_wh de TODAS las baterias declaradas — para
+    publicar sensores agregados aptos para el Panel de Energia oficial de
+    HA (Ajustes -> Paneles -> Energia -> Baterias), que necesita un sensor
+    de energia ACUMULADA (nunca decrece) por cada direccion, no uno por
+    bateria por separado. Mismos numeros de por vida que ya alimentan
+    "ciclos equivalentes" en `get_health` — ninguna cuenta nueva, solo se
+    suman entre baterias.
+    """
+    data = _load()
+    charged_wh = sum(data.get(bid, {}).get("charged_wh", 0.0) for bid in battery_ids)
+    discharged_wh = sum(data.get(bid, {}).get("discharged_wh", 0.0) for bid in battery_ids)
+    since_values = [data[bid]["since"] for bid in battery_ids if bid in data and data[bid].get("since")]
+    return {
+        "charged_wh": charged_wh,
+        "discharged_wh": discharged_wh,
+        "since": min(since_values) if since_values else None,
+    }
+
+
 def get_all_health(batteries: list[dict]) -> list[dict]:
     out = []
     for b in batteries:

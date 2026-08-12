@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.28
+Nuevo: 4 sensores **agregados** (todas las baterías juntas, no uno por batería) pensados específicamente para poder darlos de alta en el **Panel de Energía oficial de Home Assistant** (Ajustes → Paneles → Energía → Baterías):
+- `sensor.battery_orchestrator_energy_charged` / `..._energy_discharged`: energía acumulada en kWh, con `device_class: energy` y `state_class: total_increasing` — justo lo que pide ese panel para "energía que entra"/"energía que sale" de la batería. Reutilizan el mismo contador de por vida que ya alimentaba "ciclos equivalentes" (`lifetime_store`), solo sumado entre baterías — ningún dato nuevo, ninguna cuenta duplicada.
+- `sensor.battery_orchestrator_soc`: SOC agregado (%), y `sensor.battery_orchestrator_power`: potencia neta en vivo (W, positivo cargando/negativo descargando) — para poder ponerlos en una tarjeta normal del dashboard sin tener que sacarlos de los atributos de `sensor.battery_orchestrator_status`.
+
 ## 0.11.27
 Nuevo: **Liquid Glass** en todo el panel. Misma paleta violeta/cian, misma cuadrícula HUD de fondo y los mismos componentes de siempre — pero las tarjetas, chips, inputs y demás superficies ahora usan desenfoque real (`backdrop-filter`) con un realce especular en el borde, sobre unas manchas de color ambiente discretas de fondo (sin las cuales el desenfoque no se notaría en nada). Probado antes en una demo aparte y aprobado antes de aplicarlo aquí. Funciona igual en modo claro y oscuro.
 

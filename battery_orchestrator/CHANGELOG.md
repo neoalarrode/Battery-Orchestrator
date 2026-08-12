@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.27
+Nuevo: **Liquid Glass** en todo el panel. Misma paleta violeta/cian, misma cuadrícula HUD de fondo y los mismos componentes de siempre — pero las tarjetas, chips, inputs y demás superficies ahora usan desenfoque real (`backdrop-filter`) con un realce especular en el borde, sobre unas manchas de color ambiente discretas de fondo (sin las cuales el desenfoque no se notaría en nada). Probado antes en una demo aparte y aprobado antes de aplicarlo aquí. Funciona igual en modo claro y oscuro.
+
 ## 0.11.26
 Reestructuración de la tarjeta "Consumo de la casa" (v0.11.25 lo dejaba mal organizado): ahora el **selector va primero** y decide qué campos rellenar, con "dos sensores" (consumo + vertido opcional) como opción por defecto — antes el sensor de consumo aparecía siempre fijo arriba y el desplegable de vertido quedaba suelto debajo, dando la sensación de ser dos cosas independientes cuando en realidad es una sola elección.
 - **Ampliación importante del modo "unificado"**: el sensor único de red con signo ahora alimenta también la **previsión histórica del planificador**, no solo el flujo en vivo — con este sensor basta, no hace falta declarar ningún otro de consumo. Se reconstruye con el balance físico del panel (consumo = sol + red neta + descarga − carga de baterías), igual en vivo que en el histórico.

@@ -31,10 +31,10 @@ DEFAULT_CONFIG = {
     "deferrable_loads": [],
     "climate_orchestrator_zones": [],  # entity_id de las zonas de Climate Orchestrator (ver climate_link.py) — SOLO se rellena al pulsar "Buscar zonas" en la configuracion, nunca por sondeo automatico
     "climate_orchestrator_zones_discovered_at": None,  # ISO 8601 de la ultima vez que se pulso el boton, o None si nunca — solo informativo para la interfaz
-    "load_sensor": "",  # consumo base YA SIN carga de baterias (p.ej. "consumo_instantaneo"); + solar + descarga de baterias = consumo real
-    "export_sensor_mode": "none",  # "none" | "separate" | "combined" — vertido a red en vivo, ver _live_export_w en main.py; puramente informativo, no afecta consumo/margen
+    "load_sensor": "",  # modo "separate": consumo base YA SIN carga de baterias (p.ej. "consumo_instantaneo"); + solar + descarga de baterias = consumo real
+    "load_sensor_mode": "separate",  # "separate" (load_sensor + export_sensor opcional) | "combined" (un unico net_grid_sensor con signo, alimenta tanto el flujo en vivo como la previsión historica)
     "export_sensor": "",  # modo "separate": potencia de vertido dedicada (siempre >= 0), opcional
-    "net_grid_sensor": "",  # modo "combined": sensor unico con signo del punto de conexion a red (+ importando, - vertiendo)
+    "net_grid_sensor": "",  # modo "combined": sensor unico con signo del punto de conexion a red EN BRUTO (+ importando, - vertiendo) — sustituye a load_sensor tanto en vivo como en la previsión
     "general": {
         "horizon_hours": 48,  # menos de esto y, segun la hora del dia, el plan puede no llegar a ver la punta del dia siguiente y no cargar en la madrugada que toca (ver CHANGELOG v0.11.6)
         "cycle_seconds": 60,
@@ -87,7 +87,9 @@ def load_config() -> dict:
         # completar claves que falten (por si se actualiza el esquema)
         merged = json.loads(json.dumps(DEFAULT_CONFIG))
         _deep_merge(merged, cfg)
-        if _migrate_legacy_pv_sensor(merged):
+        migrated = _migrate_legacy_pv_sensor(merged)
+        migrated = _migrate_legacy_export_sensor_mode(merged) or migrated
+        if migrated:
             save_config(merged)
         return merged
 
@@ -119,6 +121,24 @@ def save_config(cfg: dict) -> None:
     with _lock:
         with open(CONFIG_PATH, "w") as f:
             json.dump(cfg, f, indent=2, ensure_ascii=False)
+
+
+def _migrate_legacy_export_sensor_mode(cfg: dict) -> bool:
+    """
+    La v0.11.25 guardaba "export_sensor_mode" ("none"/"separate"/"combined")
+    solo para el vertido, con `load_sensor` siempre por separado e
+    independiente. Desde que el modo "combined" tambien alimenta la
+    previsión (no solo el vertido), se unifico en un unico
+    "load_sensor_mode" que gobierna los dos a la vez. Si una instalacion ya
+    tenia guardado el campo viejo con "combined", se traslada tal cual
+    (nunca se pierde la eleccion que ya habia hecho el usuario); "none" y
+    "separate" no necesitan traslado, el nuevo default ya es "separate".
+    """
+    legacy_mode = cfg.pop("export_sensor_mode", None)
+    if legacy_mode == "combined" and cfg.get("load_sensor_mode") != "combined":
+        cfg["load_sensor_mode"] = "combined"
+        return True
+    return legacy_mode is not None
 
 
 def _deep_merge(base: dict, override: dict) -> None:

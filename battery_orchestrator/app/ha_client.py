@@ -217,9 +217,9 @@ _hourly_avg_cache: dict[tuple, tuple[float, dict[int, float], dict[int, bool]]] 
 
 
 def _hourly_avg_by_hour_of_day(
-    entity_id: str, days: int, default: float, abs_values: bool
+    entity_id: str, days: int, default: float, abs_values: bool, sign_filter: str | None = None
 ) -> tuple[dict[int, float], dict[int, bool]]:
-    cache_key = (entity_id, days, default, abs_values)
+    cache_key = (entity_id, days, default, abs_values, sign_filter)
     cached = _hourly_avg_cache.get(cache_key)
     now_ts = time.time()
     if cached is not None and (now_ts - cached[0]) < _HISTORY_CACHE_SECONDS:
@@ -248,7 +248,21 @@ def _hourly_avg_by_hour_of_day(
             val = float(point["state"])
         except (KeyError, ValueError):
             continue
-        if abs_values:
+        # sign_filter separa un sensor bidireccional con signo en sus dos
+        # mitades (p.ej. un "net_power_sensor" de bateria: positivo=carga,
+        # negativo=descarga) para poder promediar cada una POR SEPARADO —
+        # necesario para reconstruir consumo desde un sensor de red en
+        # bruto (ver `true_load_forecast_from_grid`), donde la carga tiene
+        # que RESTARSE y la descarga SUMARSE, cosa que un abs_values() a
+        # secas no puede distinguir. Tiene prioridad sobre abs_values.
+        if sign_filter == "positive":
+            if val <= 0:
+                continue
+        elif sign_filter == "negative":
+            if val >= 0:
+                continue
+            val = abs(val)
+        elif abs_values:
             val = abs(val)
         ts = datetime.fromisoformat(point["last_changed"].replace("Z", "+00:00"))
         buckets[ts.astimezone().hour].append(val)
@@ -270,7 +284,8 @@ def _hourly_avg_by_hour_of_day(
 
 
 def hourly_average_forecast_with_reliability(
-    entity_id: str, horizon_hours: int, days: int = 21, default: float = 0.0, abs_values: bool = False
+    entity_id: str, horizon_hours: int, days: int = 21, default: float = 0.0, abs_values: bool = False,
+    sign_filter: str | None = None,
 ) -> tuple[list[float], list[bool]]:
     """
     Igual que `hourly_average_forecast`, pero ademas devuelve, hora a hora,
@@ -291,7 +306,7 @@ def hourly_average_forecast_with_reliability(
     `_HISTORY_CACHE_SECONDS`; la alineacion al horizonte desde la hora
     ACTUAL se recalcula siempre al vuelo, nunca desde cache.
     """
-    hourly_avg, reliable_by_hour = _hourly_avg_by_hour_of_day(entity_id, days, default, abs_values)
+    hourly_avg, reliable_by_hour = _hourly_avg_by_hour_of_day(entity_id, days, default, abs_values, sign_filter)
     now = datetime.now()
     values = [hourly_avg[(now.hour + i) % 24] for i in range(horizon_hours)]
     reliable = [reliable_by_hour[(now.hour + i) % 24] for i in range(horizon_hours)]
@@ -299,7 +314,8 @@ def hourly_average_forecast_with_reliability(
 
 
 def hourly_average_forecast(
-    entity_id: str, horizon_hours: int, days: int = 21, default: float = 0.0, abs_values: bool = False
+    entity_id: str, horizon_hours: int, days: int = 21, default: float = 0.0, abs_values: bool = False,
+    sign_filter: str | None = None,
 ) -> list[float]:
     """
     Previsión simple y explicable para CUALQUIER sensor numerico: para cada
@@ -310,8 +326,14 @@ def hourly_average_forecast(
     defecto el recorder solo guarda 10 dias), reintenta con ventanas mas
     cortas antes de rendirse - asi no depende de que sepas/ajustes ese
     detalle de configuracion tuyo.
+
+    `sign_filter` ("positive" | "negative" | None): para sensores
+    bidireccionales con signo, promedia SOLO la mitad de muestras que
+    cumple el signo pedido (ver `_hourly_avg_by_hour_of_day`) — necesario
+    cuando carga y descarga comparten el mismo sensor y hay que tratarlas
+    por separado (ver `true_load_forecast_from_grid`).
     """
-    values, _ = hourly_average_forecast_with_reliability(entity_id, horizon_hours, days, default, abs_values)
+    values, _ = hourly_average_forecast_with_reliability(entity_id, horizon_hours, days, default, abs_values, sign_filter)
     return values
 
 
@@ -363,6 +385,61 @@ def true_load_forecast(base_consumption_sensor: str, solar_sensors: list[str],
         total = [total[i] + batt[i] for i in range(horizon_hours)]
 
     return total
+
+
+def true_load_forecast_from_grid(net_grid_sensor: str, solar_sensors: list[str],
+                                  batteries_cfg: list[dict], horizon_hours: int, days: int = 21) -> list[float]:
+    """
+    Igual que `true_load_forecast`, pero para el modo "unificado" del
+    sensor de consumo (ver "Consumo de la casa" en Configuración): en vez
+    de un sensor que YA reste la carga de las baterías, aquí se parte del
+    medidor de red EN BRUTO del punto de conexión (con signo: positivo
+    importando, negativo vertiendo) — balance de potencia en el panel:
+
+        consumo = produccion_solar + red_neta (con signo) + descarga_baterias
+                  - carga_baterias
+
+    A diferencia de `true_load_forecast`, aquí SÍ hace falta la carga de
+    cada batería por separado (positiva), porque el sensor de red en bruto
+    no la excluye como sí hace un "consumo_instantaneo" ya neteado — sin
+    restarla, cada carga se contaría dos veces como si fuera consumo de la
+    casa.
+
+    Para baterías en modo "combined" (un único `net_power_sensor` con
+    signo, carga positiva/descarga negativa), la carga y la descarga se
+    extraen del MISMO sensor pero promediando cada mitad por separado
+    (`sign_filter`, ver `hourly_average_forecast`) — promediar el sensor
+    entero y aplicar abs() después cancelaría carga y descarga entre sí
+    dentro de la misma franja horaria.
+    """
+    total = hourly_average_forecast(net_grid_sensor, horizon_hours, days, default=0.0)
+
+    for ss in solar_sensors:
+        if not ss:
+            continue
+        solar = hourly_average_forecast(ss, horizon_hours, days, default=0.0)
+        total = [total[i] + solar[i] for i in range(horizon_hours)]
+
+    for b in batteries_cfg:
+        mode = b.get("power_sensor_mode") or ("separate" if b.get("power_sensor") or b.get("charge_power_sensor") else "none")
+        if mode == "combined" and b.get("net_power_sensor"):
+            sensor = b.get("net_power_sensor")
+            discharge = hourly_average_forecast(sensor, horizon_hours, days, default=0.0, sign_filter="negative")
+            charge = hourly_average_forecast(sensor, horizon_hours, days, default=0.0, sign_filter="positive")
+            total = [total[i] + discharge[i] - charge[i] for i in range(horizon_hours)]
+        elif mode == "separate":
+            if b.get("power_sensor"):
+                discharge = hourly_average_forecast(b.get("power_sensor"), horizon_hours, days, default=0.0, abs_values=True)
+                total = [total[i] + discharge[i] for i in range(horizon_hours)]
+            if b.get("charge_power_sensor"):
+                charge = hourly_average_forecast(b.get("charge_power_sensor"), horizon_hours, days, default=0.0, abs_values=True)
+                total = [total[i] - charge[i] for i in range(horizon_hours)]
+
+    # El consumo real nunca es negativo — un resultado negativo aqui solo
+    # puede venir de ruido de medida entre sensores independientes (p.ej.
+    # relojes/franjas ligeramente desalineados entre el sensor de red y el
+    # de bateria), nunca de una situacion real.
+    return [max(0.0, v) for v in total]
 
 
 def pv_forecast_from_entity(entity_id: str, horizon_hours: int) -> list[float]:

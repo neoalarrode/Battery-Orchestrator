@@ -178,24 +178,27 @@ def _live_battery_charge_discharge_w(batteries_cfg: list[dict]) -> tuple[float, 
     return total_charge_w, total_discharge_w, any_data
 
 
-def _live_export_w(cfg: dict) -> float | None:
+def _live_export_w(cfg: dict, known_net_grid_w: float | None = None) -> float | None:
     """
-    Vertido a red AHORA MISMO, leido en vivo — mismo patron "separado vs
-    unificado" que ya usa `power_sensor_mode` para las baterias (ver
-    `_live_battery_charge_discharge_w`). Nunca cuenta como "consumo de la
-    casa" ni afecta a `contracted_power_w`/grid_w, porque el excedente
-    vertido no pasa por la linea contratada — es puramente informativo
-    para el widget de "Consumo de la casa".
+    Vertido a red AHORA MISMO, leido en vivo — deriva del mismo modo
+    "separado vs unificado" que gobierna "Consumo de la casa"
+    (`load_sensor_mode`). Nunca cuenta como "consumo de la casa" ni afecta
+    a `contracted_power_w`/grid_w, porque el excedente vertido no pasa por
+    la linea contratada — es puramente informativo.
+
+    `known_net_grid_w`: si quien llama ya ha leido `net_grid_sensor` este
+    mismo ciclo (para reconstruir el consumo, ver run_cycle/api_live), se
+    pasa aqui para no volver a pedirselo a HA por lo mismo.
 
     `None` significa "no hay dato de verdad" (sin sensor declarado, o el
     sensor no responde ahora mismo) — nunca un cero inventado; quien llama
     debe tratarlo como "vertido no disponible", no como "0W de verdad".
     """
-    mode = cfg.get("export_sensor_mode") or ("combined" if cfg.get("net_grid_sensor") else "separate" if cfg.get("export_sensor") else "none")
+    mode = cfg.get("load_sensor_mode") or "separate"
     if mode == "combined" and cfg.get("net_grid_sensor"):
-        net = ha_client.get_numeric_state(cfg.get("net_grid_sensor"), default=None)
+        net = known_net_grid_w if known_net_grid_w is not None else ha_client.get_numeric_state(cfg.get("net_grid_sensor"), default=None)
         return max(0.0, -net) if net is not None else None
-    if mode == "separate" and cfg.get("export_sensor"):
+    if cfg.get("export_sensor"):
         return ha_client.get_numeric_state(cfg.get("export_sensor"), default=None)
     return None
 
@@ -232,23 +235,46 @@ def run_cycle():
     # ningun sensor de baterias/solar declarado, es simplemente el consumo
     # base (funciona igual, solo menos preciso en las horas en que la
     # bateria o el sol cubren gran parte del consumo).
+    #
+    # Modo "combined" (ver "Consumo de la casa" en Configuración): en vez
+    # de un sensor ya neteado, se parte del medidor de red EN BRUTO con
+    # signo (`net_grid_sensor`) y se reconstruye el consumo con el balance
+    # fisico del panel (sol + red neta + descarga − carga) — mismo criterio
+    # tanto para la previsión historica (`true_load_forecast_from_grid`)
+    # como para la lectura en vivo, ver mas abajo. La carga/descarga en
+    # vivo de baterias se necesita para ese balance, asi que se calcula
+    # AQUI (antes de lo habitual) y se reutiliza mas abajo en el flujo de
+    # energia "ahora mismo" en vez de volver a pedirla a HA.
     load_sensor = cfg.get("load_sensor")
+    load_sensor_mode = cfg.get("load_sensor_mode") or "separate"
+    net_grid_sensor = cfg.get("net_grid_sensor")
     history_days = cfg["general"]["history_days_for_load"]
+    solar_sensors_for_load = [a.get("current_sensor") for a in cfg["pv_arrays"] if a.get("current_sensor")]
+    live_charge_w, live_discharge_w, live_battery_data_ok = _live_battery_charge_discharge_w(batteries_cfg)
+    net_grid_now_w = None  # solo se rellena en modo "combined"; se reutiliza mas abajo para el vertido
 
-    if load_sensor:
+    if load_sensor_mode == "combined" and net_grid_sensor:
+        load_forecast = ha_client.true_load_forecast_from_grid(
+            net_grid_sensor, solar_sensors_for_load, batteries_cfg, horizon, days=history_days
+        )
+        net_grid_now_w = ha_client.get_numeric_state(net_grid_sensor, default=None)
+        if net_grid_now_w is not None and pv_now_actual is not None and live_battery_data_ok:
+            live_base_load_w = max(0.0, pv_now_actual + net_grid_now_w + live_discharge_w - live_charge_w)
+        else:
+            live_base_load_w = None
+    elif load_sensor:
         battery_discharge_sensors = [s for s in (_battery_discharge_sensor(b) for b in batteries_cfg) if s]
-        solar_sensors_for_load = [a.get("current_sensor") for a in cfg["pv_arrays"] if a.get("current_sensor")]
         load_forecast = ha_client.true_load_forecast(
             load_sensor, solar_sensors_for_load, battery_discharge_sensors, horizon, days=history_days
         )
+        # Lectura en vivo del consumo base, UNA sola vez por ciclo — se
+        # reutiliza tanto para decidir si cortar antes de tiempo una carga
+        # diferible interrumpible como para la deteccion de anomalias mas
+        # abajo, en vez de pedirsela dos veces a Home Assistant.
+        live_base_load_w = ha_client.get_numeric_state(load_sensor, default=None)
     else:
         load_forecast = [300.0] * horizon
-
-    # Lectura en vivo del consumo base, UNA sola vez por ciclo — se reutiliza
-    # tanto para decidir si cortar antes de tiempo una carga diferible
-    # interrumpible como para la deteccion de anomalias mas abajo, en vez de
-    # pedirsela dos veces a Home Assistant.
-    live_base_load_w = ha_client.get_numeric_state(load_sensor, default=None) if load_sensor else None
+        live_base_load_w = None
 
     # Climate Orchestrator, si esta instalado: la lista de zonas NUNCA se
     # descubre sola aqui (ver climate_link.py) — se guarda en config.json
@@ -484,8 +510,10 @@ def run_cycle():
     # evitar. Se usa el dato en vivo siempre que existe, con la previsión
     # como red de seguridad SOLO si el sensor no responde ahora mismo
     # (mismo patrón "vivo con fallback a previsión" que ya usa pv_source.py
-    # para la hora actual) — nunca al revés.
-    live_charge_w, live_discharge_w, live_battery_data_ok = _live_battery_charge_discharge_w(batteries_cfg)
+    # para la hora actual) — nunca al revés. `live_charge_w`/
+    # `live_discharge_w`/`live_battery_data_ok` ya se calcularon mas arriba
+    # (los necesitaba el modo "combined" del consumo), se reutilizan tal
+    # cual en vez de volver a pedirlos a HA.
     flow_pv_w = pv_now_actual if pv_now_actual is not None else now_hp.pv_w
     flow_load_w = live_base_load_w if live_base_load_w is not None else now_hp.load_w
     flow_charge_w = live_charge_w if live_battery_data_ok else now_hp.charge_w
@@ -526,7 +554,7 @@ def run_cycle():
         # cuenta en `load_w`/`grid_w` ni en el margen de potencia contratada,
         # justo porque el excedente vertido no pasa por esa linea. `None`
         # si no hay sensor de vertido declarado (no un 0 inventado).
-        "vertido_w": (lambda v: round(v) if v is not None else None)(_live_export_w(cfg)),
+        "vertido_w": (lambda v: round(v) if v is not None else None)(_live_export_w(cfg, known_net_grid_w=net_grid_now_w)),
     }
 
     # Energia (Wh) movida en este ciclo, por bateria. En carga usamos la
@@ -609,14 +637,22 @@ def run_cycle():
     # de encender nosotros mismos, o la calefaccion trabajando de verdad un
     # dia atipico de frio, con un consumo fuera de lo normal.
     anomaly = None
-    if load_sensor and live_base_load_w is not None:
+    has_live_load_data = live_base_load_w is not None and (load_sensor_mode == "combined" or load_sensor)
+    if has_live_load_data:
         try:
-            live_pv = pv_now_actual if pv_now_actual is not None else pv_forecast[0]
-            live_discharge = sum(
-                abs(ha_client.get_numeric_state(_battery_discharge_sensor(b), default=0.0) or 0.0)
-                for b in batteries_cfg if _battery_discharge_sensor(b)
-            )
-            live_load_w = live_base_load_w + live_pv + live_discharge
+            if load_sensor_mode == "combined":
+                # live_base_load_w ya es el consumo TOTAL reconstruido
+                # (sol + red neta + descarga − carga, ver mas arriba) — a
+                # diferencia del modo "separate", donde el sensor de
+                # consumo excluye sol/descarga y hay que sumarlos aqui.
+                live_load_w = live_base_load_w
+            else:
+                live_pv = pv_now_actual if pv_now_actual is not None else pv_forecast[0]
+                live_discharge = sum(
+                    abs(ha_client.get_numeric_state(_battery_discharge_sensor(b), default=0.0) or 0.0)
+                    for b in batteries_cfg if _battery_discharge_sensor(b)
+                )
+                live_load_w = live_base_load_w + live_pv + live_discharge
             expected_load_w = load_forecast[0] + deferrable_expected_now_w + climate_live["total_w"]
             anomaly = anomaly_store.update(now, live_load_w, expected_load_w)
             if anomaly["changed"]:
@@ -914,8 +950,21 @@ def api_live():
         vals = [v for v in (ha_client.get_numeric_state(s, default=None) for s in pv_sensors) if v is not None]
         pv_now_w = round(sum(vals)) if vals else None
 
-    load_sensor = cfg.get("load_sensor")
-    load_now_w = ha_client.get_numeric_state(load_sensor, default=None) if load_sensor else None
+    # Modo "combined" (ver "Consumo de la casa" en Configuración): sin
+    # sensor de consumo ya neteado, se reconstruye con el balance fisico
+    # del panel — sol + red neta (con signo) + descarga − carga — a partir
+    # del medidor de red EN BRUTO, mismo criterio que usa run_cycle.
+    load_sensor_mode = cfg.get("load_sensor_mode") or "separate"
+    net_grid_sensor = cfg.get("net_grid_sensor")
+    net_grid_now_w = None
+    if load_sensor_mode == "combined" and net_grid_sensor:
+        net_grid_now_w = ha_client.get_numeric_state(net_grid_sensor, default=None)
+        load_now_w = None
+        if net_grid_now_w is not None and pv_now_w is not None and live_battery_data_ok:
+            load_now_w = max(0.0, pv_now_w + net_grid_now_w + live_discharge_w - live_charge_w)
+    else:
+        load_sensor = cfg.get("load_sensor")
+        load_now_w = ha_client.get_numeric_state(load_sensor, default=None) if load_sensor else None
 
     # Flujo de energia y margen de potencia contratada, calculados AQUI
     # (no en run_cycle) para que se refresquen cada vez que se pide
@@ -955,7 +1004,7 @@ def api_live():
             "contracted_power_w": float(cfg["general"].get("contracted_power_w") or 0),
             # Ver `_live_export_w` / comentario homologo en run_cycle: solo
             # informativo, no forma parte de load_w/grid_w ni del margen.
-            "vertido_w": (lambda v: round(v) if v is not None else None)(_live_export_w(cfg)),
+            "vertido_w": (lambda v: round(v) if v is not None else None)(_live_export_w(cfg, known_net_grid_w=net_grid_now_w)),
         }
 
     deferrable_live = []

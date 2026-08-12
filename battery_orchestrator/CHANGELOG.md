@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.26
+Reestructuración de la tarjeta "Consumo de la casa" (v0.11.25 lo dejaba mal organizado): ahora el **selector va primero** y decide qué campos rellenar, con "dos sensores" (consumo + vertido opcional) como opción por defecto — antes el sensor de consumo aparecía siempre fijo arriba y el desplegable de vertido quedaba suelto debajo, dando la sensación de ser dos cosas independientes cuando en realidad es una sola elección.
+- **Ampliación importante del modo "unificado"**: el sensor único de red con signo ahora alimenta también la **previsión histórica del planificador**, no solo el flujo en vivo — con este sensor basta, no hace falta declarar ningún otro de consumo. Se reconstruye con el balance físico del panel (consumo = sol + red neta + descarga − carga de baterías), igual en vivo que en el histórico.
+- Arreglo: la detección de consumo anómalo sumaba sol y descarga por segunda vez sobre un consumo que en modo unificado ya venía completo — corregido antes de publicarse, no llegó a afectar a ninguna instalación.
+- Instalaciones que ya tenían guardado el modo de vertido de la v0.11.25 migran solas a la nueva casilla única, sin tener que volver a configurar nada.
+
 ## 0.11.25
 Nuevo: **vertido a red en vivo**, en la tarjeta "Consumo de la casa" de la configuración. Sigue el mismo patrón "separado vs unificado" que ya usan las baterías para su sensor de potencia:
 - Modo **separado**: un sensor dedicado de vertido (opcional — si no lo tienes o no lo quieres, simplemente no se muestra).

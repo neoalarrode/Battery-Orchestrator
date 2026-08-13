@@ -35,12 +35,13 @@ DEFAULT_CONFIG = {
     "load_sensor_mode": "separate",  # "separate" (load_sensor + export_sensor opcional) | "combined" (un unico net_grid_sensor con signo, alimenta tanto el flujo en vivo como la previsión historica)
     "export_sensor": "",  # modo "separate": potencia de vertido dedicada (siempre >= 0), opcional
     "net_grid_sensor": "",  # modo "combined": sensor unico con signo del punto de conexion a red EN BRUTO (+ importando, - vertiendo) — sustituye a load_sensor tanto en vivo como en la previsión
-    # Credenciales de la cuenta EcoFlow (developer.ecoflow.com), UNA sola
-    # para toda la instalacion — las baterias EcoFlow (ver ecoflow_cloud.py
-    # y el campo "source" de cada bateria) las reutilizan todas, no se
-    # repiten por bateria. Vacias = sin baterias EcoFlow configuradas.
-    "ecoflow_access_key": "",
+    # Credenciales de la cuenta EcoFlow, UNA sola para toda la instalacion
+    # — las baterias EcoFlow (ver "source"/"ecoflow_mode" de cada bateria)
+    # las reutilizan todas, no se repiten por bateria. Vacias = sin
+    # baterias EcoFlow configuradas en ese modo.
+    "ecoflow_access_key": "",   # modo cloud/hybrid — developer-eu.ecoflow.com (ver ecoflow_cloud.py)
     "ecoflow_secret_key": "",
+    "ecoflow_user_id": "",      # modo bluetooth/hybrid — userId de la cuenta (no la contraseña), ver ecoflow_ble.py
     "general": {
         "horizon_hours": 48,  # menos de esto y, segun la hora del dia, el plan puede no llegar a ver la punta del dia siguiente y no cargar en la madrugada que toca (ver CHANGELOG v0.11.6)
         "cycle_seconds": 60,

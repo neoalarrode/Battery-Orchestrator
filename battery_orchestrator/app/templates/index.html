@@ -548,14 +548,44 @@
 
     <label data-i18n="label_battery_source">Origen</label>
     <select id="b-source" onchange="toggleBatterySource()">
-      <option value="ha" data-i18n="opt_source_ha">Home Assistant (sensores/switches declarados a mano)</option>
-      <option value="ecoflow_cloud" data-i18n="opt_source_ecoflow">EcoFlow (gestionada directamente, vía Cloud)</option>
+      <option value="ha" data-i18n="opt_source_ha">Configuración manual</option>
+      <option value="ecoflow" data-i18n="opt_source_ecoflow">EcoFlow</option>
     </select>
 
-    <div id="b-ecoflow-fields" style="display:none">
-      <p class="help" data-i18n="help_ecoflow_battery">Vinculada a EcoFlow — se añade desde el botón "Buscar baterías EcoFlow" más abajo, no hace falta declarar ningún sensor ni switch de Home Assistant para esta batería.</p>
-      <div class="kv"><span data-i18n="kv_ecoflow_device">Dispositivo</span><code id="b-ecoflow-name-display"></code></div>
-      <div class="kv"><span data-i18n="kv_ecoflow_sn">Número de serie</span><code id="b-ecoflow-sn-display"></code></div>
+    <!-- Bloque generico por marca — hoy solo EcoFlow, pensado para que una
+         marca futura añada su propio bloque igual (modo de conexion +
+         credenciales + descubrimiento) sin tocar el resto del formulario. -->
+    <div id="b-brand-fields" style="display:none">
+      <label data-i18n="label_ecoflow_mode">Modo de conexión</label>
+      <select id="b-ecoflow-mode" onchange="toggleEcoflowMode()">
+        <option value="bluetooth" data-i18n="opt_ecoflow_mode_bluetooth">Bluetooth</option>
+        <option value="cloud" data-i18n="opt_ecoflow_mode_cloud">Cloud</option>
+        <option value="hybrid" data-i18n="opt_ecoflow_mode_hybrid">Híbrido (Bluetooth con Cloud de respaldo)</option>
+      </select>
+
+      <div id="b-ecoflow-cloud-creds" style="display:none">
+        <p class="help" data-i18n-html="help_ecoflow_cloud_creds">Crea un Access Key y Secret Key en <a href="https://developer-eu.ecoflow.com" target="_blank" rel="noopener">developer-eu.ecoflow.com</a> — son de toda tu cuenta, solo hace falta guardarlos una vez.</p>
+        <label data-i18n="label_ecoflow_access_key">Access Key</label><input id="ecoflow-access-key" placeholder="Access Key">
+        <label data-i18n="label_ecoflow_secret_key">Secret Key</label><input id="ecoflow-secret-key" type="password" placeholder="Secret Key">
+      </div>
+      <div id="b-ecoflow-ble-creds" style="display:none">
+        <p class="help" data-i18n="help_ecoflow_ble_creds">Necesita el "Puente BLE EcoFlow" instalado en Home Assistant (Battery-Orchestrator-EcoFlow-BLE) y el userId numérico de tu cuenta EcoFlow — no es la contraseña, es un identificador. También de toda tu cuenta, se guarda una sola vez.</p>
+        <label data-i18n="label_ecoflow_user_id">userId de tu cuenta EcoFlow</label><input id="ecoflow-user-id" placeholder="1234567890">
+      </div>
+
+      <div class="actions">
+        <button type="button" onclick="saveEcoflowCredentials()" data-i18n="btn_save_ecoflow_creds">Guardar credenciales</button>
+        <button class="secondary" type="button" onclick="discoverEcoflowDevices()" id="ecoflow-discover-btn" data-i18n="btn_discover_ecoflow">Buscar baterías EcoFlow</button>
+      </div>
+      <p class="help" id="ecoflow-discover-result"></p>
+      <div id="ecoflow-devices-list"></div>
+
+      <div id="b-ecoflow-selected" style="display:none">
+        <p class="help" data-i18n="help_ecoflow_selected">Vinculada a:</p>
+        <div class="kv"><span data-i18n="kv_ecoflow_device">Dispositivo</span><code id="b-ecoflow-name-display"></code></div>
+        <div class="kv" id="b-ecoflow-sn-row" style="display:none"><span data-i18n="kv_ecoflow_sn">Número de serie</span><code id="b-ecoflow-sn-display"></code></div>
+        <div class="kv" id="b-ecoflow-address-row" style="display:none"><span data-i18n="kv_ecoflow_address">Dirección Bluetooth</span><code id="b-ecoflow-address-display"></code></div>
+      </div>
     </div>
 
     <div class="grid2" style="margin-top:10px">
@@ -602,21 +632,6 @@
       <button class="ghost" onclick="cancelBatteryForm()" type="button" data-i18n="btn_cancel">Cancelar</button>
     </div>
   </details>
-</div>
-
-<div class="card">
-  <h2 data-i18n="card_ecoflow_title">Baterías EcoFlow</h2>
-  <p class="help" data-i18n-html="help_ecoflow_general">Gestión directa por el API Cloud de EcoFlow — sin sensores ni switches de Home Assistant de por medio. Crea un Access Key y Secret Key en <a href="https://developer-eu.ecoflow.com" target="_blank" rel="noopener">developer-eu.ecoflow.com</a> y pégalos aquí.</p>
-  <label data-i18n="label_ecoflow_access_key">Access Key</label>
-  <input id="ecoflow-access-key" placeholder="Access Key">
-  <label data-i18n="label_ecoflow_secret_key">Secret Key</label>
-  <input id="ecoflow-secret-key" type="password" placeholder="Secret Key">
-  <div class="actions">
-    <button onclick="saveEcoflowCredentials()" data-i18n="btn_save">Guardar</button>
-    <button class="secondary" onclick="discoverEcoflowDevices()" id="ecoflow-discover-btn" data-i18n="btn_discover_ecoflow">Buscar baterías EcoFlow</button>
-  </div>
-  <p class="help" id="ecoflow-discover-result"></p>
-  <div id="ecoflow-devices-list"></div>
 </div>
 
 <div class="card">
@@ -907,13 +922,18 @@ es: {
 
   card_baterias_title: "Baterías", add_battery_toggle: "+ Añadir batería",
   label_battery_source: "Origen",
-  opt_source_ha: "Home Assistant (sensores/switches declarados a mano)",
-  opt_source_ecoflow: "EcoFlow (gestionada directamente, vía Cloud)",
-  help_ecoflow_battery: 'Vinculada a EcoFlow — se añade desde el botón "Buscar baterías EcoFlow" más abajo, no hace falta declarar ningún sensor ni switch de Home Assistant para esta batería.',
-  kv_ecoflow_device: "Dispositivo", kv_ecoflow_sn: "Número de serie", kv_source: "Origen",
+  opt_source_ha: "Configuración manual",
+  opt_source_ecoflow: "EcoFlow",
+  label_ecoflow_mode: "Modo de conexión",
+  opt_ecoflow_mode_bluetooth: "Bluetooth", opt_ecoflow_mode_cloud: "Cloud",
+  opt_ecoflow_mode_hybrid: "Híbrido (Bluetooth con Cloud de respaldo)",
+  help_ecoflow_cloud_creds: 'Crea un Access Key y Secret Key en <a href="https://developer-eu.ecoflow.com" target="_blank" rel="noopener">developer-eu.ecoflow.com</a> — son de toda tu cuenta, solo hace falta guardarlos una vez.',
+  help_ecoflow_ble_creds: 'Necesita el "Puente BLE EcoFlow" instalado en Home Assistant (Battery-Orchestrator-EcoFlow-BLE) y el userId numérico de tu cuenta EcoFlow — no es la contraseña, es un identificador. También de toda tu cuenta, se guarda una sola vez.',
+  label_ecoflow_user_id: "userId de tu cuenta EcoFlow",
+  btn_save_ecoflow_creds: "Guardar credenciales",
+  help_ecoflow_selected: "Vinculada a:",
+  kv_ecoflow_device: "Dispositivo", kv_ecoflow_sn: "Número de serie", kv_ecoflow_address: "Dirección Bluetooth", kv_source: "Origen",
   error_ecoflow_no_device: 'Elige la batería desde "Buscar baterías EcoFlow" — no se puede añadir una EcoFlow sin pasar por el descubrimiento.',
-  card_ecoflow_title: "Baterías EcoFlow",
-  help_ecoflow_general: 'Gestión directa por el API Cloud de EcoFlow — sin sensores ni switches de Home Assistant de por medio. Crea un Access Key y Secret Key en <a href="https://developer-eu.ecoflow.com" target="_blank" rel="noopener">developer-eu.ecoflow.com</a> y pégalos aquí.',
   label_ecoflow_access_key: "Access Key", label_ecoflow_secret_key: "Secret Key",
   btn_discover_ecoflow: "Buscar baterías EcoFlow", btn_add_as_battery: "Añadir como batería",
   ecoflow_discovery_searching: "Buscando…",
@@ -1163,13 +1183,18 @@ en: {
 
   card_baterias_title: "Batteries", add_battery_toggle: "+ Add battery",
   label_battery_source: "Source",
-  opt_source_ha: "Home Assistant (sensors/switches declared by hand)",
-  opt_source_ecoflow: "EcoFlow (managed directly, via Cloud)",
-  help_ecoflow_battery: 'Linked to EcoFlow — added from the "Search EcoFlow batteries" button below, no Home Assistant sensor or switch needs to be declared for this battery.',
-  kv_ecoflow_device: "Device", kv_ecoflow_sn: "Serial number", kv_source: "Source",
+  opt_source_ha: "Manual configuration",
+  opt_source_ecoflow: "EcoFlow",
+  label_ecoflow_mode: "Connection mode",
+  opt_ecoflow_mode_bluetooth: "Bluetooth", opt_ecoflow_mode_cloud: "Cloud",
+  opt_ecoflow_mode_hybrid: "Hybrid (Bluetooth with Cloud fallback)",
+  help_ecoflow_cloud_creds: 'Create an Access Key and Secret Key at <a href="https://developer-eu.ecoflow.com" target="_blank" rel="noopener">developer-eu.ecoflow.com</a> — they belong to your whole account, only need saving once.',
+  help_ecoflow_ble_creds: 'Needs the "EcoFlow BLE Bridge" installed in Home Assistant (Battery-Orchestrator-EcoFlow-BLE) and the numeric userId of your EcoFlow account — not the password, just an identifier. Also account-wide, saved once.',
+  label_ecoflow_user_id: "userId of your EcoFlow account",
+  btn_save_ecoflow_creds: "Save credentials",
+  help_ecoflow_selected: "Linked to:",
+  kv_ecoflow_device: "Device", kv_ecoflow_sn: "Serial number", kv_ecoflow_address: "Bluetooth address", kv_source: "Source",
   error_ecoflow_no_device: 'Pick the battery from "Search EcoFlow batteries" — an EcoFlow battery can\'t be added without going through discovery.',
-  card_ecoflow_title: "EcoFlow batteries",
-  help_ecoflow_general: 'Direct management via the EcoFlow Cloud API — no Home Assistant sensors or switches involved. Create an Access Key and Secret Key at <a href="https://developer-eu.ecoflow.com" target="_blank" rel="noopener">developer-eu.ecoflow.com</a> and paste them here.',
   label_ecoflow_access_key: "Access Key", label_ecoflow_secret_key: "Secret Key",
   btn_discover_ecoflow: "Search EcoFlow batteries", btn_add_as_battery: "Add as battery",
   ecoflow_discovery_searching: "Searching…",
@@ -1522,6 +1547,7 @@ let editingBatteryId = null;
 // esto (se rellena solo desde el descubrimiento, nunca a mano).
 let pendingEcoflowSn = null;
 let pendingEcoflowMainSn = null;
+let pendingEcoflowAddress = null;
 let editingPvArrayId = null;
 let editingDeferrableLoadId = null;
 let lastStatus = null;
@@ -1599,6 +1625,7 @@ async function loadConfig() {
   toggleLoadSensorMode();
   document.getElementById('ecoflow-access-key').value = cfg.ecoflow_access_key || '';
   document.getElementById('ecoflow-secret-key').value = cfg.ecoflow_secret_key || '';
+  document.getElementById('ecoflow-user-id').value = cfg.ecoflow_user_id || '';
   renderClimateDiscoveryState(cfg.climate_orchestrator_zones || [], cfg.climate_orchestrator_zones_discovered_at || null);
   document.getElementById('g-contracted').value = cfg.general.contracted_power_w || 0;
   document.getElementById('g-horizon').value = cfg.general.horizon_hours;
@@ -1644,9 +1671,10 @@ function renderBatteries() {
         <span class="meta">${b.capacity_wh} Wh</span>
       </summary>
       <div class="item-body">
-        ${b.source === 'ecoflow_cloud' ? `
-        <div class="kv"><span>${t('kv_source')}</span><code>EcoFlow Cloud</code></div>
-        <div class="kv"><span>${t('kv_ecoflow_sn')}</span><code>${b.ecoflow_sn || ''}</code></div>
+        ${b.source === 'ecoflow' ? `
+        <div class="kv"><span>${t('kv_source')}</span><code>EcoFlow — ${t('opt_ecoflow_mode_' + (b.ecoflow_mode || 'cloud'))}</code></div>
+        ${b.ecoflow_sn ? `<div class="kv"><span>${t('kv_ecoflow_sn')}</span><code>${b.ecoflow_sn}</code></div>` : ''}
+        ${b.ecoflow_ble_address ? `<div class="kv"><span>${t('kv_ecoflow_address')}</span><code>${b.ecoflow_ble_address}</code></div>` : ''}
         ` : `
         <div class="kv"><span>${t('kv_soc')}</span><code>${b.soc_sensor}</code></div>
         <div class="kv"><span>${t('kv_charge_switch')}</span><code>${b.charge_switch}</code></div>
@@ -1657,7 +1685,7 @@ function renderBatteries() {
         <div class="kv"><span>${t('kv_min_max_soc')}</span><code>${b.min_soc_pct}% / ${b.max_soc_pct}%</code></div>
         ${b.charge_power_limit_entity ? `<div class="kv"><span>${t('kv_charge_limit')}</span><code>${b.charge_power_limit_entity}</code></div>` : ''}
         ${b.discharge_power_limit_entity ? `<div class="kv"><span>${t('kv_discharge_limit')}</span><code>${b.discharge_power_limit_entity}</code></div>` : ''}
-        ${b.source !== 'ecoflow_cloud' ? (batteryPowerSensorSummary(b) ? `<div class="kv"><span>${t('kv_power_sensor')}</span><code>${batteryPowerSensorSummary(b)}</code></div>` : `<p class="help">${t('no_discharge_sensor_note')}</p>`) : ''}
+        ${b.source !== 'ecoflow' ? (batteryPowerSensorSummary(b) ? `<div class="kv"><span>${t('kv_power_sensor')}</span><code>${batteryPowerSensorSummary(b)}</code></div>` : `<p class="help">${t('no_discharge_sensor_note')}</p>`) : ''}
         <div class="actions">
           <button class="secondary" onclick="editBattery('${b.id}')" type="button">${t('btn_edit')}</button>
           <button class="danger" onclick="deleteBattery('${b.id}')" type="button">${t('btn_delete_battery')}</button>
@@ -1686,10 +1714,26 @@ function renderPvArrays() {
 
 function toggleBatterySource() {
   const source = document.getElementById('b-source').value;
-  const isEcoflow = source === 'ecoflow_cloud';
+  const isEcoflow = source === 'ecoflow';
   document.getElementById('b-ha-fields').style.display = isEcoflow ? 'none' : 'block';
   document.getElementById('b-ha-fields-2').style.display = isEcoflow ? 'none' : 'block';
-  document.getElementById('b-ecoflow-fields').style.display = isEcoflow ? 'block' : 'none';
+  document.getElementById('b-brand-fields').style.display = isEcoflow ? 'block' : 'none';
+  if (isEcoflow) toggleEcoflowMode();
+}
+
+function toggleEcoflowMode() {
+  const mode = document.getElementById('b-ecoflow-mode').value;
+  document.getElementById('b-ecoflow-cloud-creds').style.display = (mode === 'cloud' || mode === 'hybrid') ? 'block' : 'none';
+  document.getElementById('b-ecoflow-ble-creds').style.display = (mode === 'bluetooth' || mode === 'hybrid') ? 'block' : 'none';
+  // Cambiar de modo invalida la seleccion de dispositivo pendiente — sn y
+  // direccion BLE vienen de descubrimientos distintos, no tiene sentido
+  // arrastrar una eleccion de un modo al otro.
+  pendingEcoflowSn = null;
+  pendingEcoflowMainSn = null;
+  pendingEcoflowAddress = null;
+  document.getElementById('b-ecoflow-selected').style.display = 'none';
+  document.getElementById('ecoflow-devices-list').innerHTML = '';
+  document.getElementById('ecoflow-discover-result').textContent = '';
 }
 
 function toggleBatteryPowerSensorMode() {
@@ -1743,11 +1787,17 @@ function resetBatteryForm() {
   document.getElementById('b-power-mode').value = 'none';
   toggleBatteryPowerSensorMode();
   document.getElementById('b-source').value = 'ha';
+  document.getElementById('b-ecoflow-mode').value = 'bluetooth';
   document.getElementById('b-ecoflow-name-display').textContent = '';
   document.getElementById('b-ecoflow-sn-display').textContent = '';
+  document.getElementById('b-ecoflow-address-display').textContent = '';
+  document.getElementById('b-ecoflow-sn-row').style.display = 'none';
+  document.getElementById('b-ecoflow-address-row').style.display = 'none';
+  document.getElementById('b-ecoflow-selected').style.display = 'none';
   toggleBatterySource();
   pendingEcoflowSn = null;
   pendingEcoflowMainSn = null;
+  pendingEcoflowAddress = null;
   editingBatteryId = null;
   document.getElementById('add-battery-summary').textContent = t('add_battery_toggle');
   document.getElementById('battery-form-submit-btn').textContent = t('btn_save_battery');
@@ -1785,13 +1835,32 @@ function editBattery(id) {
 
   const source = b.source || 'ha';
   document.getElementById('b-source').value = source;
-  if (source === 'ecoflow_cloud') {
+  if (source === 'ecoflow') {
+    document.getElementById('b-ecoflow-mode').value = b.ecoflow_mode || 'cloud';
+    document.getElementById('b-ecoflow-selected').style.display = 'block';
     document.getElementById('b-ecoflow-name-display').textContent = b.name;
-    document.getElementById('b-ecoflow-sn-display').textContent = b.ecoflow_sn || '';
+    if (b.ecoflow_sn) {
+      document.getElementById('b-ecoflow-sn-row').style.display = 'flex';
+      document.getElementById('b-ecoflow-sn-display').textContent = b.ecoflow_sn;
+    }
+    if (b.ecoflow_ble_address) {
+      document.getElementById('b-ecoflow-address-row').style.display = 'flex';
+      document.getElementById('b-ecoflow-address-display').textContent = b.ecoflow_ble_address;
+    }
     pendingEcoflowSn = b.ecoflow_sn || null;
     pendingEcoflowMainSn = b.ecoflow_main_sn || null;
+    pendingEcoflowAddress = b.ecoflow_ble_address || null;
   }
   toggleBatterySource();
+  // toggleBatterySource() ya llama a toggleEcoflowMode(), que borra la
+  // seleccion pendiente al cambiar de modo — hay que volver a rellenarla
+  // DESPUES, o se perderia justo lo que se acaba de cargar.
+  if (source === 'ecoflow') {
+    pendingEcoflowSn = b.ecoflow_sn || null;
+    pendingEcoflowMainSn = b.ecoflow_main_sn || null;
+    pendingEcoflowAddress = b.ecoflow_ble_address || null;
+    document.getElementById('b-ecoflow-selected').style.display = 'block';
+  }
 
   editingBatteryId = id;
   document.getElementById('add-battery-summary').textContent = t('editing_battery', { name: b.name });
@@ -1815,9 +1884,12 @@ async function addBattery() {
     max_soc_pct: parseFloat(document.getElementById('b-maxsoc').value) || 100,
     source: source,
   };
-  if (source === 'ecoflow_cloud') {
-    battery.ecoflow_sn = pendingEcoflowSn;
-    battery.ecoflow_main_sn = pendingEcoflowMainSn;
+  if (source === 'ecoflow') {
+    const ecoflowMode = document.getElementById('b-ecoflow-mode').value;
+    battery.ecoflow_mode = ecoflowMode;
+    battery.ecoflow_sn = (ecoflowMode === 'cloud' || ecoflowMode === 'hybrid') ? pendingEcoflowSn : null;
+    battery.ecoflow_main_sn = (ecoflowMode === 'cloud' || ecoflowMode === 'hybrid') ? pendingEcoflowMainSn : null;
+    battery.ecoflow_ble_address = (ecoflowMode === 'bluetooth' || ecoflowMode === 'hybrid') ? pendingEcoflowAddress : null;
     battery.soc_sensor = null; battery.charge_switch = null; battery.discharge_switch = null;
     battery.charge_power_limit_entity = null; battery.discharge_power_limit_entity = null;
     battery.power_sensor_mode = null; battery.power_sensor = null; battery.charge_power_sensor = null; battery.net_power_sensor = null;
@@ -1835,8 +1907,10 @@ async function addBattery() {
   if (!battery.name) {
     showBatteryFormError(t('error_battery_required')); return;
   }
-  if (source === 'ecoflow_cloud') {
-    if (!battery.ecoflow_sn || !battery.ecoflow_main_sn) {
+  if (source === 'ecoflow') {
+    const needsCloud = battery.ecoflow_mode === 'cloud' || battery.ecoflow_mode === 'hybrid';
+    const needsBle = battery.ecoflow_mode === 'bluetooth' || battery.ecoflow_mode === 'hybrid';
+    if ((needsCloud && !battery.ecoflow_sn) || (needsBle && !battery.ecoflow_ble_address)) {
       showBatteryFormError(t('error_ecoflow_no_device')); return;
     }
   } else if (!battery.soc_sensor || !battery.charge_switch || !battery.discharge_switch) {
@@ -2727,13 +2801,19 @@ async function discoverClimateZones() {
 async function saveEcoflowCredentials() {
   cfg.ecoflow_access_key = document.getElementById('ecoflow-access-key').value.trim();
   cfg.ecoflow_secret_key = document.getElementById('ecoflow-secret-key').value.trim();
+  cfg.ecoflow_user_id = document.getElementById('ecoflow-user-id').value.trim();
   await saveConfig();
 }
 
+// Descubre por el/los camino/s que pida el modo elegido — Cloud, BLE, o
+// los dos a la vez en hibrido (dos listas separadas: sn y direccion BLE
+// no se pueden cruzar solos, el usuario elige la misma bateria en cada
+// lista si hace falta vincular las dos).
 async function discoverEcoflowDevices() {
   const btn = document.getElementById('ecoflow-discover-btn');
   const result = document.getElementById('ecoflow-discover-result');
   const list = document.getElementById('ecoflow-devices-list');
+  const mode = document.getElementById('b-ecoflow-mode').value;
   // Guarda las credenciales primero — el descubrimiento en el servidor
   // lee las que haya en config.json, no las que haya sueltas en el
   // formulario sin guardar todavia.
@@ -2741,23 +2821,34 @@ async function discoverEcoflowDevices() {
   btn.disabled = true;
   result.textContent = t('ecoflow_discovery_searching');
   list.innerHTML = '';
+
+  const sections = [];
   try {
-    const res = await fetch('api/ecoflow/discover', { method: 'POST' });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      result.textContent = body.error || t('ecoflow_discovery_error', { status: res.status });
-      return;
+    if (mode === 'cloud' || mode === 'hybrid') {
+      sections.push({ label: t('opt_ecoflow_mode_cloud'), ...(await fetchEcoflowDiscovery('api/ecoflow/discover_cloud')) });
     }
-    const data = await res.json();
-    const devices = data.devices || [];
-    result.textContent = devices.length === 0 ? t('ecoflow_discovery_found_none')
-      : devices.length === 1 ? t('ecoflow_discovery_found_one', { n: devices.length })
-      : t('ecoflow_discovery_found_n', { n: devices.length });
-    list.innerHTML = devices.map(d => `
+    if (mode === 'bluetooth' || mode === 'hybrid') {
+      sections.push({ label: t('opt_ecoflow_mode_bluetooth'), ...(await fetchEcoflowDiscovery('api/ecoflow/discover_ble')) });
+    }
+  } finally {
+    btn.disabled = false;
+  }
+
+  const totalCount = sections.reduce((n, s) => n + (s.devices ? s.devices.length : 0), 0);
+  const anyError = sections.find(s => s.error);
+  result.textContent = anyError ? anyError.error
+    : totalCount === 0 ? t('ecoflow_discovery_found_none')
+    : totalCount === 1 ? t('ecoflow_discovery_found_one', { n: totalCount })
+    : t('ecoflow_discovery_found_n', { n: totalCount });
+
+  list.innerHTML = sections.map(s => {
+    if (s.error) return `<p class="help warn">${s.label}: ${s.error}</p>`;
+    if (!s.devices.length) return '';
+    const rows = s.devices.map(d => `
       <div class="item-card">
         <div>
           <div class="item-name">${d.name}</div>
-          <div class="meta">${d.sn} — ${d.online ? t('ecoflow_online') : t('ecoflow_offline')}</div>
+          <div class="meta">${d.sn || d.address}${d.online !== undefined ? ' — ' + (d.online ? t('ecoflow_online') : t('ecoflow_offline')) : ''}</div>
         </div>
         <div class="actions" style="margin-top:0">
           ${d.already_added
@@ -2765,25 +2856,40 @@ async function discoverEcoflowDevices() {
             : `<button class="secondary" type="button" onclick='addEcoflowBatteryFromDiscovery(${JSON.stringify(d)})'>${t('btn_add_as_battery')}</button>`}
         </div>
       </div>`).join('');
+    return `<p class="help" style="margin-top:10px">${s.label}</p>${rows}`;
+  }).join('');
+}
+
+async function fetchEcoflowDiscovery(url) {
+  try {
+    const res = await fetch(url, { method: 'POST' });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: body.error || t('ecoflow_discovery_error', { status: res.status }), devices: [] };
+    return { devices: body.devices || [] };
   } catch (err) {
-    result.textContent = t('ecoflow_discovery_error', { status: '?' });
-  } finally {
-    btn.disabled = false;
+    return { error: t('ecoflow_discovery_error', { status: '?' }), devices: [] };
   }
 }
 
 function addEcoflowBatteryFromDiscovery(device) {
-  resetBatteryForm();
-  document.getElementById('b-source').value = 'ecoflow_cloud';
-  toggleBatterySource();
-  document.getElementById('b-name').value = device.name;
+  // Un dispositivo de la lista Cloud trae sn/main_sn; uno de la lista BLE
+  // trae address — en hibrido, si ya habia una seleccion pendiente del
+  // otro camino no se pisa (asi se puede elegir primero en una lista y
+  // luego en la otra para vincular ambas a la misma bateria).
+  document.getElementById('b-name').value = document.getElementById('b-name').value || device.name;
+  document.getElementById('b-ecoflow-selected').style.display = 'block';
   document.getElementById('b-ecoflow-name-display').textContent = device.name;
-  document.getElementById('b-ecoflow-sn-display').textContent = device.sn;
-  pendingEcoflowSn = device.sn;
-  pendingEcoflowMainSn = device.main_sn;
-  const panel = document.getElementById('add-battery-panel');
-  panel.open = true;
-  panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  if (device.sn) {
+    document.getElementById('b-ecoflow-sn-row').style.display = 'flex';
+    document.getElementById('b-ecoflow-sn-display').textContent = device.sn;
+    pendingEcoflowSn = device.sn;
+    pendingEcoflowMainSn = device.main_sn;
+  }
+  if (device.address) {
+    document.getElementById('b-ecoflow-address-row').style.display = 'flex';
+    document.getElementById('b-ecoflow-address-display').textContent = device.address;
+    pendingEcoflowAddress = device.address;
+  }
 }
 
 async function refreshLive() {

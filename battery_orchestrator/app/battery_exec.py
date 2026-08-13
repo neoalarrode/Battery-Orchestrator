@@ -8,13 +8,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import ecoflow_ble
 import ecoflow_cloud
 import ha_client
 
-# Campos del estado en vivo de EcoFlow que pueden traer el SOC, por orden de
-# preferencia — distintos modelos/firmwares de la familia STREAM reportan
-# uno u otro (ver hallazgos en ecoflow_cloud.py: el snapshot REST y el feed
-# MQTT no siempre coinciden en que campo rellenan primero).
+# Campos del estado en vivo de EcoFlow Cloud que pueden traer el SOC, por
+# orden de preferencia — distintos modelos/firmwares de la familia STREAM
+# reportan uno u otro (ver hallazgos en ecoflow_cloud.py: el snapshot REST
+# y el feed MQTT no siempre coinciden en que campo rellenan primero).
 ECOFLOW_SOC_FIELDS = ("cmsBattSoc", "bmsBattSoc", "soc", "f32ShowSoc")
 
 
@@ -32,25 +33,45 @@ class Battery:
     max_soc_pct: float = 100
     charge_power_limit_entity: str | None = None
     discharge_power_limit_entity: str | None = None
-    # Fuente EcoFlow Cloud (ver ecoflow_cloud.py) en vez de entidades de HA
-    # declaradas a mano — "source" decide que bloque de campos de arriba/
-    # abajo se usa de verdad para esta bateria en concreto. Cada bateria
-    # del sistema puede tener una fuente distinta, se deciden una a una.
-    source: str = "ha"  # "ha" | "ecoflow_cloud"
-    ecoflow_sn: str | None = None       # sn de ESTA unidad dentro del grupo
-    ecoflow_main_sn: str | None = None  # sn del dispositivo "principal" del grupo (a quien se mandan los comandos)
-    ecoflow_access_key: str | None = None
+    # Fuente EcoFlow (ver ecoflow_cloud.py / ecoflow_ble.py) en vez de
+    # entidades de HA declaradas a mano — "source" decide que bloque de
+    # campos de arriba/abajo se usa de verdad para esta bateria en
+    # concreto. Cada bateria del sistema puede tener una fuente distinta,
+    # se deciden una a una. "ecoflow_mode" es generico a proposito
+    # (bluetooth/cloud/hybrid) para que una marca futura que no sea
+    # EcoFlow pueda reutilizar el mismo patron de despacho sin rediseñar
+    # nada de aqui — solo necesitaria su propio modulo tipo `ecoflow_ble`/
+    # `ecoflow_cloud` con las mismas 4 funciones (get_state/discover/
+    # set_charging_task/set_discharging_task).
+    source: str = "ha"  # "ha" | "ecoflow"
+    ecoflow_mode: str | None = None  # "bluetooth" | "cloud" | "hybrid" (solo si source == "ecoflow")
+    ecoflow_sn: str | None = None            # modo cloud/hybrid: sn de ESTA unidad dentro del grupo
+    ecoflow_main_sn: str | None = None       # modo cloud/hybrid: sn del dispositivo "principal" del grupo
+    ecoflow_ble_address: str | None = None   # modo bluetooth/hybrid: direccion BLE de ESTA unidad
+    ecoflow_access_key: str | None = None    # credenciales de cuenta EcoFlow (globales), solo si hace falta cloud
     ecoflow_secret_key: str | None = None
+    ecoflow_user_id: str | None = None       # userId de cuenta EcoFlow (global), solo si hace falta bluetooth
 
     def read_soc_pct(self) -> float | None:
         """None si el sensor esta 'unavailable'/'unknown' o no responde (o,
-        en EcoFlow, si el feed en vivo todavia no ha dicho nada). No se
-        inventa un 50% - el llamante debe saltarse esta bateria."""
-        if self.source == "ecoflow_cloud":
+        en EcoFlow, si el feed en vivo/la conexion BLE todavia no ha dicho
+        nada). No se inventa un 50% - el llamante debe saltarse esta
+        bateria."""
+        if self.source == "ecoflow":
             return self._read_ecoflow_soc_pct()
         return ha_client.get_numeric_state(self.soc_sensor, default=None)
 
-    def _read_ecoflow_soc_pct(self) -> float | None:
+    def _read_ecoflow_soc_pct_via_ble(self) -> float | None:
+        if not (self.ecoflow_ble_address and self.ecoflow_user_id):
+            return None
+        state = ecoflow_ble.get_state(self.ecoflow_ble_address, self.ecoflow_user_id)
+        val = state.get("battery_level") if state else None
+        try:
+            return float(val) if val is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    def _read_ecoflow_soc_pct_via_cloud(self) -> float | None:
         if not (self.ecoflow_sn and self.ecoflow_access_key and self.ecoflow_secret_key):
             return None
         client = ecoflow_cloud.get_client(self.ecoflow_access_key, self.ecoflow_secret_key)
@@ -67,6 +88,93 @@ class Battery:
                 except (TypeError, ValueError):
                     continue
         return None
+
+    def _read_ecoflow_soc_pct(self) -> float | None:
+        if self.ecoflow_mode == "bluetooth":
+            return self._read_ecoflow_soc_pct_via_ble()
+        if self.ecoflow_mode == "hybrid":
+            val = self._read_ecoflow_soc_pct_via_ble()
+            return val if val is not None else self._read_ecoflow_soc_pct_via_cloud()
+        return self._read_ecoflow_soc_pct_via_cloud()  # "cloud" (o valor no reconocido: mejor caer aqui que no leer nada)
+
+    def read_live_power_w(self) -> float | None:
+        """
+        Potencia neta en vivo de esta bateria EcoFlow — positivo cargando,
+        negativo descargando, `None` si no hay dato de verdad. SOLO por
+        BLE se puede leer por UNIDAD (Cloud reporta un agregado de todo el
+        grupo, ver `_live_battery_charge_discharge_w` en main.py, que
+        gestiona ese caso aparte para no duplicarlo si hay varias baterias
+        del mismo grupo declaradas). No aplica a baterias "ha" — esas ya
+        se leen en main.py con su propia logica de power_sensor_mode.
+        """
+        if self.source != "ecoflow" or self.ecoflow_mode not in ("bluetooth", "hybrid"):
+            return None
+        if not (self.ecoflow_ble_address and self.ecoflow_user_id):
+            return None
+        state = ecoflow_ble.get_state(self.ecoflow_ble_address, self.ecoflow_user_id)
+        val = state.get("battery_power") if state else None
+        try:
+            return float(val) if val is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    def ecoflow_set_charging_task(
+        self, enable: bool | None = None, power_limit_w: float | None = None, target_soc: float | None = None,
+    ) -> bool:
+        """Activa/desactiva la tarea de carga y/o ajusta su limite de
+        potencia y SOC objetivo, por el camino que toque segun el modo de
+        esta bateria. Devuelve False (nunca lanza) si el modo elegido no
+        tiene los datos que necesita — quien llama decide que hacer con
+        eso (`execute()` lo convierte en un aviso, no en un fallo duro)."""
+        def via_ble() -> bool:
+            if not (self.ecoflow_ble_address and self.ecoflow_user_id):
+                return False
+            return ecoflow_ble.set_charging_task(
+                self.ecoflow_ble_address, self.ecoflow_user_id,
+                enable=enable, power_limit_w=power_limit_w, target_soc=target_soc,
+            )
+
+        def via_cloud() -> bool:
+            if not (self.ecoflow_access_key and self.ecoflow_secret_key and self.ecoflow_sn and self.ecoflow_main_sn):
+                return False
+            client = ecoflow_cloud.get_client(self.ecoflow_access_key, self.ecoflow_secret_key)
+            if client is None:
+                return False
+            return client.set_charging_task(
+                self.ecoflow_main_sn, self.ecoflow_sn,
+                enable=enable, power_limit_w=power_limit_w, target_soc=target_soc,
+            )
+
+        if self.ecoflow_mode == "bluetooth":
+            return via_ble()
+        if self.ecoflow_mode == "hybrid":
+            # BLE primero (limites en vatios de verdad, mas preciso) — Cloud
+            # solo como red de seguridad si BLE no responde (p.ej. fuera de
+            # alcance del proxy), nunca al reves.
+            return via_ble() or via_cloud()
+        return via_cloud()
+
+    def ecoflow_set_discharging_task(self, enable: bool | None = None, power_limit_w: float | None = None) -> bool:
+        def via_ble() -> bool:
+            if not (self.ecoflow_ble_address and self.ecoflow_user_id):
+                return False
+            return ecoflow_ble.set_discharging_task(
+                self.ecoflow_ble_address, self.ecoflow_user_id, enable=enable, power_limit_w=power_limit_w,
+            )
+
+        def via_cloud() -> bool:
+            if not (self.ecoflow_access_key and self.ecoflow_secret_key and self.ecoflow_main_sn):
+                return False
+            client = ecoflow_cloud.get_client(self.ecoflow_access_key, self.ecoflow_secret_key)
+            if client is None:
+                return False
+            return client.set_discharging_task(self.ecoflow_main_sn, enable=enable, power_limit_w=power_limit_w)
+
+        if self.ecoflow_mode == "bluetooth":
+            return via_ble()
+        if self.ecoflow_mode == "hybrid":
+            return via_ble() or via_cloud()
+        return via_cloud()
 
 
 def _distribute(total_w: float, items: list[tuple[Battery, float, float]]) -> dict[str, float]:
@@ -215,27 +323,22 @@ def execute(batteries: list[Battery], distribution: dict, dry_run: bool = True) 
         # la carga conectada. Confirmado en real: bateria en "sin accion"
         # seguia descargando con el switch simplemente apagado.
         #
-        # Para baterias EcoFlow (source == "ecoflow_cloud") es EXACTAMENTE
-        # la misma logica de 4 casos, pero "switch"="tarea programada"
-        # (isEnable de la tarea de carga/descarga, ver ecoflow_cloud.py) y
-        # "limite" = chgFromGridPowerLimited / homeNeedPowerLimited — nunca
-        # se mezclan entidades de HA con comandos EcoFlow para la misma
-        # bateria.
-        is_ecoflow = b.source == "ecoflow_cloud"
-
-        def _ecoflow_client(b=b):
-            client = ecoflow_cloud.get_client(b.ecoflow_access_key, b.ecoflow_secret_key)
-            if client is None:
-                raise RuntimeError("cliente EcoFlow no disponible (sin credenciales o sin conexion)")
-            return client
+        # Para baterias EcoFlow (source == "ecoflow") es EXACTAMENTE la
+        # misma logica de 4 casos, pero "switch"="tarea programada"
+        # (isEnable de la tarea de carga/descarga) y "limite" =
+        # chgFromGridPowerLimited / homeNeedPowerLimited, mandados por
+        # BLE, Cloud o ambos segun `ecoflow_mode` (ver
+        # `Battery.ecoflow_set_charging_task`/`ecoflow_set_discharging_task`)
+        # — nunca se mezclan entidades de HA con comandos EcoFlow para la
+        # misma bateria.
+        is_ecoflow = b.source == "ecoflow"
 
         if action == "charge" and entry["enabled"]:
             line = f"[{b.name}] CARGAR a {power:.0f} W ({entry['note']}, SOC {soc_txt})"
             if is_ecoflow:
                 def apply(b=b, power=power):
-                    client = _ecoflow_client(b)
-                    client.set_discharging_task(b.ecoflow_main_sn, enable=False)
-                    if not client.set_charging_task(b.ecoflow_main_sn, b.ecoflow_sn, enable=True, power_limit_w=power):
+                    b.ecoflow_set_discharging_task(enable=False)
+                    if not b.ecoflow_set_charging_task(enable=True, power_limit_w=power):
                         raise RuntimeError("EcoFlow no confirmo el comando de carga")
             else:
                 def apply(b=b, power=power):
@@ -247,9 +350,8 @@ def execute(batteries: list[Battery], distribution: dict, dry_run: bool = True) 
             line = f"[{b.name}] DESCARGA activada, limite {power:.0f} W ({entry['note']}, SOC {soc_txt})"
             if is_ecoflow:
                 def apply(b=b, power=power):
-                    client = _ecoflow_client(b)
-                    client.set_charging_task(b.ecoflow_main_sn, b.ecoflow_sn, enable=False)
-                    if not client.set_discharging_task(b.ecoflow_main_sn, enable=True, power_limit_w=power):
+                    b.ecoflow_set_charging_task(enable=False)
+                    if not b.ecoflow_set_discharging_task(enable=True, power_limit_w=power):
                         raise RuntimeError("EcoFlow no confirmo el comando de descarga")
             else:
                 def apply(b=b, power=power):
@@ -261,8 +363,7 @@ def execute(batteries: list[Battery], distribution: dict, dry_run: bool = True) 
             line = f"[{b.name}] descarga BLOQUEADA a 0W ({entry['note']}, SOC {soc_txt})"
             if is_ecoflow:
                 def apply(b=b):
-                    client = _ecoflow_client(b)
-                    if not client.set_discharging_task(b.ecoflow_main_sn, enable=True, power_limit_w=0):
+                    if not b.ecoflow_set_discharging_task(enable=True, power_limit_w=0):
                         raise RuntimeError("EcoFlow no confirmo el bloqueo de descarga")
             else:
                 def apply(b=b):
@@ -275,9 +376,8 @@ def execute(batteries: list[Battery], distribution: dict, dry_run: bool = True) 
             line = f"[{b.name}] sin accion (SOC {soc_txt})"
             if is_ecoflow:
                 def apply(b=b):
-                    client = _ecoflow_client(b)
-                    client.set_charging_task(b.ecoflow_main_sn, b.ecoflow_sn, enable=False)
-                    client.set_discharging_task(b.ecoflow_main_sn, enable=True, power_limit_w=0)
+                    b.ecoflow_set_charging_task(enable=False)
+                    b.ecoflow_set_discharging_task(enable=True, power_limit_w=0)
             else:
                 def apply(b=b):
                     ha_client.turn_off(b.charge_switch)

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.32
+Reestructuración pedida sobre cómo se añaden baterías EcoFlow — ya no hay una tarjeta aparte de "Baterías EcoFlow": todo vive dentro de "+ Añadir batería", con **Origen** ("Configuración manual" / "EcoFlow") y, al elegir EcoFlow, un segundo desplegable de **Modo de conexión** (Bluetooth / Cloud / Híbrido). El diseño es genérico a propósito para que una marca futura que no sea EcoFlow pueda sumarse sin rediseñar el formulario.
+- **Bluetooth** (nuevo, apoyado en el puente [Battery-Orchestrator-EcoFlow-BLE](https://github.com/neoalarrode/Battery-Orchestrator-EcoFlow-BLE) — ver ese repositorio, todavía sin verificar contra hardware real): control directo por Bluetooth, incluido a través de un ESPHome BT Proxy, sin pasar por la nube de EcoFlow para nada.
+- **Cloud**: el que ya había desde la v0.11.29/30, sin cambios de comportamiento.
+- **Híbrido**: intenta Bluetooth primero (más preciso) y cae a Cloud automáticamente si no responde — verificado en local: con el puente BLE sin instalar, la lectura cae a Cloud sin ningún error ni dato inventado.
+- Nuevo campo de cuenta EcoFlow: `userId` (identificador numérico, no la contraseña) para el modo Bluetooth/Híbrido — se obtiene una vez desde `ha-ef-ble` o similar y se guarda en la app, nunca se le pide la contraseña de la cuenta al usuario desde aquí.
+
 ## 0.11.31
 Las baterías EcoFlow ya alimentan también `/api/live` (antes solo funcionaban en el ciclo de planificación): SOC agregado y potencia en vivo, junto con el resto de baterías, en el widget de "Baterías" de "Estado actual" y en el "Flujo de energía ahora mismo". En sistemas EcoFlow con varias unidades enlazadas, la potencia (que EcoFlow reporta agregada para todo el grupo, no por unidad) solo se cuenta una vez — nunca se duplica por tener varias baterías del mismo grupo declaradas. Verificado contra una instalación real: el SOC tarda algo más en llegar la primera vez (EcoFlow lo manda en su reporte periódico completo, más lento que la potencia), pero se rellena solo en cuanto llega, sin inventar ningún dato mientras tanto.
 

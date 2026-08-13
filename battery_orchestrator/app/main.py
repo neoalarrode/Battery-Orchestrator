@@ -19,6 +19,7 @@ import config_store
 import deferrable_exec
 import deferrable_scheduler
 import deferrable_store
+import ecoflow_ble
 import ecoflow_cloud
 import forecast_store
 import ha_client
@@ -110,6 +111,7 @@ def _battery_from_cfg(b: dict, cfg: dict) -> battery_exec.Battery:
     Key) son globales de la instalacion, no se repiten en cada bateria.
     """
     source = b.get("source") or "ha"
+    ecoflow_mode = b.get("ecoflow_mode") if source == "ecoflow" else None
     return battery_exec.Battery(
         id=b["id"],
         name=b["name"],
@@ -124,10 +126,13 @@ def _battery_from_cfg(b: dict, cfg: dict) -> battery_exec.Battery:
         charge_power_limit_entity=b.get("charge_power_limit_entity") or None,
         discharge_power_limit_entity=b.get("discharge_power_limit_entity") or None,
         source=source,
+        ecoflow_mode=ecoflow_mode,
         ecoflow_sn=b.get("ecoflow_sn") or None,
         ecoflow_main_sn=b.get("ecoflow_main_sn") or None,
-        ecoflow_access_key=cfg.get("ecoflow_access_key") or None if source == "ecoflow_cloud" else None,
-        ecoflow_secret_key=cfg.get("ecoflow_secret_key") or None if source == "ecoflow_cloud" else None,
+        ecoflow_ble_address=b.get("ecoflow_ble_address") or None,
+        ecoflow_access_key=cfg.get("ecoflow_access_key") or None if ecoflow_mode in ("cloud", "hybrid") else None,
+        ecoflow_secret_key=cfg.get("ecoflow_secret_key") or None if ecoflow_mode in ("cloud", "hybrid") else None,
+        ecoflow_user_id=cfg.get("ecoflow_user_id") or None if ecoflow_mode in ("bluetooth", "hybrid") else None,
     )
 
 
@@ -164,13 +169,18 @@ def _live_battery_charge_discharge_w(batteries_cfg: list[dict], cfg: dict) -> tu
     quien llama necesita saber cual de los dos casos es para decidir si
     cae a la previsión del planificador o no.
 
-    Baterias EcoFlow (ver ecoflow_cloud.py): `powGetBpCms` es la potencia
-    AGREGADA de todo el grupo (system real-time aggregated battery power),
-    no hay forma de saber por el API cuanto pone CADA unidad enlazada por
-    separado — asi que solo se cuenta UNA VEZ por grupo (la entrada cuyo
-    `ecoflow_sn` coincide con el `ecoflow_main_sn`, sea cual sea el orden
-    en que el usuario las haya declarado), nunca sumando el mismo dato
-    varias veces por tener varias baterias del mismo grupo declaradas.
+    Baterias EcoFlow en modo "bluetooth" (ver ecoflow_ble.py): `battery_power`
+    es POR UNIDAD de verdad, se lee directo sin ningun truco.
+
+    Baterias EcoFlow en modo "cloud" (ver ecoflow_cloud.py): `powGetBpCms`
+    es la potencia AGREGADA de todo el grupo (system real-time aggregated
+    battery power), no hay forma de saber por el API cuanto pone CADA
+    unidad enlazada por separado — asi que solo se cuenta UNA VEZ por
+    grupo (la entrada cuyo `ecoflow_sn` coincide con el `ecoflow_main_sn`,
+    sea cual sea el orden en que el usuario las haya declarado), nunca
+    sumando el mismo dato varias veces por tener varias baterias del mismo
+    grupo declaradas. En modo "hybrid" se intenta primero BLE (preciso,
+    por unidad) y solo se cae al agregado de Cloud si BLE no responde.
     """
     total_charge_w = 0.0
     total_discharge_w = 0.0
@@ -179,16 +189,23 @@ def _live_battery_charge_discharge_w(batteries_cfg: list[dict], cfg: dict) -> tu
     for b in batteries_cfg:
         source = b.get("source") or "ha"
         net_power = None
-        if source == "ecoflow_cloud":
-            main_sn = b.get("ecoflow_main_sn")
-            access_key = cfg.get("ecoflow_access_key")
-            secret_key = cfg.get("ecoflow_secret_key")
-            if main_sn and main_sn not in ecoflow_main_sns_counted and access_key and secret_key:
-                client = ecoflow_cloud.get_client(access_key, secret_key)
-                state = client.get_live_state(main_sn) if client else None
-                if state and state.get("powGetBpCms") is not None:
-                    net_power = float(state["powGetBpCms"])
-                    ecoflow_main_sns_counted.add(main_sn)
+        if source == "ecoflow":
+            ecoflow_mode = b.get("ecoflow_mode")
+            if ecoflow_mode in ("bluetooth", "hybrid"):
+                address, user_id = b.get("ecoflow_ble_address"), cfg.get("ecoflow_user_id")
+                if address and user_id:
+                    state = ecoflow_ble.get_state(address, user_id)
+                    if state and state.get("battery_power") is not None:
+                        net_power = float(state["battery_power"])
+            if net_power is None and ecoflow_mode in ("cloud", "hybrid"):
+                main_sn = b.get("ecoflow_main_sn")
+                access_key, secret_key = cfg.get("ecoflow_access_key"), cfg.get("ecoflow_secret_key")
+                if main_sn and main_sn not in ecoflow_main_sns_counted and access_key and secret_key:
+                    client = ecoflow_cloud.get_client(access_key, secret_key)
+                    state = client.get_live_state(main_sn) if client else None
+                    if state and state.get("powGetBpCms") is not None:
+                        net_power = float(state["powGetBpCms"])
+                        ecoflow_main_sns_counted.add(main_sn)
         else:
             mode = b.get("power_sensor_mode") or ("separate" if b.get("power_sensor") or b.get("charge_power_sensor") else "none")
             if mode == "combined" and b.get("net_power_sensor"):
@@ -992,34 +1009,53 @@ def api_live():
     for b in cfg["batteries"]:
         source = b.get("source") or "ha"
 
-        if source == "ecoflow_cloud":
+        if source == "ecoflow":
             # Ver comentario homologo en _live_battery_charge_discharge_w:
             # el SOC es siempre por unidad (cada bateria tiene el suyo),
-            # pero la potencia (`powGetBpCms`) es AGREGADA de todo el
-            # grupo — solo se cuenta una vez por grupo, en la unidad
-            # "principal", para no duplicarla si hay varias baterias del
-            # mismo grupo declaradas por separado.
+            # pero la potencia agregada por Cloud (`powGetBpCms`) es de
+            # TODO el grupo — solo se cuenta una vez por grupo, en la
+            # unidad "principal". Por BLE (`battery_power`) no hace falta
+            # ese truco, ya es por unidad de verdad.
             soc, power, net_power = None, None, None
-            access_key, secret_key = cfg.get("ecoflow_access_key"), cfg.get("ecoflow_secret_key")
-            if access_key and secret_key:
-                client = ecoflow_cloud.get_client(access_key, secret_key)
-                sn = b.get("ecoflow_sn")
-                main_sn = b.get("ecoflow_main_sn")
-                state = client.get_live_state(sn) if (client and sn) else None
-                if state:
-                    for field in battery_exec.ECOFLOW_SOC_FIELDS:
-                        if state.get(field) is not None:
+            ecoflow_mode = b.get("ecoflow_mode")
+
+            if ecoflow_mode in ("bluetooth", "hybrid"):
+                address, user_id = b.get("ecoflow_ble_address"), cfg.get("ecoflow_user_id")
+                if address and user_id:
+                    state = ecoflow_ble.get_state(address, user_id)
+                    if state:
+                        if state.get("battery_level") is not None:
                             try:
-                                soc = float(state[field])
+                                soc = float(state["battery_level"])
                             except (TypeError, ValueError):
                                 pass
-                            break
-                if main_sn and main_sn not in ecoflow_main_sns_counted:
-                    main_state = client.get_live_state(main_sn) if client else None
-                    if main_state and main_state.get("powGetBpCms") is not None:
-                        net_power = float(main_state["powGetBpCms"])
-                        power = abs(net_power) if net_power < 0 else None  # power_w = solo descarga, mismo criterio que el resto
-                        ecoflow_main_sns_counted.add(main_sn)
+                        if state.get("battery_power") is not None:
+                            net_power = float(state["battery_power"])
+
+            if ecoflow_mode in ("cloud", "hybrid") and (soc is None or net_power is None):
+                access_key, secret_key = cfg.get("ecoflow_access_key"), cfg.get("ecoflow_secret_key")
+                if access_key and secret_key:
+                    client = ecoflow_cloud.get_client(access_key, secret_key)
+                    sn = b.get("ecoflow_sn")
+                    main_sn = b.get("ecoflow_main_sn")
+                    if soc is None:
+                        state = client.get_live_state(sn) if (client and sn) else None
+                        if state:
+                            for field in battery_exec.ECOFLOW_SOC_FIELDS:
+                                if state.get(field) is not None:
+                                    try:
+                                        soc = float(state[field])
+                                    except (TypeError, ValueError):
+                                        pass
+                                    break
+                    if net_power is None and main_sn and main_sn not in ecoflow_main_sns_counted:
+                        main_state = client.get_live_state(main_sn) if client else None
+                        if main_state and main_state.get("powGetBpCms") is not None:
+                            net_power = float(main_state["powGetBpCms"])
+                            ecoflow_main_sns_counted.add(main_sn)
+
+            if net_power is not None:
+                power = abs(net_power) if net_power < 0 else None  # power_w = solo descarga, mismo criterio que el resto
         else:
             soc = ha_client.get_numeric_state(b["soc_sensor"], default=None)
             power = ha_client.get_numeric_state(b.get("power_sensor"), default=None) if b.get("power_sensor") else None
@@ -1216,15 +1252,15 @@ def api_climate_discover():
     return jsonify({"zones": zone_ids, "count": len(zone_ids)})
 
 
-@app.post("/api/ecoflow/discover")
-def api_ecoflow_discover():
+@app.post("/api/ecoflow/discover_cloud")
+def api_ecoflow_discover_cloud():
     """
-    Boton "Buscar baterías EcoFlow" en la configuracion — lista los
-    dispositivos visibles con las credenciales ya guardadas (Access/Secret
-    Key), sin darlos de alta como bateria todavia: eso es un paso aparte
-    (`POST /api/batteries` con `source: "ecoflow_cloud"`), para que el
-    usuario pueda elegir cuales de verdad quiere gestionar desde aqui, no
-    todo lo que haya en la cuenta.
+    Boton "Buscar baterías EcoFlow" (modo Cloud/Híbrido) en "+ Añadir
+    batería" — lista los dispositivos visibles con las credenciales ya
+    guardadas (Access/Secret Key), sin darlos de alta como bateria
+    todavia: eso es un paso aparte (`POST /api/batteries` con
+    `source: "ecoflow"`), para que el usuario pueda elegir cuales de
+    verdad quiere gestionar desde aqui, no todo lo que haya en la cuenta.
     """
     cfg = config_store.load_config()
     access_key = cfg.get("ecoflow_access_key")
@@ -1234,10 +1270,13 @@ def api_ecoflow_discover():
     try:
         devices = ecoflow_cloud.list_devices(access_key, secret_key)
     except (ecoflow_cloud.EcoFlowError, requests.RequestException) as e:
-        log.warning(f"Fallo al buscar dispositivos EcoFlow: {e}")
+        log.warning(f"Fallo al buscar dispositivos EcoFlow (Cloud): {e}")
         return jsonify({"error": "No se pudo consultar la API de EcoFlow, revisa las credenciales"}), 502
 
-    already_added = {b.get("ecoflow_sn") for b in cfg["batteries"] if b.get("source") == "ecoflow_cloud"}
+    already_added = {
+        b.get("ecoflow_sn") for b in cfg["batteries"]
+        if b.get("source") == "ecoflow" and b.get("ecoflow_mode") in ("cloud", "hybrid")
+    }
     result = []
     for d in devices:
         sn = d.get("sn")
@@ -1249,6 +1288,40 @@ def api_ecoflow_discover():
             "online": bool(d.get("online")),
             "already_added": sn in already_added,
         })
+    return jsonify({"devices": result, "count": len(result)})
+
+
+@app.post("/api/ecoflow/discover_ble")
+def api_ecoflow_discover_ble():
+    """
+    Boton "Buscar baterías EcoFlow" (modo Bluetooth/Híbrido) — pide al
+    puente BLE instalado en HA (neoalarrode/Battery-Orchestrator-EcoFlow-BLE,
+    servicio `battery_orchestrator_ecoflow_ble.discover`) los dispositivos
+    vistos ahora mismo por Bluetooth, incluido a traves de un ESPHome BT
+    Proxy. Igual que el de Cloud, solo lista — no conecta ni da de alta
+    nada todavia.
+    """
+    cfg = config_store.load_config()
+    devices = ecoflow_ble.discover()
+    if devices is None:
+        return jsonify({
+            "error": "No se pudo hablar con el puente BLE — ¿está instalado "
+                     "\"Battery Orchestrator - Puente BLE EcoFlow\" en Home Assistant?",
+        }), 502
+
+    already_added = {
+        b.get("ecoflow_ble_address") for b in cfg["batteries"]
+        if b.get("source") == "ecoflow" and b.get("ecoflow_mode") in ("bluetooth", "hybrid")
+    }
+    result = [
+        {
+            "address": d.get("address"),
+            "sn": d.get("sn"),
+            "name": d.get("name") or d.get("sn"),
+            "already_added": d.get("address") in already_added,
+        }
+        for d in devices
+    ]
     return jsonify({"devices": result, "count": len(result)})
 
 

@@ -8,12 +8,15 @@ addon, se puede usar HA_URL + HA_TOKEN (token de larga duracion) en su lugar.
 
 from __future__ import annotations
 
+import logging
 import os
 import statistics
 import time
 from datetime import datetime, timedelta, timezone
 
 import requests
+
+log = logging.getLogger("ha_client")
 
 SUPERVISOR_TOKEN = os.environ.get("SUPERVISOR_TOKEN")
 if SUPERVISOR_TOKEN:
@@ -98,15 +101,42 @@ def get_numeric_state(entity_id: str, default: float | None = 0.0) -> float | No
         return default
 
 
-def call_service(domain: str, service: str, entity_id: str | None = None, extra: dict | None = None):
+def call_service(
+    domain: str, service: str, entity_id: str | None = None, extra: dict | None = None,
+    timeout: float = TIMEOUT, return_response: bool = False,
+):
     payload = {}
     if entity_id:
         payload["entity_id"] = entity_id
     if extra:
         payload.update(extra)
-    r = requests.post(f"{BASE_URL}/services/{domain}/{service}", headers=HEADERS, json=payload, timeout=TIMEOUT)
+    url = f"{BASE_URL}/services/{domain}/{service}"
+    if return_response:
+        # Query param que expone HA para servicios que declaran datos de
+        # respuesta (SupportsResponse.OPTIONAL/ONLY) — sin esto la llamada
+        # funciona igual pero el resultado nunca trae "service_response".
+        url += "?return_response"
+    r = requests.post(url, headers=HEADERS, json=payload, timeout=timeout)
     r.raise_for_status()
     return r.json()
+
+
+def call_service_with_response(
+    domain: str, service: str, extra: dict | None = None, timeout: float = TIMEOUT,
+) -> dict | None:
+    """
+    Para servicios de terceros (p.ej. el puente BLE de EcoFlow, ver
+    ecoflow_ble.py) que devuelven datos de verdad, no solo cambian
+    entidades — nunca lanza por un fallo de red/HA, devuelve `None` para
+    que quien llame lo trate igual que "sin dato todavia" en vez de tumbar
+    el ciclo entero.
+    """
+    try:
+        result = call_service(domain, service, extra=extra, timeout=timeout, return_response=True)
+    except (HAError, requests.RequestException) as e:
+        log.warning(f"Fallo al llamar al servicio {domain}.{service}: {e}")
+        return None
+    return result.get("service_response") if isinstance(result, dict) else None
 
 
 def turn_on(entity_id: str):

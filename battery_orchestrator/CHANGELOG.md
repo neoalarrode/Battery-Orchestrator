@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.33
+El puente BLE se ha rehecho para ser **genérico de verdad** (dominio `battery_orchestrator_ble_bridge`, servicios con campo `brand` en vez de fijos a EcoFlow, repositorio renombrado a [Battery-Orchestrator-BLE-Bridge](https://github.com/neoalarrode/Battery-Orchestrator-BLE-Bridge)) — este parche pone `ecoflow_ble.py` al día con esa nueva forma. Sin cambios de comportamiento para el usuario, solo para que Bluetooth/Híbrido sigan funcionando tras la reestructuración del puente.
+
 ## 0.11.32
 Reestructuración pedida sobre cómo se añaden baterías EcoFlow — ya no hay una tarjeta aparte de "Baterías EcoFlow": todo vive dentro de "+ Añadir batería", con **Origen** ("Configuración manual" / "EcoFlow") y, al elegir EcoFlow, un segundo desplegable de **Modo de conexión** (Bluetooth / Cloud / Híbrido). El diseño es genérico a propósito para que una marca futura que no sea EcoFlow pueda sumarse sin rediseñar el formulario.
 - **Bluetooth** (nuevo, apoyado en el puente [Battery-Orchestrator-EcoFlow-BLE](https://github.com/neoalarrode/Battery-Orchestrator-EcoFlow-BLE) — ver ese repositorio, todavía sin verificar contra hardware real): control directo por Bluetooth, incluido a través de un ESPHome BT Proxy, sin pasar por la nube de EcoFlow para nada.

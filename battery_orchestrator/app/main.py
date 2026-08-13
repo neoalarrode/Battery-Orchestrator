@@ -1295,11 +1295,11 @@ def api_ecoflow_discover_cloud():
 def api_ecoflow_discover_ble():
     """
     Boton "Buscar baterías EcoFlow" (modo Bluetooth/Híbrido) — pide al
-    puente BLE instalado en HA (neoalarrode/Battery-Orchestrator-EcoFlow-BLE,
-    servicio `battery_orchestrator_ecoflow_ble.discover`) los dispositivos
-    vistos ahora mismo por Bluetooth, incluido a traves de un ESPHome BT
-    Proxy. Igual que el de Cloud, solo lista — no conecta ni da de alta
-    nada todavia.
+    puente BLE generico instalado en HA (neoalarrode/Battery-Orchestrator-BLE-Bridge,
+    servicio `battery_orchestrator_ble_bridge.discover` con brand="ecoflow")
+    los dispositivos vistos ahora mismo por Bluetooth, incluido a traves de
+    un ESPHome BT Proxy. Igual que el de Cloud, solo lista — no conecta ni
+    da de alta nada todavia.
     """
     cfg = config_store.load_config()
     devices = ecoflow_ble.discover()

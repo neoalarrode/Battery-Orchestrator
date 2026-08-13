@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.38
+Descubrimiento de baterías EcoFlow **unificado**: en vez de dos listas sueltas (Cloud y Bluetooth) que había que enlazar a mano una con otra, ahora es una sola búsqueda y una sola lista — el backend empareja automáticamente por número de serie (lo devuelven las dos fuentes) y cada fila muestra de un vistazo lo que se ha encontrado de cada lado.
+
+En modo **Híbrido**, si una batería solo aparece por Cloud (el dispositivo no se estaba anunciando por Bluetooth en ese momento), ya no hace falta esperar a que aparezca para darla de alta: se añade igual, marcada como "Bluetooth (buscando…)", y el ciclo de fondo la sigue buscando cada par de minutos — en cuanto se anuncie por Bluetooth, se vincula sola sin que haga falta volver a pasar por el formulario.
+
 ## 0.11.37
 El SOC de una batería EcoFlow por Bluetooth usaba `battery_level`, que en un sistema con varias unidades EcoFlow enlazadas (BKW) es el **SOC agregado de todo el grupo**, no el de esa unidad — daba un valor que no coincidía con el de la app oficial. Ahora usa `battery_level_main`, el SOC real de la unidad, verificado contra una lectura real (81% agregado vs 82% real de esa unidad).
 

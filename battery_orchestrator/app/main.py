@@ -254,9 +254,61 @@ def _live_export_w(cfg: dict, known_net_grid_w: float | None = None) -> float | 
     return None
 
 
+_ecoflow_ble_reconcile_last_try: dict[str, datetime] = {}
+ECOFLOW_BLE_RECONCILE_INTERVAL_SECONDS = 120
+
+
+def _reconcile_ecoflow_ble_addresses(cfg: dict) -> None:
+    """
+    En modo Hibrido, una bateria EcoFlow se puede dar de alta solo con lo
+    que el descubrimiento encontro en ese momento -- si el dispositivo no
+    se estaba anunciando por Bluetooth justo entonces, se añade solo con
+    el SN de Cloud, sin direccion BLE. Aqui se reintenta el descubrimiento
+    BLE cada par de minutos para esas baterias pendientes y, en cuanto el
+    dispositivo aparezca por Bluetooth (se empareja por SN, que el puente
+    devuelve tambien en el descubrimiento BLE), se vincula sola -- sin que
+    el usuario tenga que volver a pasar por "Buscar baterias EcoFlow" a
+    mano ni perder lo ya guardado.
+    """
+    pending = [
+        b for b in cfg["batteries"]
+        if b.get("source") == "ecoflow" and b.get("ecoflow_mode") == "hybrid"
+        and b.get("ecoflow_sn") and not b.get("ecoflow_ble_address")
+    ]
+    if not pending:
+        return
+
+    now = datetime.now()
+    due = [
+        b for b in pending
+        if now - _ecoflow_ble_reconcile_last_try.get(b["id"], datetime.min)
+        >= timedelta(seconds=ECOFLOW_BLE_RECONCILE_INTERVAL_SECONDS)
+    ]
+    if not due:
+        return
+    for b in due:
+        _ecoflow_ble_reconcile_last_try[b["id"]] = now
+
+    devices = ecoflow_ble.discover()
+    if not devices:
+        return  # puente sin instalar o sin nada visible ahora mismo -- se reintenta en el proximo turno
+
+    by_sn = {d.get("sn"): d for d in devices if d.get("sn")}
+    changed = False
+    for b in due:
+        d = by_sn.get(b.get("ecoflow_sn")) or by_sn.get(b.get("ecoflow_main_sn"))
+        if d and d.get("address"):
+            b["ecoflow_ble_address"] = d["address"]
+            changed = True
+            log.info(f"[{b.get('name')}] vinculada automaticamente por Bluetooth ({d['address']}) — ya no depende solo de Cloud")
+    if changed:
+        config_store.save_config(cfg)
+
+
 def run_cycle():
     """Un ciclo completo: leer estado, planificar, repartir, ejecutar."""
     cfg = config_store.load_config()
+    _reconcile_ecoflow_ble_addresses(cfg)
     batteries_cfg = cfg["batteries"]
     dry_run = bool(cfg["general"]["dry_run"])
     cycle_hours = cfg["general"]["cycle_seconds"] / 3600
@@ -1328,6 +1380,104 @@ def api_ecoflow_discover_ble():
         for d in devices
     ]
     return jsonify({"devices": result, "count": len(result)})
+
+
+@app.post("/api/ecoflow/discover")
+def api_ecoflow_discover():
+    """
+    Descubrimiento UNIFICADO — sustituye a tener que buscar por separado
+    en dos listas (Cloud y Bluetooth) y enlazar a mano cuál es cuál: se
+    consultan las fuentes que hagan falta según el modo y se juntan en
+    una sola lista por SN (el número de serie identifica al mismo
+    dispositivo físico se vea por donde se vea, y el descubrimiento BLE
+    también lo devuelve — no hace falta nada más para emparejar). Cada
+    fila trae lo que se haya encontrado de cada lado: puede que solo
+    Cloud, solo Bluetooth, o los dos.
+
+    En modo Híbrido, un dispositivo que solo aparece por Cloud (`ble_pending`)
+    se puede añadir igual, sin dirección Bluetooth todavía — el ciclo de
+    fondo (`_reconcile_ecoflow_ble_addresses`) sigue buscándolo por su
+    cuenta y la vincula sola en cuanto el dispositivo se anuncie por BLE.
+    """
+    body = request.get_json(silent=True) or {}
+    mode = body.get("mode") or "hybrid"
+    needs_cloud = mode in ("cloud", "hybrid")
+    needs_ble = mode in ("bluetooth", "hybrid")
+
+    cfg = config_store.load_config()
+    cloud_by_sn, ble_by_sn, errors = {}, {}, []
+
+    if needs_cloud:
+        access_key = cfg.get("ecoflow_access_key")
+        secret_key = cfg.get("ecoflow_secret_key")
+        if not access_key or not secret_key:
+            errors.append("Faltan las credenciales de EcoFlow (Access Key / Secret Key)")
+        else:
+            try:
+                for d in ecoflow_cloud.list_devices(access_key, secret_key):
+                    sn = d.get("sn")
+                    if not sn:
+                        continue
+                    main_sn = ecoflow_cloud.get_main_sn(access_key, secret_key, sn) or sn
+                    cloud_by_sn[sn] = {
+                        "sn": sn, "main_sn": main_sn,
+                        "name": d.get("deviceName") or sn,
+                        "online": bool(d.get("online")),
+                    }
+            except (ecoflow_cloud.EcoFlowError, requests.RequestException) as e:
+                log.warning(f"Fallo al buscar dispositivos EcoFlow (Cloud): {e}")
+                errors.append("No se pudo consultar la API de EcoFlow (Cloud), revisa las credenciales")
+
+    if needs_ble:
+        devices = ecoflow_ble.discover()
+        if devices is None:
+            errors.append("No se pudo hablar con el puente BLE — ¿está instalado "
+                           "\"Battery Orchestrator - Puente BLE\" en Home Assistant?")
+        else:
+            for d in devices:
+                sn = d.get("sn")
+                if not sn:
+                    continue
+                ble_by_sn[sn] = {"address": d.get("address"), "name": d.get("name") or sn}
+
+    # Si TODAS las fuentes necesarias han fallado (no solo "no hay nada
+    # que ver ahora mismo"), es un error de verdad, no una lista vacia.
+    if needs_cloud and not cloud_by_sn and not needs_ble and errors:
+        return jsonify({"error": errors[0]}), 502
+    if needs_ble and not ble_by_sn and not needs_cloud and errors:
+        return jsonify({"error": errors[0]}), 502
+    if needs_cloud and needs_ble and not cloud_by_sn and not ble_by_sn and len(errors) == 2:
+        return jsonify({"error": " / ".join(errors)}), 502
+
+    already_sn = {
+        b.get("ecoflow_sn") or b.get("ecoflow_main_sn") for b in cfg["batteries"]
+        if b.get("source") == "ecoflow"
+    }
+    already_address = {
+        b.get("ecoflow_ble_address") for b in cfg["batteries"]
+        if b.get("source") == "ecoflow"
+    }
+
+    result = []
+    for sn in set(cloud_by_sn) | set(ble_by_sn):
+        c, b = cloud_by_sn.get(sn), ble_by_sn.get(sn)
+        address = b.get("address") if b else None
+        result.append({
+            "sn": sn,
+            "main_sn": (c.get("main_sn") if c else None) or sn,
+            "name": (c.get("name") if c else None) or (b.get("name") if b else None) or sn,
+            "online": c.get("online") if c else None,
+            "cloud_found": c is not None,
+            "ble_found": b is not None,
+            "address": address,
+            "ble_pending": needs_ble and needs_cloud and c is not None and b is None,
+            "already_added": (sn in already_sn) or (address is not None and address in already_address),
+        })
+    result.sort(key=lambda d: d["name"] or "")
+    return jsonify({
+        "devices": result, "count": len(result),
+        "warnings": errors if (cloud_by_sn or ble_by_sn) else [],
+    })
 
 
 @app.post("/api/ecoflow/resolve_user_id")

@@ -959,6 +959,7 @@ es: {
   ecoflow_discovery_found_one: "1 dispositivo encontrado.",
   ecoflow_discovery_found_n: "{n} dispositivos encontrados.",
   ecoflow_online: "en línea", ecoflow_offline: "sin conexión", ecoflow_already_added: "ya añadida",
+  ecoflow_ble_pending: "Bluetooth (buscando…)",
   label_name: "Nombre", label_capacity: "Capacidad (Wh)", label_soc_sensor: "Sensor SOC (%)",
   label_charge_switch: "Switch de carga", label_discharge_switch: "Switch de descarga",
   label_max_charge: "Potencia máx. carga (W)", label_max_discharge: "Potencia máx. descarga (W)",
@@ -1228,6 +1229,7 @@ en: {
   ecoflow_discovery_found_one: "1 device found.",
   ecoflow_discovery_found_n: "{n} devices found.",
   ecoflow_online: "online", ecoflow_offline: "offline", ecoflow_already_added: "already added",
+  ecoflow_ble_pending: "Bluetooth (searching…)",
   label_name: "Name", label_capacity: "Capacity (Wh)", label_soc_sensor: "SOC sensor (%)",
   label_charge_switch: "Charge switch", label_discharge_switch: "Discharge switch",
   label_max_charge: "Max. charge power (W)", label_max_discharge: "Max. discharge power (W)",
@@ -1933,9 +1935,16 @@ async function addBattery() {
     showBatteryFormError(t('error_battery_required')); return;
   }
   if (source === 'ecoflow') {
-    const needsCloud = battery.ecoflow_mode === 'cloud' || battery.ecoflow_mode === 'hybrid';
-    const needsBle = battery.ecoflow_mode === 'bluetooth' || battery.ecoflow_mode === 'hybrid';
-    if ((needsCloud && !battery.ecoflow_sn) || (needsBle && !battery.ecoflow_ble_address)) {
+    // Cloud/Bluetooth a secas necesitan su identificador si o si. Hibrido
+    // se conforma con UNO de los dos — el ciclo de fondo persigue el que
+    // falte (hoy solo en el sentido Cloud -> Bluetooth, ver
+    // _reconcile_ecoflow_ble_addresses en main.py) y lo vincula solo en
+    // cuanto aparezca, sin bloquear el alta mientras tanto.
+    const hasEither = !!(battery.ecoflow_sn || battery.ecoflow_ble_address);
+    const ok = battery.ecoflow_mode === 'cloud' ? !!battery.ecoflow_sn
+      : battery.ecoflow_mode === 'bluetooth' ? !!battery.ecoflow_ble_address
+      : hasEither;  // hybrid
+    if (!ok) {
       showBatteryFormError(t('error_ecoflow_no_device')); return;
     }
   } else if (!battery.soc_sensor || !battery.charge_switch || !battery.discharge_switch) {
@@ -2870,10 +2879,10 @@ async function saveEcoflowCredentials() {
   await saveConfig();
 }
 
-// Descubre por el/los camino/s que pida el modo elegido — Cloud, BLE, o
-// los dos a la vez en hibrido (dos listas separadas: sn y direccion BLE
-// no se pueden cruzar solos, el usuario elige la misma bateria en cada
-// lista si hace falta vincular las dos).
+// Descubrimiento UNIFICADO: una sola llamada al backend, que ya junta
+// Cloud y Bluetooth por SN cuando el modo es Hibrido — una fila por
+// bateria fisica, con lo que se haya encontrado de cada lado, en vez de
+// dos listas sueltas que habia que enlazar a mano.
 async function discoverEcoflowDevices() {
   const btn = document.getElementById('ecoflow-discover-btn');
   const result = document.getElementById('ecoflow-discover-result');
@@ -2887,73 +2896,66 @@ async function discoverEcoflowDevices() {
   result.textContent = t('ecoflow_discovery_searching');
   list.innerHTML = '';
 
-  const sections = [];
+  let devices = [], errorMsg = null;
   try {
-    if (mode === 'cloud' || mode === 'hybrid') {
-      sections.push({ label: t('opt_ecoflow_mode_cloud'), ...(await fetchEcoflowDiscovery('api/ecoflow/discover_cloud')) });
-    }
-    if (mode === 'bluetooth' || mode === 'hybrid') {
-      sections.push({ label: t('opt_ecoflow_mode_bluetooth'), ...(await fetchEcoflowDiscovery('api/ecoflow/discover_ble')) });
-    }
+    const res = await fetch('api/ecoflow/discover', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) errorMsg = body.error || t('ecoflow_discovery_error', { status: res.status });
+    else devices = body.devices || [];
+  } catch (err) {
+    errorMsg = t('ecoflow_discovery_error', { status: '?' });
   } finally {
     btn.disabled = false;
   }
 
-  const totalCount = sections.reduce((n, s) => n + (s.devices ? s.devices.length : 0), 0);
-  const anyError = sections.find(s => s.error);
-  result.textContent = anyError ? anyError.error
-    : totalCount === 0 ? t('ecoflow_discovery_found_none')
-    : totalCount === 1 ? t('ecoflow_discovery_found_one', { n: totalCount })
-    : t('ecoflow_discovery_found_n', { n: totalCount });
+  result.textContent = errorMsg ? errorMsg
+    : devices.length === 0 ? t('ecoflow_discovery_found_none')
+    : devices.length === 1 ? t('ecoflow_discovery_found_one', { n: devices.length })
+    : t('ecoflow_discovery_found_n', { n: devices.length });
 
-  list.innerHTML = sections.map(s => {
-    if (s.error) return `<p class="help warn">${s.label}: ${s.error}</p>`;
-    if (!s.devices.length) return '';
-    const rows = s.devices.map(d => `
+  list.innerHTML = devices.map(d => {
+    const badges = [];
+    if (d.cloud_found) badges.push(`<span class="pill pill-ok">Cloud${d.online === false ? ' (' + t('ecoflow_offline') + ')' : ''}</span>`);
+    if (d.ble_found) badges.push(`<span class="pill pill-ok">Bluetooth</span>`);
+    if (d.ble_pending) badges.push(`<span class="pill">${t('ecoflow_ble_pending')}</span>`);
+    return `
       <div class="item-card">
         <div>
           <div class="item-name">${d.name}</div>
-          <div class="meta">${d.sn || d.address}${d.online !== undefined ? ' — ' + (d.online ? t('ecoflow_online') : t('ecoflow_offline')) : ''}</div>
+          <div class="meta">${d.sn}</div>
+          <div class="actions" style="margin-top:6px">${badges.join('')}</div>
         </div>
         <div class="actions" style="margin-top:0">
           ${d.already_added
             ? `<span class="pill pill-ok">${t('ecoflow_already_added')}</span>`
             : `<button class="secondary" type="button" onclick='addEcoflowBatteryFromDiscovery(${JSON.stringify(d)})'>${t('btn_add_as_battery')}</button>`}
         </div>
-      </div>`).join('');
-    return `<p class="help" style="margin-top:10px">${s.label}</p>${rows}`;
+      </div>`;
   }).join('');
 }
 
-async function fetchEcoflowDiscovery(url) {
-  try {
-    const res = await fetch(url, { method: 'POST' });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) return { error: body.error || t('ecoflow_discovery_error', { status: res.status }), devices: [] };
-    return { devices: body.devices || [] };
-  } catch (err) {
-    return { error: t('ecoflow_discovery_error', { status: '?' }), devices: [] };
-  }
-}
-
 function addEcoflowBatteryFromDiscovery(device) {
-  // Un dispositivo de la lista Cloud trae sn/main_sn; uno de la lista BLE
-  // trae address — en hibrido, si ya habia una seleccion pendiente del
-  // otro camino no se pisa (asi se puede elegir primero en una lista y
-  // luego en la otra para vincular ambas a la misma bateria).
   document.getElementById('b-name').value = document.getElementById('b-name').value || device.name;
   document.getElementById('b-ecoflow-selected').style.display = 'block';
   document.getElementById('b-ecoflow-name-display').textContent = device.name;
-  if (device.sn) {
-    document.getElementById('b-ecoflow-sn-row').style.display = 'flex';
-    document.getElementById('b-ecoflow-sn-display').textContent = device.sn;
-    pendingEcoflowSn = device.sn;
-    pendingEcoflowMainSn = device.main_sn;
-  }
+  document.getElementById('b-ecoflow-sn-row').style.display = 'flex';
+  document.getElementById('b-ecoflow-sn-display').textContent = device.sn;
+  pendingEcoflowSn = device.sn;
+  pendingEcoflowMainSn = device.main_sn;
   if (device.address) {
     document.getElementById('b-ecoflow-address-row').style.display = 'flex';
     document.getElementById('b-ecoflow-address-display').textContent = device.address;
     pendingEcoflowAddress = device.address;
+  } else if (device.ble_pending) {
+    // Hibrido, todavia sin verse por Bluetooth: se añade solo con Cloud
+    // y el ciclo de fondo la vincula por BLE en cuanto aparezca, sin que
+    // haga falta volver a pasar por aqui.
+    document.getElementById('b-ecoflow-address-row').style.display = 'flex';
+    document.getElementById('b-ecoflow-address-display').textContent = t('ecoflow_ble_pending');
+    pendingEcoflowAddress = null;
   }
 }
 

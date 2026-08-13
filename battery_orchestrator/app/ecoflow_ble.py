@@ -26,6 +26,7 @@ Los 5 servicios del puente (ver su propio repositorio):
 from __future__ import annotations
 
 import threading
+import time
 
 import ha_client
 
@@ -36,6 +37,15 @@ BRAND = "ecoflow"
 # aun a traves de un ESPHome BT Proxy, un salto de red de mas frente a un
 # adaptador local) — un timeout HTTP normal de la app se quedaria corto.
 BLE_CALL_TIMEOUT_SECONDS = 40
+
+# Si una conexion fresca falla (timeout, fuera de alcance...), no se
+# reintenta hasta que pase este enfriamiento -- sin esto, un sitio que
+# pide `fresh=True` cada pocos segundos (ver _live_sensor_loop en
+# main.py) machacaria la bateria con un intento de conexion tras otro sin
+# ningun respiro, lo que en la practica empeora la inestabilidad en vez
+# de arreglarla (el propio ESPHome BT Proxy o el dispositivo pueden
+# necesitar un momento para quedar disponibles otra vez).
+FRESH_RETRY_COOLDOWN_SECONDS = 60
 
 # Cache del ultimo estado conocido por direccion + lock por direccion
 # (nunca dos conexiones BLE a la vez a la MISMA bateria desde hilos
@@ -48,6 +58,8 @@ _state_cache: dict[str, dict] = {}
 _state_cache_lock = threading.Lock()
 _address_locks: dict[str, threading.Lock] = {}
 _address_locks_guard = threading.Lock()
+_last_fresh_attempt: dict[str, float] = {}
+_last_fresh_failed: dict[str, bool] = {}
 
 
 def _lock_for(address: str) -> threading.Lock:
@@ -83,6 +95,12 @@ def get_state(address: str, user_id: str, *, fresh: bool = False) -> dict | None
     caché de verdad; el lock por direccion de aqui abajo asegura ademas
     que nunca se solapan dos conexiones reales a la MISMA bateria aunque
     dos peticiones frescas coincidieran en el tiempo.
+
+    Si la ULTIMA conexion fresca fallo, no se reintenta hasta pasado
+    `FRESH_RETRY_COOLDOWN_SECONDS` (se devuelve lo que haya en cache
+    mientras tanto, aunque este algo desactualizado) — sin este
+    enfriamiento, un fallo puntual de BLE se convertiria en un intento de
+    reconexion cada pocos segundos sin descanso.
     """
     if not fresh:
         with _state_cache_lock:
@@ -97,11 +115,22 @@ def get_state(address: str, user_id: str, *, fresh: bool = False) -> dict | None
                 cached = _state_cache.get(address)
             if cached is not None:
                 return cached
+        else:
+            last_attempt = _last_fresh_attempt.get(address)
+            if (
+                last_attempt is not None
+                and _last_fresh_failed.get(address)
+                and (time.time() - last_attempt) < FRESH_RETRY_COOLDOWN_SECONDS
+            ):
+                with _state_cache_lock:
+                    return _state_cache.get(address)  # puede ser None, es correcto asi
+        _last_fresh_attempt[address] = time.time()
         state = ha_client.call_service_with_response(
             DOMAIN, "get_state",
             {"brand": BRAND, "address": address, "credentials": {"user_id": user_id}},
             timeout=BLE_CALL_TIMEOUT_SECONDS,
         )
+        _last_fresh_failed[address] = state is None
         if state:
             with _state_cache_lock:
                 _state_cache[address] = state

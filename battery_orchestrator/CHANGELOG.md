@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.45
+Causa real de los `500 Server Error` del puente BLE (revisado el log de HA Core, no solo el del add-on): `HomeAssistantError: No se pudo conectar con <dirección> en 25s` — un timeout de conexión BLE genuino, no un bug de Python. El problema es que `_live_sensor_loop` (v0.11.42+) reintentaba conectar cada ~10s sin ningún respiro, así que un fallo puntual se convertía en un martilleo constante que probablemente empeoraba la inestabilidad en vez de arreglarla. Ahora hay un enfriamiento de 60s tras un fallo: durante ese tiempo se devuelve lo último en caché (o `None`) sin reintentar, dejando paso limpio al fallback a Cloud en modo Híbrido en vez de bloquear repetidamente en el intento de BLE.
+
 ## 0.11.44
 Causa probable de que el ciclo de planificación se quedara sin ejecutarse (y sin ningún error) tras la 0.11.42: `/api/live` (sondeado cada 5s por el dashboard) y `_live_sensor_loop` (cada ~10s) forzaban las dos lecturas BLE frescas en paralelo, desde hilos distintos, para las mismas baterías — dos conexiones a la vez al mismo dispositivo BLE pueden colisionar en el puente y dejar todo esperando indefinidamente. La caché de estado BLE se ha movido a `ecoflow_ble.py` (antes solo vivía en `main.py`, así que `battery_exec.py` —el que lee el SOC real cada ciclo— no se beneficiaba de ella) y ahora lleva también un bloqueo por dirección: nunca dos conexiones reales a la misma batería a la vez, venga de donde venga la petición. Solo `_live_sensor_loop` refresca la caché de verdad; el resto (dashboard, ciclo de planificación, menús de EcoFlow) siempre lee de ahí.
 

@@ -305,6 +305,49 @@ def _reconcile_ecoflow_ble_addresses(cfg: dict) -> None:
         config_store.save_config(cfg)
 
 
+def _ecoflow_pv_channel_now_w(cfg: dict, battery_id: str, channel: str) -> float | None:
+    """
+    Potencia AHORA MISMO de un puerto MPPT concreto (1..4) de una bateria
+    EcoFlow por Bluetooth/Hibrido — `None` si la bateria no existe, no es
+    EcoFlow por BLE, o ese puerto no ha reportado nada (nunca un cero
+    inventado). Un mismo array de Configuración → Solar apunta a un
+    battery_id + channel concretos (ver `ecoflow_battery_id`/
+    `ecoflow_pv_channel` en DEFAULT_PV_ARRAY) — asi una misma bateria
+    puede tener varios paneles de zonas distintas dados de alta por
+    separado, cada uno con su propia previsión.
+    """
+    b = next((x for x in cfg["batteries"] if x["id"] == battery_id), None)
+    if not b or b.get("source") != "ecoflow" or b.get("ecoflow_mode") not in ("bluetooth", "hybrid"):
+        return None
+    address, user_id = b.get("ecoflow_ble_address"), cfg.get("ecoflow_user_id")
+    if not (address and user_id):
+        return None
+    state = ecoflow_ble.get_state(address, user_id)
+    if not state:
+        return None
+    ch = (state.get("pv_channels") or {}).get(str(channel))
+    val = ch.get("power_w") if ch else None
+    return float(val) if val is not None else None
+
+
+def _ecoflow_pv_live_overrides(cfg: dict) -> dict[str, float]:
+    """
+    {array_id: watts_ahora_mismo} para cada array de Configuración → Solar
+    vinculado a un puerto MPPT de una bateria EcoFlow — se pasa tal cual a
+    `pv_source.get_pv_forecast_total` (ver `live_now_overrides`), que no
+    sabe nada de EcoFlow a proposito.
+    """
+    overrides = {}
+    for a in cfg["pv_arrays"]:
+        battery_id, channel = a.get("ecoflow_battery_id"), a.get("ecoflow_pv_channel")
+        if not (battery_id and channel):
+            continue
+        val = _ecoflow_pv_channel_now_w(cfg, battery_id, channel)
+        if val is not None:
+            overrides[a["id"]] = val
+    return overrides
+
+
 def run_cycle():
     """Un ciclo completo: leer estado, planificar, repartir, ejecutar."""
     cfg = config_store.load_config()
@@ -330,7 +373,8 @@ def run_cycle():
     # array que tenga su propio sensor instantáneo declarado — asi no hace
     # falta un sensor agregado en HA para tener varios strings/tejados.
     pv_forecast, pv_now_actual, hybrid_pv_now_w = pv_source.get_pv_forecast_total(
-        cfg["pv_arrays"], horizon, refresh_seconds=cfg["general"]["pv_refresh_seconds"]
+        cfg["pv_arrays"], horizon, refresh_seconds=cfg["general"]["pv_refresh_seconds"],
+        live_now_overrides=_ecoflow_pv_live_overrides(cfg),
     )
 
     # Consumo real = consumo base (ya sin carga de baterias) + solar (de
@@ -972,17 +1016,26 @@ def api_delete_battery(battery_id):
     return jsonify({"deleted": ok})
 
 
+def _force_hybrid_if_ecoflow(array: dict) -> dict:
+    # Un array vinculado a un puerto MPPT de una bateria EcoFlow esta
+    # conectado directo a esa bateria por definicion — "hybrid" siempre,
+    # sin importar lo que mande el formulario.
+    if array.get("ecoflow_battery_id") and array.get("ecoflow_pv_channel"):
+        array["installation_type"] = "hybrid"
+    return array
+
+
 @app.post("/api/pv_arrays")
 def api_add_pv_array():
     cfg = config_store.load_config()
-    array = config_store.add_pv_array(cfg, request.get_json(force=True))
+    array = config_store.add_pv_array(cfg, _force_hybrid_if_ecoflow(request.get_json(force=True)))
     return jsonify(array), 201
 
 
 @app.put("/api/pv_arrays/<array_id>")
 def api_update_pv_array(array_id):
     cfg = config_store.load_config()
-    updated = config_store.update_pv_array(cfg, array_id, request.get_json(force=True))
+    updated = config_store.update_pv_array(cfg, array_id, _force_hybrid_if_ecoflow(request.get_json(force=True)))
     if updated is None:
         return jsonify({"error": "no encontrado"}), 404
     return jsonify(updated)
@@ -1152,11 +1205,20 @@ def api_live():
             current_soc_wh += soc / 100 * cap
     current_soc_pct = round(100 * current_soc_wh / total_capacity_wh, 1) if total_capacity_wh else None
 
-    pv_sensors = [a.get("current_sensor") for a in cfg["pv_arrays"] if a.get("current_sensor")]
-    pv_now_w = None
-    if pv_sensors:
-        vals = [v for v in (ha_client.get_numeric_state(s, default=None) for s in pv_sensors) if v is not None]
-        pv_now_w = round(sum(vals)) if vals else None
+    # Solar en vivo: arrays con sensor de HA + arrays vinculados a un
+    # puerto MPPT de una bateria EcoFlow (mismo mecanismo que run_cycle,
+    # ver _ecoflow_pv_live_overrides) — cada array cuenta una vez, de la
+    # fuente que le corresponda.
+    ecoflow_pv_overrides = _ecoflow_pv_live_overrides(cfg)
+    pv_vals = []
+    for a in cfg["pv_arrays"]:
+        if a["id"] in ecoflow_pv_overrides:
+            pv_vals.append(ecoflow_pv_overrides[a["id"]])
+        elif a.get("current_sensor"):
+            v = ha_client.get_numeric_state(a["current_sensor"], default=None)
+            if v is not None:
+                pv_vals.append(v)
+    pv_now_w = round(sum(pv_vals)) if pv_vals else None
 
     # Modo "combined" (ver "Consumo de la casa" en Configuración): sin
     # sensor de consumo ya neteado, se reconstruye con el balance fisico
@@ -1478,6 +1540,46 @@ def api_ecoflow_discover():
         "devices": result, "count": len(result),
         "warnings": errors if (cloud_by_sn or ble_by_sn) else [],
     })
+
+
+@app.post("/api/ecoflow/pv_channels")
+def api_ecoflow_pv_channels():
+    """
+    Boton "+ Añadir panel EcoFlow" en Configuración → Solar: dado el id
+    de una bateria EcoFlow ya dada de alta (Bluetooth/Híbrido), pregunta
+    al puente que puertos MPPT tiene ESE modelo concreto y con que
+    potencia esta cada uno ahora mismo — para que el usuario elija cual
+    (o cuales) vincular como panel/array, sin tener que saber de antemano
+    cuantos puertos trae su modelo.
+    """
+    body = request.get_json(silent=True) or {}
+    battery_id = body.get("battery_id")
+    cfg = config_store.load_config()
+    b = next((x for x in cfg["batteries"] if x["id"] == battery_id), None)
+    if not b or b.get("source") != "ecoflow" or b.get("ecoflow_mode") not in ("bluetooth", "hybrid"):
+        return jsonify({"error": "Esa batería no es EcoFlow por Bluetooth/Híbrido"}), 400
+    address, user_id = b.get("ecoflow_ble_address"), cfg.get("ecoflow_user_id")
+    if not (address and user_id):
+        return jsonify({"error": "Esta batería todavía no tiene dirección Bluetooth vinculada"}), 400
+
+    state = ecoflow_ble.get_state(address, user_id)
+    if not state:
+        return jsonify({"error": "No se pudo hablar con el puente BLE o con la batería"}), 502
+
+    already_linked = {
+        (a.get("ecoflow_battery_id"), str(a.get("ecoflow_pv_channel")))
+        for a in cfg["pv_arrays"] if a.get("ecoflow_battery_id")
+    }
+    channels = []
+    for ch, info in sorted((state.get("pv_channels") or {}).items()):
+        if not info.get("supported"):
+            continue
+        channels.append({
+            "channel": ch,
+            "power_w": info.get("power_w"),
+            "already_added": (battery_id, ch) in already_linked,
+        })
+    return jsonify({"battery_name": b.get("name"), "channels": channels, "count": len(channels)})
 
 
 @app.post("/api/ecoflow/resolve_user_id")

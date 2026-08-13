@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.39
+Los puertos MPPT de una batería EcoFlow (paneles conectados directo, sin pasar por AC) ya se pueden **dar de alta en Configuración → Solar**, no solo usarse en vivo por detrás: nueva opción de Origen "Puerto MPPT de una batería EcoFlow" con un menú que pregunta al puente qué puertos tiene ese modelo concreto (1 a 4 según el modelo) y con qué potencia está cada uno ahora mismo — se añaden como cualquier otro panel/array, con su nombre, y quedan marcados automáticamente como "conectado directo a batería". Como cada puerto se da de alta por separado, una misma batería con paneles de zonas u orientaciones distintas puede tener varios paneles declarados, cada uno con su propio dato en vivo. Requiere v0.2.2+ del [Puente BLE](https://github.com/neoalarrode/Battery-Orchestrator-BLE-Bridge).
+
 ## 0.11.38
 Descubrimiento de baterías EcoFlow **unificado**: en vez de dos listas sueltas (Cloud y Bluetooth) que había que enlazar a mano una con otra, ahora es una sola búsqueda y una sola lista — el backend empareja automáticamente por número de serie (lo devuelven las dos fuentes) y cada fila muestra de un vistazo lo que se ha encontrado de cada lado.
 

@@ -683,6 +683,7 @@
     <select id="pv-mode" onchange="togglePvMode()">
       <option value="entity" data-i18n="opt_entity">Sensor de Home Assistant</option>
       <option value="forecast_solar_api" data-i18n="opt_forecast_api">API de Forecast.Solar (directa)</option>
+      <option value="ecoflow_battery" data-i18n="opt_ecoflow_battery">Puerto MPPT de una batería EcoFlow</option>
     </select>
     <div id="pv-entity-fields">
       <label data-i18n="label_forecast_entity">Entidad de previsión</label><input id="pv-entity" placeholder="sensor.power_production_next_24hours">
@@ -699,10 +700,28 @@
         <label data-i18n="label_kwp">kWp instalados</label><input id="pv-kwp" type="number" step="0.1">
       </div>
     </div>
-    <label data-i18n="label_current_sensor_pv">Sensor de generación instantánea de este panel/string (opcional, recomendado)</label>
-    <input id="pv-current-sensor" placeholder="sensor.tejado_sur_potencia">
-    <p class="help" data-i18n="help_current_sensor_pv">Corrige la hora actual de ESTE panel con el dato real en vez de depender solo de la previsión (nubes, etc.) — no hace falta un sensor agregado en HA, cada panel lleva el suyo y la app los suma. Las horas futuras siguen usando la previsión.</p>
-    <label data-i18n="label_install_type">Tipo de instalación de este panel/string</label>
+    <div id="pv-current-sensor-field">
+      <label data-i18n="label_current_sensor_pv">Sensor de generación instantánea de este panel/string (opcional, recomendado)</label>
+      <input id="pv-current-sensor" placeholder="sensor.tejado_sur_potencia">
+      <p class="help" data-i18n="help_current_sensor_pv">Corrige la hora actual de ESTE panel con el dato real en vez de depender solo de la previsión (nubes, etc.) — no hace falta un sensor agregado en HA, cada panel lleva el suyo y la app los suma. Las horas futuras siguen usando la previsión.</p>
+    </div>
+
+    <div id="pv-ecoflow-fields" style="display:none">
+      <p class="help" data-i18n="help_pv_ecoflow">Lee la potencia solar directo de un puerto MPPT de una batería EcoFlow ya dada de alta (Bluetooth/Híbrido) — sin sensor de Home Assistant. Una misma batería puede tener varios paneles de zonas distintas: da de alta cada puerto por separado.</p>
+      <label data-i18n="label_pv_ecoflow_battery">Batería EcoFlow</label>
+      <select id="pv-ecoflow-battery"></select>
+      <div class="actions">
+        <button class="secondary" type="button" onclick="discoverEcoflowPvChannels()" id="pv-ecoflow-discover-btn" data-i18n="btn_discover_pv_channels">Buscar puertos MPPT</button>
+      </div>
+      <p class="help" id="pv-ecoflow-discover-result"></p>
+      <div id="pv-ecoflow-channels-list"></div>
+      <div id="pv-ecoflow-selected" style="display:none">
+        <p class="help" data-i18n="help_pv_ecoflow_selected">Vinculado a:</p>
+        <div class="kv"><span data-i18n="kv_pv_ecoflow_channel">Puerto MPPT</span><code id="pv-ecoflow-selected-display"></code></div>
+      </div>
+    </div>
+
+    <label id="pv-install-type-label" data-i18n="label_install_type">Tipo de instalación de este panel/string</label>
     <select id="pv-install-type" onchange="updatePvInstallTypeHelp()">
       <option value="ac_coupled" data-i18n="opt_ac_coupled">Instalación de autoconsumo (AC) — necesita orden de carga por AC</option>
       <option value="hybrid" data-i18n="opt_hybrid">Conectado directo a una batería con inversor integrado — se autoconsume solo</option>
@@ -1005,6 +1024,20 @@ es: {
   card_solar_title: "Previsión solar", card_solar_hint: "se suman todos los paneles declarados",
   add_pv_toggle: "+ Añadir panel / array solar", label_origin: "Origen",
   opt_entity: "Sensor de Home Assistant", opt_forecast_api: "API de Forecast.Solar (directa)",
+  opt_ecoflow_battery: "Puerto MPPT de una batería EcoFlow",
+  help_pv_ecoflow: 'Lee la potencia solar directo de un puerto MPPT de una batería EcoFlow ya dada de alta (Bluetooth/Híbrido) — sin sensor de Home Assistant. Una misma batería puede tener varios paneles de zonas distintas: da de alta cada puerto por separado.',
+  label_pv_ecoflow_battery: "Batería EcoFlow",
+  btn_discover_pv_channels: "Buscar puertos MPPT",
+  help_pv_ecoflow_selected: "Vinculado a:", kv_pv_ecoflow_channel: "Puerto MPPT",
+  opt_no_ecoflow_ble_batteries: "No tienes ninguna batería EcoFlow por Bluetooth/Híbrido todavía",
+  error_pv_ecoflow_no_battery: "Elige primero una batería EcoFlow.",
+  error_pv_ecoflow_channel_required: 'Elige un puerto MPPT desde "Buscar puertos MPPT".',
+  pv_channels_found_none: "Este modelo no tiene ningún puerto MPPT.",
+  pv_channels_found_n: "{n} puerto(s) MPPT encontrados.",
+  pv_channel_label: "Puerto {n}", pv_channel_no_data: "sin datos todavía",
+  pv_channel_default_name: "{battery} — Puerto {n}",
+  btn_add_as_panel: "Añadir como panel",
+  pv_meta_ecoflow: "EcoFlow: {battery} · Puerto {n}",
   label_forecast_entity: "Entidad de previsión",
   label_api_key: "API key (vacío = plan gratuito)", label_lat: "Latitud", label_lon: "Longitud",
   label_declination: "Inclinación (grados)", label_azimuth: "Azimut (grados, 0=sur)", label_kwp: "kWp instalados",
@@ -1275,6 +1308,20 @@ en: {
   card_solar_title: "Solar forecast", card_solar_hint: "all declared panels are added together",
   add_pv_toggle: "+ Add solar panel / array", label_origin: "Source",
   opt_entity: "Home Assistant sensor", opt_forecast_api: "Forecast.Solar API (direct)",
+  opt_ecoflow_battery: "MPPT port of an EcoFlow battery",
+  help_pv_ecoflow: "Reads solar power directly from an MPPT port of an EcoFlow battery already added (Bluetooth/Hybrid) — no Home Assistant sensor needed. The same battery can have several panels from different zones: add each port separately.",
+  label_pv_ecoflow_battery: "EcoFlow battery",
+  btn_discover_pv_channels: "Search MPPT ports",
+  help_pv_ecoflow_selected: "Linked to:", kv_pv_ecoflow_channel: "MPPT port",
+  opt_no_ecoflow_ble_batteries: "You don't have any EcoFlow battery over Bluetooth/Hybrid yet",
+  error_pv_ecoflow_no_battery: "Pick an EcoFlow battery first.",
+  error_pv_ecoflow_channel_required: 'Pick an MPPT port from "Search MPPT ports".',
+  pv_channels_found_none: "This model has no MPPT ports.",
+  pv_channels_found_n: "{n} MPPT port(s) found.",
+  pv_channel_label: "Port {n}", pv_channel_no_data: "no data yet",
+  pv_channel_default_name: "{battery} — Port {n}",
+  btn_add_as_panel: "Add as panel",
+  pv_meta_ecoflow: "EcoFlow: {battery} · Port {n}",
   label_forecast_entity: "Forecast entity",
   label_api_key: "API key (empty = free plan)", label_lat: "Latitude", label_lon: "Longitude",
   label_declination: "Tilt (degrees)", label_azimuth: "Azimuth (degrees, 0=south)", label_kwp: "Installed kWp",
@@ -1575,6 +1622,8 @@ let editingBatteryId = null;
 let pendingEcoflowSn = null;
 let pendingEcoflowMainSn = null;
 let pendingEcoflowAddress = null;
+let pendingEcoflowPvBatteryId = null;
+let pendingEcoflowPvChannel = null;
 let editingPvArrayId = null;
 let editingDeferrableLoadId = null;
 let lastStatus = null;
@@ -1684,6 +1733,30 @@ function togglePvMode() {
   const mode = document.getElementById('pv-mode').value;
   document.getElementById('pv-entity-fields').style.display = mode === 'entity' ? 'block' : 'none';
   document.getElementById('pv-api-fields').style.display = mode === 'forecast_solar_api' ? 'grid' : 'none';
+  document.getElementById('pv-current-sensor-field').style.display = mode === 'ecoflow_battery' ? 'none' : 'block';
+  document.getElementById('pv-ecoflow-fields').style.display = mode === 'ecoflow_battery' ? 'block' : 'none';
+  const installType = document.getElementById('pv-install-type');
+  const installLabel = document.getElementById('pv-install-type-label');
+  if (mode === 'ecoflow_battery') {
+    // Un puerto MPPT esta conectado directo a la bateria por definicion
+    // — no tiene sentido dejar elegir "autoconsumo (AC)" aqui.
+    installType.value = 'hybrid';
+    installType.disabled = true;
+    installLabel.style.display = 'none';
+    populateEcoflowPvBatterySelect();
+  } else {
+    installType.disabled = false;
+    installLabel.style.display = 'block';
+  }
+  updatePvInstallTypeHelp();
+}
+
+function populateEcoflowPvBatterySelect() {
+  const sel = document.getElementById('pv-ecoflow-battery');
+  const candidates = cfg.batteries.filter(b => b.source === 'ecoflow' && (b.ecoflow_mode === 'bluetooth' || b.ecoflow_mode === 'hybrid'));
+  sel.innerHTML = candidates.length
+    ? candidates.map(b => `<option value="${b.id}">${b.name}</option>`).join('')
+    : `<option value="">${t('opt_no_ecoflow_ble_batteries')}</option>`;
 }
 
 function renderBatteries() {
@@ -1728,8 +1801,12 @@ function renderPvArrays() {
     <div class="item-card">
       <div>
         <div class="item-name">${a.name || '(?)'}</div>
+        ${a.ecoflow_battery_id ? `
+        <div class="meta">${t('pv_meta_ecoflow', { battery: (cfg.batteries.find(b => b.id === a.ecoflow_battery_id) || {}).name || '?', n: a.ecoflow_pv_channel })}</div>
+        ` : `
         <div class="meta">${a.mode === 'entity' ? t('pv_meta_sensor', { entity: a.entity_id }) : t('pv_meta_api', { kwp: a.kwp })}</div>
         <div class="meta">${a.current_sensor ? t('pv_meta_instant', { sensor: a.current_sensor }) : t('pv_meta_no_instant')}</div>
+        `}
         <div class="meta">${a.installation_type === 'hybrid' ? t('pv_meta_hybrid') : t('pv_meta_ac')}</div>
       </div>
       <div class="actions" style="margin-top:0">
@@ -1995,6 +2072,11 @@ function resetPvArrayForm() {
   document.getElementById('pv-az').value = '';
   document.getElementById('pv-kwp').value = '';
   document.getElementById('pv-install-type').value = 'ac_coupled';
+  pendingEcoflowPvBatteryId = null;
+  pendingEcoflowPvChannel = null;
+  document.getElementById('pv-ecoflow-selected').style.display = 'none';
+  document.getElementById('pv-ecoflow-channels-list').innerHTML = '';
+  document.getElementById('pv-ecoflow-discover-result').textContent = '';
   togglePvMode();
   updatePvInstallTypeHelp();
   editingPvArrayId = null;
@@ -2012,7 +2094,7 @@ function editPvArray(id) {
   const a = cfg.pv_arrays.find(x => x.id === id);
   if (!a) return;
   document.getElementById('pv-name').value = a.name || '';
-  document.getElementById('pv-mode').value = a.mode || 'entity';
+  document.getElementById('pv-mode').value = a.ecoflow_battery_id ? 'ecoflow_battery' : (a.mode || 'entity');
   document.getElementById('pv-entity').value = a.entity_id || '';
   document.getElementById('pv-apikey').value = a.api_key || '';
   document.getElementById('pv-lat').value = a.lat ?? '';
@@ -2024,6 +2106,13 @@ function editPvArray(id) {
   document.getElementById('pv-install-type').value = a.installation_type || 'ac_coupled';
   togglePvMode();
   updatePvInstallTypeHelp();
+  if (a.ecoflow_battery_id && a.ecoflow_pv_channel) {
+    pendingEcoflowPvBatteryId = a.ecoflow_battery_id;
+    pendingEcoflowPvChannel = a.ecoflow_pv_channel;
+    document.getElementById('pv-ecoflow-battery').value = a.ecoflow_battery_id;
+    document.getElementById('pv-ecoflow-selected').style.display = 'block';
+    document.getElementById('pv-ecoflow-selected-display').textContent = t('pv_channel_label', { n: a.ecoflow_pv_channel });
+  }
 
   editingPvArrayId = id;
   document.getElementById('add-pv-summary').textContent = t('editing_panel', { name: a.name || '' });
@@ -2036,9 +2125,10 @@ function editPvArray(id) {
 
 async function addPvArray() {
   showPvFormError('');
+  const mode = document.getElementById('pv-mode').value;
   const array = {
     name: document.getElementById('pv-name').value.trim(),
-    mode: document.getElementById('pv-mode').value,
+    mode: mode === 'ecoflow_battery' ? 'entity' : mode,  // sin previsión propia salvo que se rellene la API aparte
     entity_id: document.getElementById('pv-entity').value.trim(),
     api_key: document.getElementById('pv-apikey').value.trim(),
     lat: parseFloat(document.getElementById('pv-lat').value) || 0,
@@ -2046,11 +2136,16 @@ async function addPvArray() {
     declination: parseFloat(document.getElementById('pv-decl').value) || 30,
     azimuth: parseFloat(document.getElementById('pv-az').value) || 0,
     kwp: parseFloat(document.getElementById('pv-kwp').value) || 1,
-    current_sensor: document.getElementById('pv-current-sensor').value.trim() || null,
+    current_sensor: mode === 'ecoflow_battery' ? null : (document.getElementById('pv-current-sensor').value.trim() || null),
     installation_type: document.getElementById('pv-install-type').value,
+    ecoflow_battery_id: mode === 'ecoflow_battery' ? pendingEcoflowPvBatteryId : null,
+    ecoflow_pv_channel: mode === 'ecoflow_battery' ? pendingEcoflowPvChannel : null,
   };
-  if (array.mode === 'entity' && !array.entity_id) {
+  if (mode === 'entity' && !array.entity_id) {
     showPvFormError(t('error_pv_entity_required')); return;
+  }
+  if (mode === 'ecoflow_battery' && !(array.ecoflow_battery_id && array.ecoflow_pv_channel)) {
+    showPvFormError(t('error_pv_ecoflow_channel_required')); return;
   }
 
   const isEdit = !!editingPvArrayId;
@@ -2957,6 +3052,61 @@ function addEcoflowBatteryFromDiscovery(device) {
     document.getElementById('b-ecoflow-address-display').textContent = t('ecoflow_ble_pending');
     pendingEcoflowAddress = null;
   }
+}
+
+// Menu de puertos MPPT para "Puerto MPPT de una batería EcoFlow" en
+// Configuración → Solar — pregunta al puente que puertos tiene ESE
+// modelo concreto y con que potencia esta cada uno ahora mismo.
+async function discoverEcoflowPvChannels() {
+  const btn = document.getElementById('pv-ecoflow-discover-btn');
+  const result = document.getElementById('pv-ecoflow-discover-result');
+  const list = document.getElementById('pv-ecoflow-channels-list');
+  const batteryId = document.getElementById('pv-ecoflow-battery').value;
+  if (!batteryId) { result.textContent = t('error_pv_ecoflow_no_battery'); return; }
+
+  btn.disabled = true;
+  result.textContent = t('ecoflow_discovery_searching');
+  list.innerHTML = '';
+  let channels = [], errorMsg = null, batteryName = '';
+  try {
+    const res = await fetch('api/ecoflow/pv_channels', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ battery_id: batteryId }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) errorMsg = body.error || t('ecoflow_discovery_error', { status: res.status });
+    else { channels = body.channels || []; batteryName = body.battery_name || ''; }
+  } catch (err) {
+    errorMsg = t('ecoflow_discovery_error', { status: '?' });
+  } finally {
+    btn.disabled = false;
+  }
+
+  result.textContent = errorMsg ? errorMsg
+    : channels.length === 0 ? t('pv_channels_found_none')
+    : t('pv_channels_found_n', { n: channels.length });
+
+  list.innerHTML = channels.map(c => `
+    <div class="item-card">
+      <div>
+        <div class="item-name">${t('pv_channel_label', { n: c.channel })}</div>
+        <div class="meta">${c.power_w !== null && c.power_w !== undefined ? Math.round(c.power_w) + ' W' : t('pv_channel_no_data')}</div>
+      </div>
+      <div class="actions" style="margin-top:0">
+        ${c.already_added
+          ? `<span class="pill pill-ok">${t('ecoflow_already_added')}</span>`
+          : `<button class="secondary" type="button" onclick='addPvArrayFromEcoflowChannel(${JSON.stringify({ batteryId, batteryName, channel: c.channel })})'>${t('btn_add_as_panel')}</button>`}
+      </div>
+    </div>`).join('');
+}
+
+function addPvArrayFromEcoflowChannel(sel) {
+  pendingEcoflowPvBatteryId = sel.batteryId;
+  pendingEcoflowPvChannel = sel.channel;
+  document.getElementById('pv-name').value = document.getElementById('pv-name').value
+    || t('pv_channel_default_name', { battery: sel.batteryName, n: sel.channel });
+  document.getElementById('pv-ecoflow-selected').style.display = 'block';
+  document.getElementById('pv-ecoflow-selected-display').textContent = t('pv_channel_label', { n: sel.channel });
 }
 
 async function refreshLive() {

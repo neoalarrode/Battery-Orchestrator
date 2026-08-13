@@ -157,7 +157,8 @@ def get_array_forecast(array: dict, horizon_hours: int, refresh_seconds: int) ->
 
 
 def get_pv_forecast_total(
-    pv_arrays: list[dict], horizon_hours: int, refresh_seconds: int = 1800
+    pv_arrays: list[dict], horizon_hours: int, refresh_seconds: int = 1800,
+    live_now_overrides: dict[str, float] | None = None,
 ) -> tuple[list[float], float | None, float]:
     """
     Suma la previsión de todos los arrays declarados, y corrige la hora
@@ -167,11 +168,20 @@ def get_pv_forecast_total(
     tener que crear un sensor agregado aparte en Home Assistant: cada uno
     lleva su propio dato real, y aqui se suman igual que la previsión.
 
+    `live_now_overrides` (opcional): {array_id: watts_ahora_mismo} para
+    arrays cuyo dato en vivo no viene de un sensor de HA (`current_sensor`)
+    sino de otra fuente que resuelve quien llama — hoy, un puerto MPPT de
+    una bateria EcoFlow (ver `ecoflow_battery_id`/`ecoflow_pv_channel` en
+    cada array y `_ecoflow_pv_channel_live_overrides` en main.py). Este
+    modulo no sabe nada de EcoFlow a proposito, solo recibe el numero ya
+    resuelto — mismo trato que `current_sensor`, con prioridad si los dos
+    estuvieran declarados a la vez.
+
     Devuelve (forecast_w, pv_now_actual_w, hybrid_now_w):
       - forecast_w: la lista horaria total.
       - pv_now_actual_w: la generación real total ahora mismo — None si
-        ningun array declara sensor instantáneo (para que el llamante
-        sepa que no hay dato real).
+        ningun array tiene dato en vivo (para que el llamante sepa que no
+        hay dato real).
       - hybrid_now_w: cuanto de la hora actual viene de arrays marcados
         como "hybrid" (paneles conectados directamente a una bateria con
         inversor integrado) — esa energia ya se esta absorbiendo sola,
@@ -181,18 +191,21 @@ def get_pv_forecast_total(
     if not pv_arrays:
         return [0.0] * horizon_hours, None, 0.0
 
+    live_now_overrides = live_now_overrides or {}
     total = [0.0] * horizon_hours
     any_live = False
     hybrid_now = 0.0
 
     for array in pv_arrays:
         series = get_array_forecast(array, horizon_hours, refresh_seconds)
-        current_sensor = array.get("current_sensor")
-        if current_sensor and horizon_hours > 0:
-            live_value = ha_client.get_numeric_state(current_sensor, default=None)
-            if live_value is not None:
-                series = [live_value] + list(series[1:])
-                any_live = True
+        live_value = live_now_overrides.get(array.get("id"))
+        if live_value is None:
+            current_sensor = array.get("current_sensor")
+            if current_sensor and horizon_hours > 0:
+                live_value = ha_client.get_numeric_state(current_sensor, default=None)
+        if live_value is not None and horizon_hours > 0:
+            series = [live_value] + list(series[1:])
+            any_live = True
         for i in range(horizon_hours):
             total[i] += series[i] if i < len(series) else 0.0
         if horizon_hours > 0 and array.get("installation_type") == "hybrid" and series:

@@ -55,6 +55,10 @@ SET_ACK_TIMEOUT_SECONDS = 10
 # Cuanto se considera "todavia fresco" un dato de MQTT antes de caer al
 # snapshot REST como red de seguridad (ver `get_live_state`).
 LIVE_STATE_STALE_SECONDS = 120
+# Ese "preguntar activamente" al REST no se repite mas a menudo que esto
+# por dispositivo -- arranque en frio o corte largo de MQTT, no cada vez
+# que alguien llama a get_live_state (que puede ser cada pocos segundos).
+REST_FALLBACK_COOLDOWN_SECONDS = 20
 
 
 class EcoFlowError(Exception):
@@ -228,6 +232,7 @@ class EcoFlowCloudClient:
         self._client = None
         self._username = None
         self._started = False
+        self._rest_fallback_last_call: dict[str, float] = {}  # sn -> ultima vez que se pregunto por REST
 
     # -- ciclo de vida ----------------------------------------------------
 
@@ -345,17 +350,34 @@ class EcoFlowCloudClient:
 
     def get_live_state(self, sn: str) -> dict | None:
         """
-        Estado mergeado en vivo de este dispositivo, o `None` si todavia
-        no ha llegado nada por MQTT (arranque en frio) — quien llama debe
-        caer entonces a `get_quota_all` como red de seguridad, igual que
-        ya hace el resto de la app con otras fuentes en vivo.
+        Estado en vivo de este dispositivo — MQTT si hay algo fresco, si
+        no PREGUNTA ACTIVAMENTE al snapshot REST (`get_quota_all`) en vez
+        de quedarse a la escucha esperando el proximo mensaje: en un
+        arranque en frio (sin cache, sin saber en que estado esta el
+        sistema de verdad) o tras un corte largo de MQTT, esperar
+        pasivamente puede tardar minutos: un dato equivocado de "no hay
+        nada" durante ese rato es peor que una llamada REST de mas. Este
+        metodo es la UNICA fuente de estado Cloud que usa el resto de la
+        app (planificador incluido, via battery_exec.py) — arreglarlo
+        aqui beneficia a todos los que lo llaman sin tocar nada mas.
+
+        La llamada REST esta limitada a como mucho una vez cada
+        `REST_FALLBACK_COOLDOWN_SECONDS` por dispositivo, para no
+        agotar la cuota de la API mientras se sigue esperando el primer
+        mensaje MQTT real.
         """
         self.ensure_subscribed(sn)
         with self._lock:
             ts = self._live_state_ts.get(sn)
-            if ts is None or (time.time() - ts) > LIVE_STATE_STALE_SECONDS:
-                return None
-            return dict(self._live_state.get(sn, {}))
+            if ts is not None and (time.time() - ts) <= LIVE_STATE_STALE_SECONDS:
+                return dict(self._live_state.get(sn, {}))
+
+        now = time.time()
+        last_rest_call = self._rest_fallback_last_call.get(sn)
+        if last_rest_call is not None and (now - last_rest_call) < REST_FALLBACK_COOLDOWN_SECONDS:
+            return None
+        self._rest_fallback_last_call[sn] = now
+        return get_quota_all(self.access_key, self.secret_key, sn)
 
     def get_all_timer_task(self, main_sn: str) -> dict | None:
         self.ensure_subscribed(main_sn)

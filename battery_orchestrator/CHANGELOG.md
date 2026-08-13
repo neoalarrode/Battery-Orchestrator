@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.36
+Arreglado el 404 real de "Obtener userId automáticamente" (v0.11.34): la llamada usaba una ruta absoluta (`/api/ecoflow/resolve_user_id`) en vez de relativa como el resto de la app (`api/...`) — bajo el Ingress de Home Assistant la página vive en `.../api/hassio_ingress/<token>/`, así que una ruta con barra inicial se salta ese prefijo y apunta a la raíz del dominio, donde no existe nada. No era la caché (aunque ese arreglo de la v0.11.35 también hacía falta): la petición sí llegaba a salir del navegador, solo que a la URL equivocada.
+
 ## 0.11.35
 La página principal (`index.html`, todo el frontend en un único archivo) se estaba pudiendo quedar cacheada en el navegador o en el webview de la app móvil de Home Assistant tras actualizar el add-on, así que una actualización de la interfaz podía pasar desapercibida aunque el backend ya estuviera al día — es lo que impidió ver el botón nuevo de "Obtener userId automáticamente" de la v0.11.34 sin refrescar a mano. Ahora se sirve siempre con `Cache-Control: no-store`, para que el navegador la pida fresca en cada visita.
 

@@ -2842,7 +2842,7 @@ async function resolveEcoflowUserId() {
   btn.disabled = true;
   result.textContent = t('ecoflow_resolve_working');
   try {
-    const res = await fetch('/api/ecoflow/resolve_user_id', {
+    const res = await fetch('api/ecoflow/resolve_user_id', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),

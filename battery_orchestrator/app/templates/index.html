@@ -874,6 +874,9 @@
     <label data-i18n="label_paced_charging">Carga sostenida — reparte la carga desde red en el tiempo disponible en vez de ir siempre al máximo</label>
   </div>
   <p class="help" id="paced-charging-help" data-i18n="help_paced_charging">Menos calor y estrés en la batería: en vez de cargar a tope y luego parar, reparte la potencia a lo largo de las horas que quedan hasta que vaya a hacer falta descargar. Si el tiempo se echa encima, sube sola hasta el máximo — no te va a dejar sin cubrir la punta por ir despacio.</p>
+  <label data-i18n="label_reserve_margin">Colchón de seguridad sobre la reserva (%)</label>
+  <input id="g-reserve-margin" type="number" min="0" max="100" step="1">
+  <p class="help" data-i18n="help_reserve_margin">Extra que se suma a la reserva calculada para punta/llano, por si la previsión de sol o consumo falla un poco. 0% = apurar al filo (como siempre). Se nota sobre todo en bloques largos de valle (p.ej. fines de semana) donde la reserva calculada puede ser mínima: con margen, la batería no se queda a 0 útil varias horas seguidas.</p>
   <div class="actions"><button onclick="saveConfig()" data-i18n="btn_save">Guardar</button></div>
 </div>
 
@@ -1132,6 +1135,8 @@ es: {
   priority_help_longevidad: 'Igual que "ahorro", pero el objetivo de carga nunca supera el 90% del SOC máximo real, para reducir el desgaste de mantener la batería siempre llena.',
   label_paced_charging: "Carga sostenida — reparte la carga desde red en el tiempo disponible en vez de ir siempre al máximo",
   help_paced_charging: "Menos calor y estrés en la batería: en vez de cargar a tope y luego parar, reparte la potencia a lo largo de las horas que quedan hasta que vaya a hacer falta descargar. Si el tiempo se echa encima, sube sola hasta el máximo — no te va a dejar sin cubrir la punta por ir despacio.",
+  label_reserve_margin: "Colchón de seguridad sobre la reserva (%)",
+  help_reserve_margin: "Extra que se suma a la reserva calculada para punta/llano, por si la previsión de sol o consumo falla un poco. 0% = apurar al filo (como siempre). Se nota sobre todo en bloques largos de valle (p.ej. fines de semana) donde la reserva calculada puede ser mínima: con margen, la batería no se queda a 0 útil varias horas seguidas.",
 
   card_general_title: "General", label_horizon: "Horizonte de planificación (horas)",
   help_horizon: "Recomendado 48h o más: con menos, según la hora del día, el plan puede no llegar a ver la punta de mañana y no cargar en la madrugada que toca.",
@@ -1434,6 +1439,8 @@ en: {
   priority_help_longevidad: 'Same as "savings", but the charge target never exceeds 90% of the real max SOC, to reduce the wear of always keeping the battery full.',
   label_paced_charging: "Sustained charging — spreads grid charging over the available time instead of always going full power",
   help_paced_charging: "Less heat and stress on the battery: instead of charging flat-out and then stopping, it spreads the power over the hours left until discharging will be needed. If time runs short, it ramps up on its own to full power — it won't leave the peak period uncovered by going slow.",
+  label_reserve_margin: "Safety margin on the reserve target (%)",
+  help_reserve_margin: "Extra added on top of the calculated peak/mid-tariff reserve, in case the solar or consumption forecast is a bit off. 0% = cut it as close as always. Matters most in long off-peak blocks (e.g. weekends) where the calculated reserve can be near zero: with a margin, the battery won't sit near-empty for hours at a stretch.",
 
   card_general_title: "General", label_horizon: "Planning horizon (hours)",
   help_horizon: "48h or more recommended: with less, depending on the time of day, the plan may not reach far enough to see tomorrow's peak hours and skip charging overnight when it should.",
@@ -1774,6 +1781,7 @@ async function loadConfig() {
   document.getElementById('g-dryrun').checked = cfg.general.dry_run;
   document.getElementById('g-priority').value = cfg.general.priority_mode || 'ahorro';
   document.getElementById('g-paced').checked = !!cfg.general.paced_charging;
+  document.getElementById('g-reserve-margin').value = cfg.general.reserve_safety_margin_pct ?? 15;
   updatePriorityHelp();
   const backfillLast = document.getElementById('energy-backfill-last');
   if (cfg._energy_history_backfilled_at) {
@@ -2475,6 +2483,7 @@ async function saveConfig() {
   cfg.general.dry_run = document.getElementById('g-dryrun').checked;
   cfg.general.priority_mode = document.getElementById('g-priority').value;
   cfg.general.paced_charging = document.getElementById('g-paced').checked;
+  cfg.general.reserve_safety_margin_pct = Number(document.getElementById('g-reserve-margin').value) || 0;
 
   try {
     const res = await fetch('api/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(cfg) });

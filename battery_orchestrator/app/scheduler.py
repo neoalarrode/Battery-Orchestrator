@@ -58,6 +58,7 @@ def build_plan(
     max_usable_wh: float | None = None,
     allow_grid_charging: bool = True,
     paced_charging: bool = False,
+    reserve_safety_margin_wh: float = 0.0,
 ) -> tuple[list[HourPlan], float]:
     """
     pv_forecast_w / load_forecast_w: listas de potencia media (W) para cada
@@ -93,6 +94,19 @@ def build_plan(
     cargar tan rapido. Si el tiempo se echa encima, la potencia calculada
     sube sola (mismo calculo, menos horas) hasta el maximo si hace falta —
     no es una rama de emergencia aparte, es el mismo numero.
+
+    reserve_safety_margin_wh: colchon extra (Wh) que se suma a CUALQUIER
+    objetivo de reserva calculado (punta/llano futuros) antes de decidir si
+    cargar en valle o si descargar el sobrante en valle/llano — nunca se
+    toca en la descarga de EMERGENCIA de punta (rama 3), que siempre puede
+    llegar hasta min_soc_wh de verdad si hace falta. Sin margen, la reserva
+    apunta exactamente a lo que la previsión dice que hara falta; si la
+    previsión falla un poco (sol real por debajo de lo previsto, consumo
+    real por encima), la bateria puede acabar tocando el suelo de verdad
+    varias horas seguidas sin colchon ninguno — sobre todo en bloques de
+    valle largos (p.ej. fin de semana entero) donde no se ve ningun tramo
+    caro dentro del horizonte y la reserva calculada es minima o nula. 0.0
+    (por defecto) reproduce el comportamiento de siempre, al filo.
 
     Devuelve (plan, reserve_wh): el plan hora a hora, y el nivel de SOC
     absoluto (Wh) que el motor esta intentando alcanzar AHORA MISMO para
@@ -161,7 +175,7 @@ def build_plan(
         """
         energy_needed = min(valle_target_punta[i], usable_capacity_wh)
         energy_needed += min(valle_target_llano[i], max(0.0, usable_capacity_wh - energy_needed))
-        return min(ceiling_wh, min_soc_wh + energy_needed)
+        return min(ceiling_wh, min_soc_wh + energy_needed + reserve_safety_margin_wh)
 
     # reserve_wh (para mostrar "cuanto hace falta ahora mismo"): si la
     # hora actual es valle, usa el objetivo propagado del bloque de valle
@@ -171,7 +185,7 @@ def build_plan(
     else:
         energy_needed_now = min(future_punta_after[0], usable_capacity_wh)
         energy_needed_now += min(future_llano_after[0], max(0.0, usable_capacity_wh - energy_needed_now))
-        reserve_wh = min(ceiling_wh, min_soc_wh + energy_needed_now)
+        reserve_wh = min(ceiling_wh, min_soc_wh + energy_needed_now + reserve_safety_margin_wh)
 
     # Para la carga sostenida (paced_charging): en que hora, de aqui en
     # adelante, va a hacer falta de verdad la bateria por primera vez — sea
@@ -275,7 +289,7 @@ def build_plan(
         #    haga falta reservar para TODA la punta que quede por delante.
         elif deficit_w[i] > 0 and tier == "llano":
             reserved_for_future_punta = future_punta_after[i + 1]
-            available = max(0.0, soc - min_soc_wh - reserved_for_future_punta)
+            available = max(0.0, soc - min_soc_wh - reserved_for_future_punta - reserve_safety_margin_wh)
             discharge = min(deficit_w[i], max_discharge_w, available)
             if discharge > 0:
                 soc -= discharge

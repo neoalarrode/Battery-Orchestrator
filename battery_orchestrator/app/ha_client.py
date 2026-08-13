@@ -372,8 +372,8 @@ load_forecast_from_history = hourly_average_forecast
 
 
 def true_load_forecast(base_consumption_sensor: str, solar_sensors: list[str],
-                        battery_discharge_sensors: list[str],
-                        horizon_hours: int, days: int = 21) -> list[float]:
+                        horizon_hours: int, days: int = 21,
+                        battery_power_sensor: str | None = None) -> list[float]:
     """
     Reconstruye el consumo REAL de la vivienda sumando el historico de cada
     componente por separado, hora a hora:
@@ -381,24 +381,26 @@ def true_load_forecast(base_consumption_sensor: str, solar_sensors: list[str],
         consumo = consumo_base (red YA SIN la carga de baterias, p.ej.
                                  "consumo_instantaneo")
                 + produccion_solar (de cada string/tejado declarado, sumados)
-                + descarga_baterias (solo salida, sensores positivos tipo
-                  "..._load_from_battery"; NO hace falta el de carga: al
-                  restarse ya en el sensor base, los terminos de carga se
-                  cancelan matematicamente)
+                + descarga_baterias (NO hace falta la carga: al restarse ya
+                  en el sensor base, los terminos de carga se cancelan
+                  matematicamente)
 
-    El sensor de descarga de cada bateria se toma en valor absoluto MUESTRA A
-    MUESTRA (no sobre la media ya calculada): algunos modelos usan un unico
-    sensor bidireccional (carga positiva/descarga negativa - el mismo caso ya
-    detectado y corregido en el calculo en vivo, ver `net_power_w` en
-    main.py). Si una franja horaria mezcla muestras de carga y descarga de
-    distintos dias (p.ej. unos dias todavia cargando a esa hora, otros ya
-    descargando), promediar primero y aplicar abs() despues deja que esas
-    muestras se CANCELEN entre si y el resultado se hunda cerca de cero
-    aunque hubiera bastante movimiento de energia real. Por eso el abs() se
-    aplica antes de promediar.
+    `battery_power_sensor`: UN unico sensor con signo para TODO el sistema
+    ("sensor.battery_orchestrator_power", positivo = descargando, negativo =
+    cargando) — publicado por el propio addon, agnostico de cuantas baterias
+    haya ni de que fabricante sean (HA, EcoFlow o cualquier otro). Ni la
+    logica ni el calculo de esto vive en Home Assistant, solo el dato ya
+    hecho; por eso no hace falta un sensor por bateria ni uno especifico
+    por fabricante, solo el total que YA se publica para el dashboard.
 
-    No hace falta un sensor nuevo en HA: se calcula aqui mismo a partir de
-    sensores que ya existen y ya tienen historico acumulado.
+    El signo se filtra MUESTRA A MUESTRA (no sobre la media ya calculada):
+    si una franja horaria mezcla muestras de carga y descarga de distintos
+    dias (p.ej. unos dias todavia cargando a esa hora, otros ya
+    descargando), promediar primero y filtrar el signo despues deja que
+    esas muestras se CANCELEN entre si y el resultado se hunda cerca de
+    cero aunque hubiera bastante movimiento de energia real. Por eso el
+    filtro se aplica antes de promediar (ver `sign_filter` en
+    `hourly_average_forecast`).
     """
     total = hourly_average_forecast(base_consumption_sensor, horizon_hours, days, default=0.0)
 
@@ -408,19 +410,16 @@ def true_load_forecast(base_consumption_sensor: str, solar_sensors: list[str],
         solar = hourly_average_forecast(ss, horizon_hours, days, default=0.0)
         total = [total[i] + solar[i] for i in range(horizon_hours)]
 
-    for bs in battery_discharge_sensors:
-        if not bs:
-            continue
-        batt = hourly_average_forecast(bs, horizon_hours, days, default=0.0, abs_values=True)
-        total = [total[i] + batt[i] for i in range(horizon_hours)]
+    if battery_power_sensor:
+        discharge = hourly_average_forecast(battery_power_sensor, horizon_hours, days, default=0.0, sign_filter="positive")
+        total = [total[i] + discharge[i] for i in range(horizon_hours)]
 
     return total
 
 
 def true_load_forecast_from_grid(net_grid_sensor: str, solar_sensors: list[str],
-                                  batteries_cfg: list[dict], horizon_hours: int, days: int = 21,
-                                  ecoflow_discharge_sensor: str | None = None,
-                                  ecoflow_charge_sensor: str | None = None) -> list[float]:
+                                  horizon_hours: int, days: int = 21,
+                                  battery_power_sensor: str | None = None) -> list[float]:
     """
     Igual que `true_load_forecast`, pero para el modo "unificado" del
     sensor de consumo (ver "Consumo de la casa" en Configuración): en vez
@@ -431,18 +430,16 @@ def true_load_forecast_from_grid(net_grid_sensor: str, solar_sensors: list[str],
         consumo = produccion_solar + red_neta (con signo) + descarga_baterias
                   - carga_baterias
 
-    A diferencia de `true_load_forecast`, aquí SÍ hace falta la carga de
-    cada batería por separado (positiva), porque el sensor de red en bruto
-    no la excluye como sí hace un "consumo_instantaneo" ya neteado — sin
-    restarla, cada carga se contaría dos veces como si fuera consumo de la
-    casa.
+    A diferencia de `true_load_forecast`, aquí SÍ hace falta la carga por
+    separado (positiva), porque el sensor de red en bruto no la excluye
+    como sí hace un "consumo_instantaneo" ya neteado — sin restarla, cada
+    carga se contaría dos veces como si fuera consumo de la casa.
 
-    Para baterías en modo "combined" (un único `net_power_sensor` con
-    signo, carga positiva/descarga negativa), la carga y la descarga se
-    extraen del MISMO sensor pero promediando cada mitad por separado
-    (`sign_filter`, ver `hourly_average_forecast`) — promediar el sensor
-    entero y aplicar abs() después cancelaría carga y descarga entre sí
-    dentro de la misma franja horaria.
+    `battery_power_sensor`: UN unico sensor con signo para TODO el sistema
+    ("sensor.battery_orchestrator_power", positivo = descargando, negativo
+    = cargando), agnostico de fabricante — ver `true_load_forecast`. La
+    carga y la descarga se extraen del MISMO sensor filtrando cada mitad
+    por separado (`sign_filter`, ver `hourly_average_forecast`).
     """
     total = hourly_average_forecast(net_grid_sensor, horizon_hours, days, default=0.0)
 
@@ -452,33 +449,10 @@ def true_load_forecast_from_grid(net_grid_sensor: str, solar_sensors: list[str],
         solar = hourly_average_forecast(ss, horizon_hours, days, default=0.0)
         total = [total[i] + solar[i] for i in range(horizon_hours)]
 
-    for b in batteries_cfg:
-        mode = b.get("power_sensor_mode") or ("separate" if b.get("power_sensor") or b.get("charge_power_sensor") else "none")
-        if mode == "combined" and b.get("net_power_sensor"):
-            sensor = b.get("net_power_sensor")
-            discharge = hourly_average_forecast(sensor, horizon_hours, days, default=0.0, sign_filter="negative")
-            charge = hourly_average_forecast(sensor, horizon_hours, days, default=0.0, sign_filter="positive")
-            total = [total[i] + discharge[i] - charge[i] for i in range(horizon_hours)]
-        elif mode == "separate":
-            if b.get("power_sensor"):
-                discharge = hourly_average_forecast(b.get("power_sensor"), horizon_hours, days, default=0.0, abs_values=True)
-                total = [total[i] + discharge[i] for i in range(horizon_hours)]
-            if b.get("charge_power_sensor"):
-                charge = hourly_average_forecast(b.get("charge_power_sensor"), horizon_hours, days, default=0.0, abs_values=True)
-                total = [total[i] - charge[i] for i in range(horizon_hours)]
-
-    # Baterias EcoFlow: no tienen sensor de HA propio (bucle de arriba las
-    # ignora, `power_sensor`/`net_power_sensor` vienen vacios a proposito),
-    # asi que su descarga/carga se suma aqui a partir del agregado que
-    # publica el propio addon (ver _live_sensor_loop en main.py) — sin
-    # esto, cualquier consumo que una bateria EcoFlow cubriera sola
-    # desaparece de la reconstruccion del historico.
-    if ecoflow_discharge_sensor:
-        discharge = hourly_average_forecast(ecoflow_discharge_sensor, horizon_hours, days, default=0.0)
-        total = [total[i] + discharge[i] for i in range(horizon_hours)]
-    if ecoflow_charge_sensor:
-        charge = hourly_average_forecast(ecoflow_charge_sensor, horizon_hours, days, default=0.0)
-        total = [total[i] - charge[i] for i in range(horizon_hours)]
+    if battery_power_sensor:
+        discharge = hourly_average_forecast(battery_power_sensor, horizon_hours, days, default=0.0, sign_filter="positive")
+        charge = hourly_average_forecast(battery_power_sensor, horizon_hours, days, default=0.0, sign_filter="negative")
+        total = [total[i] + discharge[i] - charge[i] for i in range(horizon_hours)]
 
     # El consumo real nunca es negativo — un resultado negativo aqui solo
     # puede venir de ruido de medida entre sensores independientes (p.ej.

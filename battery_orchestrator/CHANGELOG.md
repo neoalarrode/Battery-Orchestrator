@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.53
+Simplificación: los sensores agregados EcoFlow-específicos (`sensor.battery_orchestrator_ecoflow_discharge_power`/`_charge_power`, añadidos en 0.11.52) se eliminan — eran redundantes con `sensor.battery_orchestrator_power` (ya existente, con signo, agnóstico de fabricante: suma TODAS las baterías del sistema, no solo EcoFlow). `true_load_forecast`/`true_load_forecast_from_grid` ahora usan ese único sensor con `sign_filter` (mismo mecanismo que ya existía para baterías en modo "combined") en vez de un sensor nuevo. También se corrige la detección de anomalías en vivo, que tenía el mismo fallo (solo sumaba descarga de baterías HA, ignoraba EcoFlow) — ahora reusa `live_discharge_w`, ya calculado para todas las baterías.
+
+Nuevo: colchón de seguridad configurable sobre la reserva del planificador (Configuración → Prioridad → "Colchón de seguridad sobre la reserva"), 0-100%, por defecto 15%. Antes, `_reserve_target()` apuntaba exactamente a lo que la previsión decía que hacía falta, sin margen — en bloques largos de valle sin ningún tramo caro visible dentro del horizonte (p.ej. un fin de semana entero, con `weekend_is_valle` activado), la reserva calculada podía ser prácticamente nula y la batería se quedaba al SOC mínimo configurado varias horas seguidas, apostando el 100% a que la previsión de sol del día siguiente se cumpliera al dedillo. Con margen > 0, la batería para de descargar (y empieza a cargar en valle) antes de tocar ese suelo, dejando colchón real para cuando la previsión falle. 0% reproduce el comportamiento de siempre.
+
 ## 0.11.52
 Causa real de que el planificador subestimara el consumo: la reconstrucción del histórico (`true_load_forecast`) suma de vuelta la descarga de cada batería a partir de su sensor de HA — pero las baterías EcoFlow no tienen ningún sensor de HA propio (se leen por BLE/Cloud), así que desde que se migraron las baterías antiguas a EcoFlow, esa reconstrucción las trataba como si no existieran: solo veía lo que se importaba de red en esas horas, nunca lo que la batería cubría por su cuenta.
 

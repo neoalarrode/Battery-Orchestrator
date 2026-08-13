@@ -331,34 +331,29 @@ def _stable_battery_key(b) -> str:
     return b.id
 
 
-def _ecoflow_pv_channel_now_w(cfg: dict, battery_id: str, channel: str) -> float | None:
+def _ecoflow_pv_channels_state(cfg: dict, battery_id: str) -> dict[str, float]:
     """
-    Potencia AHORA MISMO de un puerto MPPT concreto (1..4) de una bateria
-    EcoFlow — `None` si la bateria no existe o ese puerto no ha reportado
-    nada por ningun camino (nunca un cero inventado). Un mismo array de
-    Configuración → Solar apunta a un battery_id + channel concretos (ver
-    `ecoflow_battery_id`/`ecoflow_pv_channel` en DEFAULT_PV_ARRAY) — asi
-    una misma bateria puede tener varios paneles de zonas distintas dados
-    de alta por separado, cada uno con su propia previsión.
-
-    En Híbrido se intenta primero BLE (mas preciso, sabe de antemano si el
-    puerto existe) y si no hay dato se cae a Cloud (MQTT) — mismo criterio
-    que el resto de lecturas EcoFlow de la app.
+    {"1": watts, "2": watts, ...} con TODOS los puertos MPPT que se hayan
+    podido leer ahora mismo de una bateria EcoFlow, uno a uno. En Híbrido
+    se intenta primero BLE (mas preciso, sabe de antemano si el puerto
+    existe) y se completa con Cloud (MQTT) lo que falte — mismo criterio
+    que el resto de lecturas EcoFlow de la app. Base para sumar varios
+    puertos de la misma zona (ver `_ecoflow_pv_channels_now_w`) y para el
+    menu de descubrimiento (`/api/ecoflow/pv_channels`).
     """
     b = next((x for x in cfg["batteries"] if x["id"] == battery_id), None)
     if not b or b.get("source") != "ecoflow":
-        return None
+        return {}
     ecoflow_mode = b.get("ecoflow_mode")
-    channel = str(channel)
+    result: dict[str, float] = {}
 
     if ecoflow_mode in ("bluetooth", "hybrid"):
         address, user_id = b.get("ecoflow_ble_address"), cfg.get("ecoflow_user_id")
         if address and user_id:
             state = ecoflow_ble.get_state(address, user_id)
-            ch = (state or {}).get("pv_channels", {}).get(channel)
-            val = ch.get("power_w") if ch else None
-            if val is not None:
-                return float(val)
+            for ch, info in (state or {}).get("pv_channels", {}).items():
+                if info.get("power_w") is not None:
+                    result[ch] = float(info["power_w"])
 
     if ecoflow_mode in ("cloud", "hybrid"):
         access_key, secret_key = cfg.get("ecoflow_access_key"), cfg.get("ecoflow_secret_key")
@@ -367,26 +362,38 @@ def _ecoflow_pv_channel_now_w(cfg: dict, battery_id: str, channel: str) -> float
             client = ecoflow_cloud.get_client(access_key, secret_key)
             state = client.get_live_state(sn) if client else None
             if state:
-                val = ecoflow_cloud.pv_channels_from_state(state).get(channel)
-                if val is not None:
-                    return float(val)
+                for ch, val in ecoflow_cloud.pv_channels_from_state(state).items():
+                    result.setdefault(ch, val)  # BLE manda si ya lo trajo
 
-    return None
+    return result
+
+
+def _ecoflow_pv_channels_now_w(cfg: dict, battery_id: str, channels: list[str]) -> float | None:
+    """
+    Suma la potencia AHORA MISMO de uno o varios puertos MPPT de la MISMA
+    bateria (misma zona/orientacion, p.ej. dos entradas de un mismo
+    tejado) — `None` solo si NINGUNO de los puertos pedidos ha reportado
+    nada; si alguno si y otro no, se suma el que haya (nunca un cero
+    inventado para el que falta, pero tampoco se descarta el dato bueno).
+    """
+    state = _ecoflow_pv_channels_state(cfg, battery_id)
+    vals = [state[str(ch)] for ch in channels if str(ch) in state]
+    return sum(vals) if vals else None
 
 
 def _ecoflow_pv_live_overrides(cfg: dict) -> dict[str, float]:
     """
     {array_id: watts_ahora_mismo} para cada array de Configuración → Solar
-    vinculado a un puerto MPPT de una bateria EcoFlow — se pasa tal cual a
-    `pv_source.get_pv_forecast_total` (ver `live_now_overrides`), que no
-    sabe nada de EcoFlow a proposito.
+    vinculado a uno o varios puertos MPPT de una bateria EcoFlow — se pasa
+    tal cual a `pv_source.get_pv_forecast_total` (ver `live_now_overrides`),
+    que no sabe nada de EcoFlow a proposito.
     """
     overrides = {}
     for a in cfg["pv_arrays"]:
-        battery_id, channel = a.get("ecoflow_battery_id"), a.get("ecoflow_pv_channel")
-        if not (battery_id and channel):
+        battery_id, channels = a.get("ecoflow_battery_id"), a.get("ecoflow_pv_channels")
+        if not (battery_id and channels):
             continue
-        val = _ecoflow_pv_channel_now_w(cfg, battery_id, channel)
+        val = _ecoflow_pv_channels_now_w(cfg, battery_id, channels)
         if val is not None:
             overrides[a["id"]] = val
     return overrides
@@ -1103,7 +1110,7 @@ def _force_hybrid_if_ecoflow(array: dict) -> dict:
     # Un array vinculado a un puerto MPPT de una bateria EcoFlow esta
     # conectado directo a esa bateria por definicion — "hybrid" siempre,
     # sin importar lo que mande el formulario.
-    if array.get("ecoflow_battery_id") and array.get("ecoflow_pv_channel"):
+    if array.get("ecoflow_battery_id") and array.get("ecoflow_pv_channels"):
         array["installation_type"] = "hybrid"
     return array
 
@@ -1742,8 +1749,9 @@ def api_ecoflow_pv_channels():
         return jsonify({"error": ble_error or cloud_error}), 502
 
     already_linked = {
-        (a.get("ecoflow_battery_id"), str(a.get("ecoflow_pv_channel")))
+        (a.get("ecoflow_battery_id"), str(ch))
         for a in cfg["pv_arrays"] if a.get("ecoflow_battery_id")
+        for ch in (a.get("ecoflow_pv_channels") or [])
     }
     all_ch = sorted(set(ble_channels) | set(cloud_channels))
     channels = []

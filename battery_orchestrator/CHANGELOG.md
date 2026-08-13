@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.41
+Dos mejoras sobre los paneles vinculados a puertos MPPT de EcoFlow (Configuración → Solar):
+
+- **Selección de varios puertos para la misma zona**: si una zona tiene paneles repartidos en varios puertos MPPT de la misma batería (p. ej. dos entradas del mismo tejado), ahora se pueden marcar todos con casillas y añadirlos juntos como un único panel (se suman) — antes solo dejaba vincular uno por panel.
+- **Previsión de Forecast.Solar opcional para el array de EcoFlow**: nueva casilla "Añadir también una previsión para las horas futuras" — el dato de la hora actual siempre viene de la batería, pero ahora se puede además rellenar API key/lat/lon/kWp para que las horas futuras usen una previsión real en vez de quedarse en 0.
+
+Cambio interno: los arrays vinculados a EcoFlow ahora guardan `ecoflow_pv_channels` (lista) en vez de `ecoflow_pv_channel` (uno solo) — si ya tenías paneles EcoFlow dados de alta con la v0.11.39/0.11.40, tendrás que volver a vincularlos (son pocos días de uso, no debería afectar a nadie más).
+
 ## 0.11.40
 Ronda de correcciones y mejoras sobre los sensores de HA y las baterías EcoFlow:
 

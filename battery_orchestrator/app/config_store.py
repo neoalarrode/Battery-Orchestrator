@@ -67,15 +67,19 @@ DEFAULT_PV_ARRAY = {
     "kwp": 1.0,
     "current_sensor": "",  # generacion INSTANTANEA real (W) de este array/string, corrige la hora actual del plan
     "installation_type": "ac_coupled",  # "ac_coupled" (necesita orden de carga por AC) | "hybrid" (conectado directo a una bateria, se autoconsume solo)
-    # Alternativa a "current_sensor": este array/string va conectado a un
-    # puerto MPPT concreto de una bateria EcoFlow (Bluetooth/Hibrido), en
-    # vez de tener su propio sensor en Home Assistant -- la potencia
-    # instantanea se lee sola del puente BLE. Una misma bateria puede
-    # tener varios de estos arrays a la vez (uno por puerto/orientacion).
-    # Siempre implica installation_type "hybrid" (esta conectado directo
-    # a la bateria por definicion).
-    "ecoflow_battery_id": "",  # id de la bateria (cfg["batteries"]) de la que cuelga este puerto
-    "ecoflow_pv_channel": "",  # "1".."4" -- que puerto MPPT de esa bateria
+    # Alternativa/complemento a "current_sensor": este array/string tiene
+    # su dato EN VIVO conectado a uno o varios puertos MPPT de una
+    # bateria EcoFlow (Bluetooth/Hibrido/Cloud), en vez de (o ademas de)
+    # un sensor de Home Assistant -- se suman si son varios puertos de la
+    # MISMA zona/orientacion (p.ej. dos entradas MPPT del mismo tejado).
+    # Una misma bateria puede tener varios de estos arrays a la vez, uno
+    # por zona. "mode"/"entity_id"/API siguen decidiendo la previsión de
+    # las horas FUTURAS (opcional, el usuario puede rellenarla o no) --
+    # el vinculo EcoFlow solo aporta el dato de la hora actual. Cuando
+    # hay puertos vinculados, installation_type se fuerza siempre a
+    # "hybrid" (conectado directo a la bateria por definicion).
+    "ecoflow_battery_id": "",     # id de la bateria (cfg["batteries"]) de la que cuelgan estos puertos
+    "ecoflow_pv_channels": [],    # lista de "1".."4" -- que puerto(s) MPPT de esa bateria
 }
 
 DEFAULT_DEFERRABLE_LOAD = {

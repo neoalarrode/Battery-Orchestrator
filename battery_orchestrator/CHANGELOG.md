@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.54
+Fix: "Flujo de energía ahora mismo" (`/api/live`) mostraba un consumo total absurdamente bajo mientras la batería descargaba cientos de W. Causa: en modo "separate", `load_now_w` se leía directo de `load_sensor` (p.ej. "consumo_instantaneo") sin reconstruirlo — ese sensor es solo el lado de red, YA SIN la carga de baterías, no el consumo total de la vivienda (igual que ya se documentaba en `true_load_forecast`). Faltaba sumarle de vuelta el solar y la descarga de baterías, tal y como el modo "combined" ya hacía bien un poco más arriba en el mismo endpoint.
+
 ## 0.11.53
 Simplificación: los sensores agregados EcoFlow-específicos (`sensor.battery_orchestrator_ecoflow_discharge_power`/`_charge_power`, añadidos en 0.11.52) se eliminan — eran redundantes con `sensor.battery_orchestrator_power` (ya existente, con signo, agnóstico de fabricante: suma TODAS las baterías del sistema, no solo EcoFlow). `true_load_forecast`/`true_load_forecast_from_grid` ahora usan ese único sensor con `sign_filter` (mismo mecanismo que ya existía para baterías en modo "combined") en vez de un sensor nuevo. También se corrige la detección de anomalías en vivo, que tenía el mismo fallo (solo sumaba descarga de baterías HA, ignoraba EcoFlow) — ahora reusa `live_discharge_w`, ya calculado para todas las baterías.
 

@@ -1446,8 +1446,25 @@ def api_live():
         if net_grid_now_w is not None and pv_now_w is not None and live_battery_data_ok:
             load_now_w = max(0.0, pv_now_w + net_grid_now_w + live_discharge_w - live_charge_w)
     else:
+        # Modo "separate": `load_sensor` (p.ej. "consumo_instantaneo") es
+        # SOLO el lado de red, ya sin la carga de baterias — NO es el
+        # consumo total de la vivienda (ver comentario en config_store.py
+        # y la formula identica en ha_client.true_load_forecast). Hay que
+        # sumarle de vuelta el solar y la descarga de baterias para
+        # reconstruir el consumo real, igual que ya se hace en modo
+        # "combined" un poco mas arriba — si no, cualquier consumo que la
+        # bateria o el sol esten cubriendo AHORA MISMO desaparece del
+        # "Flujo de energia" (queda un total absurdamente bajo mientras la
+        # bateria descarga cientos de W).
         load_sensor = cfg.get("load_sensor")
-        load_now_w = ha_client.get_numeric_state(load_sensor, default=None) if load_sensor else None
+        base_load_now_w = ha_client.get_numeric_state(load_sensor, default=None) if load_sensor else None
+        load_now_w = base_load_now_w
+        if load_now_w is not None:
+            if pv_now_w is not None:
+                load_now_w += pv_now_w
+            if live_battery_data_ok:
+                load_now_w += live_discharge_w
+            load_now_w = max(0.0, load_now_w)
 
     # Flujo de energia y margen de potencia contratada, calculados AQUI
     # (no en run_cycle) para que se refresquen cada vez que se pide

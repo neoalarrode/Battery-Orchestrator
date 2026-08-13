@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.35
+La página principal (`index.html`, todo el frontend en un único archivo) se estaba pudiendo quedar cacheada en el navegador o en el webview de la app móvil de Home Assistant tras actualizar el add-on, así que una actualización de la interfaz podía pasar desapercibida aunque el backend ya estuviera al día — es lo que impidió ver el botón nuevo de "Obtener userId automáticamente" de la v0.11.34 sin refrescar a mano. Ahora se sirve siempre con `Cache-Control: no-store`, para que el navegador la pida fresca en cada visita.
+
 ## 0.11.34
 El userId de EcoFlow para el modo Bluetooth/Híbrido ya no hace falta copiarlo a mano desde otra integración: en "+ Añadir batería" → EcoFlow → Bluetooth/Híbrido hay ahora un botón "Obtener userId automáticamente" que pide tu email y contraseña de EcoFlow y los enfrenta contra el API de cuenta de EcoFlow (el mismo login que usa la app oficial) para resolver el userId. La contraseña viaja una sola vez a tu propia instancia de Battery Orchestrator para esa consulta y no se guarda en ningún sitio — ni en `config.json` ni en ningún log; lo único que se persiste es el userId ya resuelto, exactamente igual que si lo hubieras pegado tú a mano.
 

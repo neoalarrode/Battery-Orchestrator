@@ -1354,7 +1354,14 @@ def api_ecoflow_resolve_user_id():
 
 @app.get("/")
 def index():
-    return send_from_directory("templates", "index.html")
+    # Toda la app es este unico HTML (JS/CSS inline, sin bundle aparte) —
+    # si el navegador (o el webview de la app movil de HA) lo cachea, una
+    # actualizacion del add-on puede quedar invisible para el usuario
+    # aunque el backend ya este en la version nueva. Se fuerza a pedirlo
+    # fresco siempre.
+    resp = send_from_directory("templates", "index.html")
+    resp.headers["Cache-Control"] = "no-store, must-revalidate"
+    return resp
 
 
 @app.get("/<path:path>")

@@ -197,7 +197,7 @@ def _live_battery_charge_discharge_w(batteries_cfg: list[dict], cfg: dict) -> tu
             if ecoflow_mode in ("bluetooth", "hybrid"):
                 address, user_id = b.get("ecoflow_ble_address"), cfg.get("ecoflow_user_id")
                 if address and user_id:
-                    state = _ecoflow_ble_state(address, user_id)
+                    state = ecoflow_ble.get_state(address, user_id)
                     if state and state.get("battery_power") is not None:
                         net_power = float(state["battery_power"])
             if net_power is None and ecoflow_mode in ("cloud", "hybrid"):
@@ -254,36 +254,6 @@ def _live_export_w(cfg: dict, known_net_grid_w: float | None = None) -> float | 
     if cfg.get("export_sensor"):
         return ha_client.get_numeric_state(cfg.get("export_sensor"), default=None)
     return None
-
-
-_ecoflow_ble_state_cache: dict[str, dict] = {}
-_ecoflow_ble_state_cache_lock = threading.Lock()
-
-
-def _ecoflow_ble_state(address: str, user_id: str, *, fresh: bool = False) -> dict | None:
-    """
-    Envoltorio con cache sobre `ecoflow_ble.get_state()` — conectar por
-    BLE la primera vez es lento (hasta ~30s de emparejamiento), asi que
-    en vez de pagar ese coste cada vez que algo pide el estado de una
-    bateria (SOC, potencia, puertos MPPT, especificaciones...), se
-    reutiliza el ultimo estado conocido: `_live_sensor_loop` ya conecta y
-    refresca CADA bateria BLE cada ~10s de fondo (`fresh=True`), asi que
-    el resto de lecturas (descubrir puertos MPPT, autorrellenar
-    capacidad/limites...) pueden servirse de ese cache al instante en vez
-    de esperar una conexion nueva -- solo se paga el coste de conectar de
-    verdad si TODAVIA no hay ningun dato en cache (bateria recien
-    vinculada, antes de que el bucle de fondo la haya visto ni una vez).
-    """
-    if not fresh:
-        with _ecoflow_ble_state_cache_lock:
-            cached = _ecoflow_ble_state_cache.get(address)
-        if cached is not None:
-            return cached
-    state = ecoflow_ble.get_state(address, user_id)
-    if state:
-        with _ecoflow_ble_state_cache_lock:
-            _ecoflow_ble_state_cache[address] = state
-    return state
 
 
 _ecoflow_ble_reconcile_last_try: dict[str, datetime] = {}
@@ -381,7 +351,7 @@ def _ecoflow_pv_channels_state(cfg: dict, battery_id: str) -> dict[str, float]:
     if ecoflow_mode in ("bluetooth", "hybrid"):
         address, user_id = b.get("ecoflow_ble_address"), cfg.get("ecoflow_user_id")
         if address and user_id:
-            state = _ecoflow_ble_state(address, user_id)
+            state = ecoflow_ble.get_state(address, user_id)
             for ch, info in (state or {}).get("pv_channels", {}).items():
                 if info.get("power_w") is not None:
                     result[ch] = float(info["power_w"])
@@ -1054,7 +1024,7 @@ def _live_sensor_loop():
         try:
             cfg = config_store.load_config()
             if cfg["batteries"]:
-                live = _live_battery_totals(cfg)
+                live = _live_battery_totals(cfg, fresh=True)
                 if live["current_soc_pct"] is not None:
                     _publish_sensor_throttled(
                         "sensor.battery_orchestrator_soc", live["current_soc_pct"],
@@ -1262,12 +1232,21 @@ def _live_solar_now_w(cfg: dict) -> float | None:
     return round(sum(pv_vals)) if pv_vals else None
 
 
-def _live_battery_totals(cfg: dict) -> dict:
+def _live_battery_totals(cfg: dict, *, fresh: bool = False) -> dict:
     """
     Estado de baterias medido AHORA MISMO (sin previsión ni planificacion)
     — compartido entre `/api/live` (sondeo del dashboard, cada pocos
     segundos) y `_live_sensor_loop` (publicacion frecuente de SOC/potencia
     hacia HA), para no duplicar esta logica en dos sitios.
+
+    `fresh=False` (por defecto, usado por `/api/live`): lee del cache de
+    `ecoflow_ble.get_state`, sin abrir conexion BLE nueva -- rapido, y sobre
+    todo evita que dos sitios (el dashboard sondeando cada 5s y el bucle
+    de fondo cada 10s) intenten conectar por BLE A LA VEZ a la misma
+    bateria desde hilos distintos, que puede colgar o desestabilizar la
+    conexion del puente. Solo `_live_sensor_loop` pide `fresh=True` — es
+    el UNICO sitio que refresca la caché de verdad, una vez cada ~10s,
+    nunca en paralelo consigo mismo.
     """
     battery_live = []
     total_capacity_wh, current_soc_wh = 0.0, 0.0
@@ -1291,10 +1270,7 @@ def _live_battery_totals(cfg: dict) -> dict:
             if ecoflow_mode in ("bluetooth", "hybrid"):
                 address, user_id = b.get("ecoflow_ble_address"), cfg.get("ecoflow_user_id")
                 if address and user_id:
-                    # fresh=True: esta es la funcion que mantiene el cache
-                    # caliente (ver _ecoflow_ble_state) -- se llama cada
-                    # ~5-10s desde /api/live y desde _live_sensor_loop.
-                    state = _ecoflow_ble_state(address, user_id, fresh=True)
+                    state = ecoflow_ble.get_state(address, user_id, fresh=fresh)
                     if state:
                         # battery_level_main = SOC de ESTA unidad;
                         # battery_level = SOC agregado de todo el grupo
@@ -1742,7 +1718,7 @@ def api_ecoflow_specs():
     if not (address and user_id):
         return jsonify({"error": "Falta la dirección Bluetooth o el userId de la cuenta EcoFlow"}), 400
 
-    state = _ecoflow_ble_state(address, user_id)
+    state = ecoflow_ble.get_state(address, user_id)
     if not state:
         return jsonify({"error": "No se pudo hablar con el puente BLE o con la batería"}), 502
 

@@ -25,6 +25,8 @@ Los 5 servicios del puente (ver su propio repositorio):
 
 from __future__ import annotations
 
+import threading
+
 import ha_client
 
 DOMAIN = "battery_orchestrator_ble_bridge"
@@ -34,6 +36,27 @@ BRAND = "ecoflow"
 # aun a traves de un ESPHome BT Proxy, un salto de red de mas frente a un
 # adaptador local) — un timeout HTTP normal de la app se quedaria corto.
 BLE_CALL_TIMEOUT_SECONDS = 40
+
+# Cache del ultimo estado conocido por direccion + lock por direccion
+# (nunca dos conexiones BLE a la vez a la MISMA bateria desde hilos
+# distintos de esta app -- `/api/live` sondeado cada 5s por el dashboard,
+# el bucle de fondo cada ~10s, el ciclo de planificacion, el menu de
+# puertos MPPT... todos piden el estado de las mismas baterias. Sin esto,
+# conexiones concurrentes a un mismo dispositivo BLE pueden colisionar en
+# el puente y dejar el ciclo de planificacion esperando indefinidamente).
+_state_cache: dict[str, dict] = {}
+_state_cache_lock = threading.Lock()
+_address_locks: dict[str, threading.Lock] = {}
+_address_locks_guard = threading.Lock()
+
+
+def _lock_for(address: str) -> threading.Lock:
+    with _address_locks_guard:
+        lock = _address_locks.get(address)
+        if lock is None:
+            lock = threading.Lock()
+            _address_locks[address] = lock
+        return lock
 
 
 def discover() -> list[dict] | None:
@@ -45,15 +68,44 @@ def discover() -> list[dict] | None:
     return resp.get("devices") if resp else None
 
 
-def get_state(address: str, user_id: str) -> dict | None:
-    """Conecta (si hace falta) y devuelve el ultimo estado conocido —
-    `None` si el puente no responde o el dispositivo no esta al alcance,
-    nunca un cero inventado."""
-    return ha_client.call_service_with_response(
-        DOMAIN, "get_state",
-        {"brand": BRAND, "address": address, "credentials": {"user_id": user_id}},
-        timeout=BLE_CALL_TIMEOUT_SECONDS,
-    )
+def get_state(address: str, user_id: str, *, fresh: bool = False) -> dict | None:
+    """
+    Conecta (si hace falta) y devuelve el ultimo estado conocido — `None`
+    si el puente no responde o el dispositivo no esta al alcance, nunca
+    un cero inventado.
+
+    `fresh=False` (por defecto): si ya hay un estado en cache para esta
+    direccion, se devuelve al instante SIN abrir conexion nueva —
+    conectar por BLE es lento (hasta 30-40s de emparejamiento) y, sobre
+    todo, evita que varios sitios de la app pidan el mismo dato a la vez
+    desde hilos distintos. Solo `_live_sensor_loop` (main.py) pide
+    `fresh=True`, una vez cada ~10s — el UNICO sitio que refresca la
+    caché de verdad; el lock por direccion de aqui abajo asegura ademas
+    que nunca se solapan dos conexiones reales a la MISMA bateria aunque
+    dos peticiones frescas coincidieran en el tiempo.
+    """
+    if not fresh:
+        with _state_cache_lock:
+            cached = _state_cache.get(address)
+        if cached is not None:
+            return cached
+
+    with _lock_for(address):
+        if not fresh:
+            # Puede que otro hilo ya la haya refrescado mientras esperabamos el lock.
+            with _state_cache_lock:
+                cached = _state_cache.get(address)
+            if cached is not None:
+                return cached
+        state = ha_client.call_service_with_response(
+            DOMAIN, "get_state",
+            {"brand": BRAND, "address": address, "credentials": {"user_id": user_id}},
+            timeout=BLE_CALL_TIMEOUT_SECONDS,
+        )
+        if state:
+            with _state_cache_lock:
+                _state_cache[address] = state
+        return state
 
 
 def set_charging_task(

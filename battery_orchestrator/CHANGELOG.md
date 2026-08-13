@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.44
+Causa probable de que el ciclo de planificación se quedara sin ejecutarse (y sin ningún error) tras la 0.11.42: `/api/live` (sondeado cada 5s por el dashboard) y `_live_sensor_loop` (cada ~10s) forzaban las dos lecturas BLE frescas en paralelo, desde hilos distintos, para las mismas baterías — dos conexiones a la vez al mismo dispositivo BLE pueden colisionar en el puente y dejar todo esperando indefinidamente. La caché de estado BLE se ha movido a `ecoflow_ble.py` (antes solo vivía en `main.py`, así que `battery_exec.py` —el que lee el SOC real cada ciclo— no se beneficiaba de ella) y ahora lleva también un bloqueo por dirección: nunca dos conexiones reales a la misma batería a la vez, venga de donde venga la petición. Solo `_live_sensor_loop` refresca la caché de verdad; el resto (dashboard, ciclo de planificación, menús de EcoFlow) siempre lee de ahí.
+
 ## 0.11.43
 **Arreglo real** del `TypeError: _live_solar_now_w() missing 1 required positional argument: 'cfg'` en `/api/live` — el decorador `@app.get("/api/live")` había quedado pegado a `_live_solar_now_w` en vez de a `api_live` tras una refactorización de la v0.11.40 (Flask registraba la función equivocada como manejador de la ruta). No era ningún problema de caché de Home Assistant ni del add-on — era un bug real en el código, mis disculpas por la vuelta perdida insistiendo en lo contrario. Revisado el resto de rutas una por una: no hay ningún otro decorador descolocado.
 

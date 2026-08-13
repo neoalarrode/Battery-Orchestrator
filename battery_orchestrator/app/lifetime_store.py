@@ -38,17 +38,30 @@ def _save(data: dict) -> None:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
 
-def accumulate(battery_id: str, battery_name: str, charged_wh: float, discharged_wh: float) -> None:
-    """Suma la energia movida en este ciclo al acumulado de por vida de esa bateria."""
+def accumulate(battery_id: str, battery_name: str, charged_wh: float, discharged_wh: float,
+                legacy_id: str | None = None) -> None:
+    """
+    Suma la energia movida en este ciclo al acumulado de por vida de esa
+    bateria. `battery_id` deberia ser una clave ESTABLE (ver
+    `_stable_battery_key` en main.py), no el id de configuracion volatil
+    — si no hay ninguna entrada todavia bajo esa clave pero SI la hay bajo
+    `legacy_id` (el id de configuracion de antes de este cambio, o de una
+    version anterior de la app), se migra ese historico en vez de
+    empezar de cero, para no perder lo ya acumulado.
+    """
     if charged_wh <= 0 and discharged_wh <= 0:
         return
     data = _load()
-    entry = data.get(battery_id) or {
-        "name": battery_name,
-        "since": datetime.now().isoformat(),
-        "charged_wh": 0.0,
-        "discharged_wh": 0.0,
-    }
+    entry = data.get(battery_id)
+    if entry is None and legacy_id and legacy_id in data:
+        entry = data.pop(legacy_id)
+    if entry is None:
+        entry = {
+            "name": battery_name,
+            "since": datetime.now().isoformat(),
+            "charged_wh": 0.0,
+            "discharged_wh": 0.0,
+        }
     entry["name"] = battery_name  # por si cambio el nombre
     entry["charged_wh"] += charged_wh
     entry["discharged_wh"] += discharged_wh
@@ -56,7 +69,7 @@ def accumulate(battery_id: str, battery_name: str, charged_wh: float, discharged
     _save(data)
 
 
-def get_health(battery_id: str, capacity_wh: float) -> dict | None:
+def get_health(battery_id: str, capacity_wh: float, display_id: str | None = None) -> dict | None:
     data = _load()
     entry = data.get(battery_id)
     if not entry or capacity_wh <= 0:
@@ -65,13 +78,26 @@ def get_health(battery_id: str, capacity_wh: float) -> dict | None:
     # un "ciclo completo" mueve 2x la capacidad (una carga + una descarga completas)
     equivalent_cycles = total_throughput_wh / (2 * capacity_wh)
     return {
-        "id": battery_id,
+        "id": display_id if display_id is not None else battery_id,
         "name": entry["name"],
         "since": entry["since"],
         "charged_kwh": round(entry["charged_wh"] / 1000, 2),
         "discharged_kwh": round(entry["discharged_wh"] / 1000, 2),
         "equivalent_cycles": round(equivalent_cycles, 1),
     }
+
+
+def _stable_key(b: dict) -> str:
+    """Version dict-friendly del mismo criterio que `_stable_battery_key`
+    en main.py — necesaria aqui porque `get_all_health` recibe la config
+    cruda (`cfg["batteries"]`), no objetos `Battery`."""
+    if b.get("source") == "ecoflow":
+        ident = b.get("ecoflow_sn") or b.get("ecoflow_ble_address")
+        if ident:
+            return f"ecoflow:{ident}"
+    elif b.get("soc_sensor"):
+        return f"ha:{b['soc_sensor']}"
+    return b["id"]
 
 
 def get_aggregate_totals(battery_ids: list[str]) -> dict:
@@ -98,7 +124,7 @@ def get_aggregate_totals(battery_ids: list[str]) -> dict:
 def get_all_health(batteries: list[dict]) -> list[dict]:
     out = []
     for b in batteries:
-        h = get_health(b["id"], float(b.get("capacity_wh", 0)))
+        h = get_health(_stable_key(b), float(b.get("capacity_wh", 0)), display_id=b["id"])
         if h:
             out.append(h)
         else:

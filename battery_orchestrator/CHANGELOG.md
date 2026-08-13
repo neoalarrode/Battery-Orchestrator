@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.11.40
+Ronda de correcciones y mejoras sobre los sensores de HA y las baterías EcoFlow:
+
+- **Reinicios de energía cargada/descargada (y de "salud"/ciclos equivalentes)**: causa encontrada — se indexaban por el id de configuración de la batería, que cambia cada vez que se borra y se vuelve a dar de alta la misma batería física. Ahora se indexan por una identidad estable (SN/dirección BLE en EcoFlow, sensor de SOC en Home Assistant), con migración automática del histórico ya guardado bajo el id antiguo.
+- **`sensor.battery_orchestrator_power`**: signo corregido — descargando = positivo, cargando = negativo (al revés que antes).
+- **SOC y potencia ya se publican en vivo** (cada ~10s, ciclo independiente del de planificación) en vez de esperar al ciclo completo (podía tardar varios minutos). `energy_charged`/`energy_discharged` siguen en el ciclo normal, solo cambian cuando se manda una orden de verdad.
+- **Nuevo `sensor.battery_orchestrator_solar_power`**: potencia solar total en vivo, ahora que también se puede ingerir desde puertos MPPT de baterías EcoFlow.
+- **Autorrellenar capacidad y límites de potencia** al dar de alta una batería EcoFlow por Bluetooth/Híbrido — botón "Autorrellenar desde la batería" que trae la capacidad real (Wh) y los límites de carga/descarga (W) directos de la propia batería. Requiere el Puente BLE v0.2.3+. La API Cloud no tiene un campo de capacidad fiable, así que en Cloud-only sigue siendo manual.
+- **Puertos MPPT también desde Cloud**: el descubrimiento de puertos MPPT (Configuración → Solar) ahora también consulta Cloud (MQTT) cuando BLE no tiene el dato todavía (p. ej. en Híbrido con la batería aún sin verse por Bluetooth) — antes solo miraba BLE.
+
 ## 0.11.39
 Los puertos MPPT de una batería EcoFlow (paneles conectados directo, sin pasar por AC) ya se pueden **dar de alta en Configuración → Solar**, no solo usarse en vivo por detrás: nueva opción de Origen "Puerto MPPT de una batería EcoFlow" con un menú que pregunta al puente qué puertos tiene ese modelo concreto (1 a 4 según el modelo) y con qué potencia está cada uno ahora mismo — se añaden como cualquier otro panel/array, con su nombre, y quedan marcados automáticamente como "conectado directo a batería". Como cada puerto se da de alta por separado, una misma batería con paneles de zonas u orientaciones distintas puede tener varios paneles declarados, cada uno con su propio dato en vivo. Requiere v0.2.2+ del [Puente BLE](https://github.com/neoalarrode/Battery-Orchestrator-BLE-Bridge).
 

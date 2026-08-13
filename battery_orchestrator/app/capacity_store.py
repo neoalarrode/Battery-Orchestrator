@@ -66,18 +66,28 @@ def _close_segment(entry: dict, current_soc_pct: float) -> None:
 
 
 def update(battery_id: str, battery_name: str, soc_pct: float | None,
-           action: str | None, energy_wh_this_cycle: float) -> None:
+           action: str | None, energy_wh_this_cycle: float,
+           legacy_id: str | None = None) -> None:
     """
     Llamar una vez por ciclo con el SOC actual (%), la accion real de ESTA
     bateria ahora mismo ("charge" | "discharge" | None) y la energia (Wh,
     siempre positiva) movida en este ciclo. Cuando la accion cambia (o se
     para), se cierra el segmento anterior y, si el delta de SOC acumulado
     es suficiente, se registra como observacion.
+
+    `battery_id` deberia ser una clave ESTABLE (ver `_stable_battery_key`
+    en main.py) — si no hay entrada bajo esa clave pero SI la hay bajo
+    `legacy_id` (el id de configuracion de antes de este cambio), se migra
+    ese historico de observaciones en vez de perderlo.
     """
     if soc_pct is None:
         return
     data = _load()
-    entry = data.get(battery_id) or _default_entry(battery_name)
+    entry = data.get(battery_id)
+    if entry is None and legacy_id and legacy_id in data:
+        entry = data.pop(legacy_id)
+    if entry is None:
+        entry = _default_entry(battery_name)
     entry["name"] = battery_name
 
     if action != entry["segment_action"]:
@@ -93,7 +103,7 @@ def update(battery_id: str, battery_name: str, soc_pct: float | None,
     _save(data)
 
 
-def get_health(battery_id: str, declared_capacity_wh: float) -> dict | None:
+def get_health(battery_id: str, declared_capacity_wh: float, display_id: str | None = None) -> dict | None:
     data = _load()
     entry = data.get(battery_id)
     if not entry or not entry["observations"] or declared_capacity_wh <= 0:
@@ -101,7 +111,7 @@ def get_health(battery_id: str, declared_capacity_wh: float) -> dict | None:
     real_capacity_wh = statistics.median(entry["observations"])
     health_pct = min(100.0, real_capacity_wh / declared_capacity_wh * 100)
     return {
-        "id": battery_id,
+        "id": display_id if display_id is not None else battery_id,
         "name": entry["name"],
         "declared_capacity_wh": declared_capacity_wh,
         "estimated_capacity_wh": round(real_capacity_wh),
@@ -110,11 +120,22 @@ def get_health(battery_id: str, declared_capacity_wh: float) -> dict | None:
     }
 
 
+def _stable_key(b: dict) -> str:
+    """Ver comentario homologo en lifetime_store.py / main.py."""
+    if b.get("source") == "ecoflow":
+        ident = b.get("ecoflow_sn") or b.get("ecoflow_ble_address")
+        if ident:
+            return f"ecoflow:{ident}"
+    elif b.get("soc_sensor"):
+        return f"ha:{b['soc_sensor']}"
+    return b["id"]
+
+
 def get_all_health(batteries: list[dict]) -> list[dict]:
     out = []
     for b in batteries:
         declared = float(b.get("capacity_wh", 0))
-        h = get_health(b["id"], declared)
+        h = get_health(_stable_key(b), declared, display_id=b["id"])
         if h:
             out.append(h)
         else:

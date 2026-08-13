@@ -173,6 +173,37 @@ def _find_discharge_task(all_timer_task: dict) -> dict | None:
     return None
 
 
+# Mismos campos que expone la MQTT en vivo para los puertos MPPT --
+# corresponden uno a uno con los `pv_power_N` de eflib (protobuf) por
+# BLE: `powGetPv`/`powGetPv2`/`powGetPv3`/`powGetPv4`, verificado contra
+# una lectura real de una STREAM Ultra X (traia `powGetPv3` y
+# `powGetPvSum`). No todos los modelos reportan todos los canales.
+PV_CHANNEL_QUOTA_FIELDS = {"1": "powGetPv", "2": "powGetPv2", "3": "powGetPv3", "4": "powGetPv4"}
+
+
+def pv_channels_from_state(state: dict) -> dict:
+    """
+    Puertos MPPT a partir del estado en vivo de MQTT -- a diferencia de
+    BLE (que sabe de antemano, por la clase del modelo, si un puerto
+    existe o no aunque todavia no haya reportado nada), aqui solo se
+    puede saber que un puerto existe cuando YA ha mandado un valor -- no
+    hay forma de distinguir "este modelo no tiene este puerto" de
+    "todavia no ha llegado su primer dato" desde Cloud. Por eso solo se
+    devuelven los canales que SI tienen valor; los demas simplemente no
+    aparecen (nunca un "no soportado" que en realidad seria "aun sin
+    dato").
+    """
+    channels = {}
+    for ch, field in PV_CHANNEL_QUOTA_FIELDS.items():
+        val = state.get(field)
+        if val is not None:
+            try:
+                channels[ch] = float(val)
+            except (TypeError, ValueError):
+                pass
+    return channels
+
+
 class EcoFlowCloudClient:
     """
     Una conexion MQTT persistente para una cuenta EcoFlow — mantiene en

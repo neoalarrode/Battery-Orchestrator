@@ -96,10 +96,11 @@ PUBLISH_MIN_INTERVAL_SECONDS = 120
 _last_published_at: dict[str, float] = {}
 
 
-def _publish_sensor_throttled(entity_id: str, state, attributes: dict) -> None:
+def _publish_sensor_throttled(entity_id: str, state, attributes: dict,
+                               min_interval: float = PUBLISH_MIN_INTERVAL_SECONDS) -> None:
     now_ts = time.time()
     last = _last_published_at.get(entity_id)
-    if last is not None and (now_ts - last) < PUBLISH_MIN_INTERVAL_SECONDS:
+    if last is not None and (now_ts - last) < min_interval:
         return
     ha_client.publish_sensor(entity_id, state, attributes)
     _last_published_at[entity_id] = now_ts
@@ -305,29 +306,72 @@ def _reconcile_ecoflow_ble_addresses(cfg: dict) -> None:
         config_store.save_config(cfg)
 
 
+def _stable_battery_key(b) -> str:
+    """
+    Identidad ESTABLE de una bateria para los acumulados "de por vida"
+    (`lifetime_store`: energia cargada/descargada, ciclos equivalentes;
+    `capacity_store`: capacidad real estimada / salud) — el id de
+    configuracion (`b.id`) es un uuid NUEVO cada vez que se borra y se
+    vuelve a dar de alta la misma bateria fisica (p.ej. al pasarla de
+    Home Assistant a EcoFlow, o al reconfigurarla desde cero durante unas
+    pruebas), lo que hacia que estos contadores parecieran "reiniciarse"
+    sin haber pasado nada de verdad. Aqui se usa el identificador mas
+    estable disponible: el SN/direccion BLE en EcoFlow (el dispositivo
+    fisico, no cambia aunque se borre y se vuelva a añadir), o el sensor
+    de SOC declarado en Home Assistant (la entidad real, tampoco cambia).
+    Solo si no hay ninguno de los dos (bateria recien creada, sin acabar
+    de configurar) se cae al id de configuracion como ultimo recurso.
+    """
+    if b.source == "ecoflow":
+        ident = b.ecoflow_sn or b.ecoflow_ble_address
+        if ident:
+            return f"ecoflow:{ident}"
+    elif b.soc_sensor:
+        return f"ha:{b.soc_sensor}"
+    return b.id
+
+
 def _ecoflow_pv_channel_now_w(cfg: dict, battery_id: str, channel: str) -> float | None:
     """
     Potencia AHORA MISMO de un puerto MPPT concreto (1..4) de una bateria
-    EcoFlow por Bluetooth/Hibrido — `None` si la bateria no existe, no es
-    EcoFlow por BLE, o ese puerto no ha reportado nada (nunca un cero
-    inventado). Un mismo array de Configuración → Solar apunta a un
-    battery_id + channel concretos (ver `ecoflow_battery_id`/
-    `ecoflow_pv_channel` en DEFAULT_PV_ARRAY) — asi una misma bateria
-    puede tener varios paneles de zonas distintas dados de alta por
-    separado, cada uno con su propia previsión.
+    EcoFlow — `None` si la bateria no existe o ese puerto no ha reportado
+    nada por ningun camino (nunca un cero inventado). Un mismo array de
+    Configuración → Solar apunta a un battery_id + channel concretos (ver
+    `ecoflow_battery_id`/`ecoflow_pv_channel` en DEFAULT_PV_ARRAY) — asi
+    una misma bateria puede tener varios paneles de zonas distintas dados
+    de alta por separado, cada uno con su propia previsión.
+
+    En Híbrido se intenta primero BLE (mas preciso, sabe de antemano si el
+    puerto existe) y si no hay dato se cae a Cloud (MQTT) — mismo criterio
+    que el resto de lecturas EcoFlow de la app.
     """
     b = next((x for x in cfg["batteries"] if x["id"] == battery_id), None)
-    if not b or b.get("source") != "ecoflow" or b.get("ecoflow_mode") not in ("bluetooth", "hybrid"):
+    if not b or b.get("source") != "ecoflow":
         return None
-    address, user_id = b.get("ecoflow_ble_address"), cfg.get("ecoflow_user_id")
-    if not (address and user_id):
-        return None
-    state = ecoflow_ble.get_state(address, user_id)
-    if not state:
-        return None
-    ch = (state.get("pv_channels") or {}).get(str(channel))
-    val = ch.get("power_w") if ch else None
-    return float(val) if val is not None else None
+    ecoflow_mode = b.get("ecoflow_mode")
+    channel = str(channel)
+
+    if ecoflow_mode in ("bluetooth", "hybrid"):
+        address, user_id = b.get("ecoflow_ble_address"), cfg.get("ecoflow_user_id")
+        if address and user_id:
+            state = ecoflow_ble.get_state(address, user_id)
+            ch = (state or {}).get("pv_channels", {}).get(channel)
+            val = ch.get("power_w") if ch else None
+            if val is not None:
+                return float(val)
+
+    if ecoflow_mode in ("cloud", "hybrid"):
+        access_key, secret_key = cfg.get("ecoflow_access_key"), cfg.get("ecoflow_secret_key")
+        sn = b.get("ecoflow_sn")
+        if access_key and secret_key and sn:
+            client = ecoflow_cloud.get_client(access_key, secret_key)
+            state = client.get_live_state(sn) if client else None
+            if state:
+                val = ecoflow_cloud.pv_channels_from_state(state).get(channel)
+                if val is not None:
+                    return float(val)
+
+    return None
 
 
 def _ecoflow_pv_live_overrides(cfg: dict) -> dict[str, float]:
@@ -731,11 +775,12 @@ def run_cycle():
     # comparacion con la capacidad declarada). Ver capacity_store.py.
     for b in batteries:
         action, wh = per_battery_energy[b.id]
+        key = _stable_battery_key(b)
         if action == "charge":
-            lifetime_store.accumulate(b.id, b.name, charged_wh=wh, discharged_wh=0)
+            lifetime_store.accumulate(key, b.name, charged_wh=wh, discharged_wh=0, legacy_id=b.id)
         elif action == "discharge":
-            lifetime_store.accumulate(b.id, b.name, charged_wh=0, discharged_wh=wh)
-        capacity_store.update(b.id, b.name, socs.get(b.id), action, wh)
+            lifetime_store.accumulate(key, b.name, charged_wh=0, discharged_wh=wh, legacy_id=b.id)
+        capacity_store.update(key, b.name, socs.get(b.id), action, wh, legacy_id=b.id)
 
     # Registrar la decision REAL de esta hora en el historico (se
     # sobreescribe con cada ciclo hasta que la hora termine, quedando la
@@ -842,25 +887,18 @@ def run_cycle():
     except Exception as e:  # no tumbar el ciclo si HA no responde
         log.warning(f"No se pudo publicar el sensor de estado: {e}")
 
-    # Sensores AGREGADOS (todas las baterias juntas, no uno por bateria) —
-    # pensados especificamente para poder darlos de alta en el Panel de
-    # Energia oficial de HA (Ajustes -> Paneles -> Energia -> Baterias):
-    # ese panel pide UN sensor de energia entrante y UN sensor de energia
-    # saliente para "la bateria" en conjunto, con device_class "energy" y
-    # state_class "total_increasing" (nunca decrece) — justo lo que ya
-    # llevaba la cuenta `lifetime_store` para "ciclos equivalentes", aqui
-    # solo sumado entre baterias y expuesto en kWh. SOC y potencia van
-    # aparte, por si se quieren en una tarjeta normal del dashboard.
+    # Sensores de energia ACUMULADA (todas las baterias juntas, no una por
+    # una) — pensados especificamente para poder darlos de alta en el
+    # Panel de Energia oficial de HA (Ajustes -> Paneles -> Energia ->
+    # Baterias): ese panel pide UN sensor de energia entrante y UN sensor
+    # de energia saliente para "la bateria" en conjunto, con device_class
+    # "energy" y state_class "total_increasing" (nunca decrece) — justo lo
+    # que ya llevaba la cuenta `lifetime_store` para "ciclos
+    # equivalentes", aqui solo sumado entre baterias y expuesto en kWh.
+    # SOC y potencia se publican aparte, en `_live_sensor_loop` (mucho mas
+    # a menudo que este ciclo — ver ahi el porque).
     try:
-        totals = lifetime_store.get_aggregate_totals([b.id for b in batteries])
-        _publish_sensor_throttled(
-            "sensor.battery_orchestrator_soc",
-            current_soc_pct,
-            {
-                "device_class": "battery", "state_class": "measurement",
-                "unit_of_measurement": "%", "friendly_name": "Battery Orchestrator SOC",
-            },
-        )
+        totals = lifetime_store.get_aggregate_totals([_stable_battery_key(b) for b in batteries])
         _publish_sensor_throttled(
             "sensor.battery_orchestrator_energy_charged",
             round(totals["charged_wh"] / 1000, 3),
@@ -877,16 +915,6 @@ def run_cycle():
                 "device_class": "energy", "state_class": "total_increasing",
                 "unit_of_measurement": "kWh", "since": totals["since"],
                 "friendly_name": "Battery Orchestrator Energía descargada",
-            },
-        )
-        _publish_sensor_throttled(
-            "sensor.battery_orchestrator_power",
-            round(flow_charge_w - flow_discharge_w),
-            {
-                "device_class": "power", "state_class": "measurement",
-                "unit_of_measurement": "W", "friendly_name": "Battery Orchestrator Potencia",
-                # Mismo criterio de signo que "battery_net_w" en energy_flow:
-                # positivo cargando, negativo descargando.
             },
         )
     except Exception as e:
@@ -957,6 +985,61 @@ def background_loop():
                 _last_status["error"] = "Error en el ultimo ciclo, revisa los logs del addon."
         cfg = config_store.load_config()
         time.sleep(max(15, int(cfg["general"]["cycle_seconds"])))
+
+
+LIVE_SENSOR_PUBLISH_INTERVAL_SECONDS = 10
+
+
+def _live_sensor_loop():
+    """
+    Publica SOC, potencia y solar en HA cada pocos segundos, INDEPENDIENTE
+    del ciclo de planificacion (`background_loop`, que solo se relanza
+    cada `cycle_seconds` — puede ser varios minutos) — es informacion en
+    vivo (para el Panel de Energia, automatizaciones, tarjetas del
+    dashboard...), no tiene sentido que espere al ciclo completo de
+    decision para actualizarse. `energy_charged`/`energy_discharged` (los
+    acumulados) siguen publicandose solo desde `run_cycle`, porque solo
+    cambian cuando de verdad se manda una orden de carga/descarga.
+    """
+    while True:
+        try:
+            cfg = config_store.load_config()
+            if cfg["batteries"]:
+                live = _live_battery_totals(cfg)
+                if live["current_soc_pct"] is not None:
+                    _publish_sensor_throttled(
+                        "sensor.battery_orchestrator_soc", live["current_soc_pct"],
+                        {
+                            "device_class": "battery", "state_class": "measurement",
+                            "unit_of_measurement": "%", "friendly_name": "Battery Orchestrator SOC",
+                        },
+                        min_interval=LIVE_SENSOR_PUBLISH_INTERVAL_SECONDS - 1,
+                    )
+                if live["live_battery_data_ok"]:
+                    # Descargando = positivo, cargando = negativo (al
+                    # reves del criterio anterior, a peticion expresa).
+                    power_w = live["live_discharge_w"] - live["live_charge_w"]
+                    _publish_sensor_throttled(
+                        "sensor.battery_orchestrator_power", round(power_w),
+                        {
+                            "device_class": "power", "state_class": "measurement",
+                            "unit_of_measurement": "W", "friendly_name": "Battery Orchestrator Potencia",
+                        },
+                        min_interval=LIVE_SENSOR_PUBLISH_INTERVAL_SECONDS - 1,
+                    )
+            solar_w = _live_solar_now_w(cfg)
+            if solar_w is not None:
+                _publish_sensor_throttled(
+                    "sensor.battery_orchestrator_solar_power", solar_w,
+                    {
+                        "device_class": "power", "state_class": "measurement",
+                        "unit_of_measurement": "W", "friendly_name": "Battery Orchestrator Potencia solar",
+                    },
+                    min_interval=LIVE_SENSOR_PUBLISH_INTERVAL_SECONDS - 1,
+                )
+        except Exception:
+            log.exception("Fallo publicando los sensores en vivo")
+        time.sleep(LIVE_SENSOR_PUBLISH_INTERVAL_SECONDS)
 
 
 # ---------------------------------------------------------------- API ----
@@ -1092,22 +1175,35 @@ def api_status():
 
 
 @app.get("/api/live")
-def api_live():
+def _live_solar_now_w(cfg: dict) -> float | None:
     """
-    Lectura RAPIDA de solo lectura: nada de previsión, planificacion ni
-    ejecucion, solo el estado medido en Home Assistant AHORA MISMO. Pensada
-    para que el dashboard refresque los numeros "en vivo" cada pocos
-    segundos sin esperar al proximo ciclo completo de optimizacion (que es
-    mas lento y solo se relanza cada `cycle_seconds`).
+    Solar en vivo AHORA MISMO: arrays con sensor de HA + arrays vinculados
+    a un puerto MPPT de una bateria EcoFlow (ver `_ecoflow_pv_live_overrides`)
+    — cada array cuenta una vez, de la fuente que le corresponda. Usado
+    por `/api/live` y por `_live_sensor_loop` (mismo numero en los dos
+    sitios, sin duplicar la logica).
     """
-    cfg = config_store.load_config()
+    ecoflow_pv_overrides = _ecoflow_pv_live_overrides(cfg)
+    pv_vals = []
+    for a in cfg["pv_arrays"]:
+        if a["id"] in ecoflow_pv_overrides:
+            pv_vals.append(ecoflow_pv_overrides[a["id"]])
+        elif a.get("current_sensor"):
+            v = ha_client.get_numeric_state(a["current_sensor"], default=None)
+            if v is not None:
+                pv_vals.append(v)
+    return round(sum(pv_vals)) if pv_vals else None
 
+
+def _live_battery_totals(cfg: dict) -> dict:
+    """
+    Estado de baterias medido AHORA MISMO (sin previsión ni planificacion)
+    — compartido entre `/api/live` (sondeo del dashboard, cada pocos
+    segundos) y `_live_sensor_loop` (publicacion frecuente de SOC/potencia
+    hacia HA), para no duplicar esta logica en dos sitios.
+    """
     battery_live = []
     total_capacity_wh, current_soc_wh = 0.0, 0.0
-    # Suma en vivo de carga/descarga de TODAS las baterias, reutilizando el
-    # mismo `net_power` que ya se calcula por bateria mas abajo en este
-    # mismo bucle (nunca una segunda ronda de llamadas a HA por lo mismo)
-    # — hace falta para "energy_flow" al final de esta funcion, ver ahi.
     live_charge_w = 0.0
     live_discharge_w = 0.0
     live_battery_data_ok = False
@@ -1205,20 +1301,33 @@ def api_live():
             current_soc_wh += soc / 100 * cap
     current_soc_pct = round(100 * current_soc_wh / total_capacity_wh, 1) if total_capacity_wh else None
 
-    # Solar en vivo: arrays con sensor de HA + arrays vinculados a un
-    # puerto MPPT de una bateria EcoFlow (mismo mecanismo que run_cycle,
-    # ver _ecoflow_pv_live_overrides) — cada array cuenta una vez, de la
-    # fuente que le corresponda.
-    ecoflow_pv_overrides = _ecoflow_pv_live_overrides(cfg)
-    pv_vals = []
-    for a in cfg["pv_arrays"]:
-        if a["id"] in ecoflow_pv_overrides:
-            pv_vals.append(ecoflow_pv_overrides[a["id"]])
-        elif a.get("current_sensor"):
-            v = ha_client.get_numeric_state(a["current_sensor"], default=None)
-            if v is not None:
-                pv_vals.append(v)
-    pv_now_w = round(sum(pv_vals)) if pv_vals else None
+    return {
+        "battery_live": battery_live,
+        "current_soc_pct": current_soc_pct,
+        "live_charge_w": live_charge_w,
+        "live_discharge_w": live_discharge_w,
+        "live_battery_data_ok": live_battery_data_ok,
+    }
+
+
+def api_live():
+    """
+    Lectura RAPIDA de solo lectura: nada de previsión, planificacion ni
+    ejecucion, solo el estado medido en Home Assistant AHORA MISMO. Pensada
+    para que el dashboard refresque los numeros "en vivo" cada pocos
+    segundos sin esperar al proximo ciclo completo de optimizacion (que es
+    mas lento y solo se relanza cada `cycle_seconds`).
+    """
+    cfg = config_store.load_config()
+
+    live = _live_battery_totals(cfg)
+    battery_live = live["battery_live"]
+    current_soc_pct = live["current_soc_pct"]
+    live_charge_w = live["live_charge_w"]
+    live_discharge_w = live["live_discharge_w"]
+    live_battery_data_ok = live["live_battery_data_ok"]
+
+    pv_now_w = _live_solar_now_w(cfg)
 
     # Modo "combined" (ver "Consumo de la casa" en Configuración): sin
     # sensor de consumo ya neteado, se reconstruye con el balance fisico
@@ -1542,6 +1651,44 @@ def api_ecoflow_discover():
     })
 
 
+@app.post("/api/ecoflow/specs")
+def api_ecoflow_specs():
+    """
+    Boton "Autorrellenar desde la batería" en "+ Añadir batería" (modo
+    Bluetooth/Híbrido) — capacidad real y límites de potencia de
+    carga/descarga que la propia batería reporta, para no tener que
+    teclearlos a mano mirando la etiqueta o la app oficial. Solo
+    disponible por Bluetooth: la API Cloud no trae un campo de capacidad
+    directo en Wh (solo una capacidad de diseño en mAh sin la tensión de
+    referencia para convertirla con garantías, así que aquí no se
+    inventa la conversión) — si la batería es Cloud-only, el usuario
+    sigue rellenando estos campos a mano, como hasta ahora.
+    """
+    body = request.get_json(silent=True) or {}
+    address = body.get("address")
+    cfg = config_store.load_config()
+    user_id = cfg.get("ecoflow_user_id")
+    if not (address and user_id):
+        return jsonify({"error": "Falta la dirección Bluetooth o el userId de la cuenta EcoFlow"}), 400
+
+    state = ecoflow_ble.get_state(address, user_id)
+    if not state:
+        return jsonify({"error": "No se pudo hablar con el puente BLE o con la batería"}), 502
+
+    def _num(key):
+        v = state.get(key)
+        try:
+            return round(float(v)) if v is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    return jsonify({
+        "capacity_wh": _num("battery_full_energy_wh"),
+        "max_charge_w": _num("max_ac_in_power"),
+        "max_discharge_w": _num("max_ac_out_power"),
+    })
+
+
 @app.post("/api/ecoflow/pv_channels")
 def api_ecoflow_pv_channels():
     """
@@ -1556,27 +1703,57 @@ def api_ecoflow_pv_channels():
     battery_id = body.get("battery_id")
     cfg = config_store.load_config()
     b = next((x for x in cfg["batteries"] if x["id"] == battery_id), None)
-    if not b or b.get("source") != "ecoflow" or b.get("ecoflow_mode") not in ("bluetooth", "hybrid"):
-        return jsonify({"error": "Esa batería no es EcoFlow por Bluetooth/Híbrido"}), 400
-    address, user_id = b.get("ecoflow_ble_address"), cfg.get("ecoflow_user_id")
-    if not (address and user_id):
-        return jsonify({"error": "Esta batería todavía no tiene dirección Bluetooth vinculada"}), 400
+    if not b or b.get("source") != "ecoflow":
+        return jsonify({"error": "Esa batería no es EcoFlow"}), 400
+    ecoflow_mode = b.get("ecoflow_mode")
 
-    state = ecoflow_ble.get_state(address, user_id)
-    if not state:
-        return jsonify({"error": "No se pudo hablar con el puente BLE o con la batería"}), 502
+    # BLE: sabe de antemano, por la clase del modelo, que puertos existen
+    # de verdad (aunque no hayan reportado nada todavia) -- "supported".
+    ble_channels: dict[str, dict] = {}
+    ble_error = None
+    if ecoflow_mode in ("bluetooth", "hybrid"):
+        address, user_id = b.get("ecoflow_ble_address"), cfg.get("ecoflow_user_id")
+        if address and user_id:
+            state = ecoflow_ble.get_state(address, user_id)
+            if state:
+                ble_channels = {
+                    ch: info for ch, info in (state.get("pv_channels") or {}).items()
+                    if info.get("supported")
+                }
+            else:
+                ble_error = "No se pudo hablar con el puente BLE o con la batería"
+
+    # Cloud (MQTT): solo se sabe que un puerto existe cuando YA ha
+    # reportado un valor -- no distingue "no soportado" de "sin dato
+    # todavia", asi que solo aporta lo que BLE no haya encontrado.
+    cloud_channels: dict[str, float] = {}
+    cloud_error = None
+    if ecoflow_mode in ("cloud", "hybrid"):
+        access_key, secret_key, sn = cfg.get("ecoflow_access_key"), cfg.get("ecoflow_secret_key"), b.get("ecoflow_sn")
+        if access_key and secret_key and sn:
+            client = ecoflow_cloud.get_client(access_key, secret_key)
+            state = client.get_live_state(sn) if client else None
+            if state:
+                cloud_channels = ecoflow_cloud.pv_channels_from_state(state)
+            else:
+                cloud_error = "No se pudo consultar la API de EcoFlow (Cloud)"
+
+    if not ble_channels and not cloud_channels and (ble_error or cloud_error):
+        return jsonify({"error": ble_error or cloud_error}), 502
 
     already_linked = {
         (a.get("ecoflow_battery_id"), str(a.get("ecoflow_pv_channel")))
         for a in cfg["pv_arrays"] if a.get("ecoflow_battery_id")
     }
+    all_ch = sorted(set(ble_channels) | set(cloud_channels))
     channels = []
-    for ch, info in sorted((state.get("pv_channels") or {}).items()):
-        if not info.get("supported"):
-            continue
+    for ch in all_ch:
+        power_w = ble_channels.get(ch, {}).get("power_w")
+        if power_w is None:
+            power_w = cloud_channels.get(ch)
         channels.append({
             "channel": ch,
-            "power_w": info.get("power_w"),
+            "power_w": power_w,
             "already_added": (battery_id, ch) in already_linked,
         })
     return jsonify({"battery_name": b.get("name"), "channels": channels, "count": len(channels)})
@@ -1637,6 +1814,8 @@ def _run_wallpanel_server():
 if __name__ == "__main__":
     t = threading.Thread(target=background_loop, daemon=True)
     t.start()
+    live_t = threading.Thread(target=_live_sensor_loop, daemon=True)
+    live_t.start()
     wp = threading.Thread(target=_run_wallpanel_server, daemon=True)
     wp.start()
     app.run(host="0.0.0.0", port=8099, threaded=True)

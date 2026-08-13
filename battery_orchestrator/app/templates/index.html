@@ -597,6 +597,13 @@
       </div>
     </div>
 
+    <div id="b-ecoflow-autofill" style="display:none">
+      <div class="actions">
+        <button class="secondary" type="button" onclick="autofillEcoflowSpecs()" id="b-ecoflow-autofill-btn" data-i18n="btn_ecoflow_autofill">Autorrellenar desde la batería</button>
+      </div>
+      <p class="help" id="b-ecoflow-autofill-result"></p>
+    </div>
+
     <div class="grid2" style="margin-top:10px">
       <div>
         <label data-i18n="label_name">Nombre</label><input id="b-name" placeholder="Ultra">
@@ -967,6 +974,11 @@ es: {
   error_ecoflow_resolve_failed: "No se ha podido obtener el userId. Comprueba el email y la contraseña.",
   label_ecoflow_user_id: "userId de tu cuenta EcoFlow",
   btn_save_ecoflow_creds: "Guardar credenciales",
+  btn_ecoflow_autofill: "Autorrellenar desde la batería",
+  ecoflow_autofill_working: "Consultando la batería…",
+  ecoflow_autofill_ok: "Rellenado: {fields}.",
+  ecoflow_autofill_none: "La batería no ha reportado esos datos todavía.",
+  ecoflow_autofill_failed: "No se pudo consultar la batería.",
   help_ecoflow_selected: "Vinculada a:",
   kv_ecoflow_device: "Dispositivo", kv_ecoflow_sn: "Número de serie", kv_ecoflow_address: "Dirección Bluetooth", kv_source: "Origen",
   error_ecoflow_no_device: 'Elige la batería desde "Buscar baterías EcoFlow" — no se puede añadir una EcoFlow sin pasar por el descubrimiento.',
@@ -1251,6 +1263,11 @@ en: {
   error_ecoflow_resolve_failed: "Couldn't get the userId. Check the email and password.",
   label_ecoflow_user_id: "userId of your EcoFlow account",
   btn_save_ecoflow_creds: "Save credentials",
+  btn_ecoflow_autofill: "Autofill from the battery",
+  ecoflow_autofill_working: "Checking the battery…",
+  ecoflow_autofill_ok: "Filled in: {fields}.",
+  ecoflow_autofill_none: "The battery hasn't reported that data yet.",
+  ecoflow_autofill_failed: "Couldn't reach the battery.",
   help_ecoflow_selected: "Linked to:",
   kv_ecoflow_device: "Device", kv_ecoflow_sn: "Serial number", kv_ecoflow_address: "Bluetooth address", kv_source: "Source",
   error_ecoflow_no_device: 'Pick the battery from "Search EcoFlow batteries" — an EcoFlow battery can\'t be added without going through discovery.',
@@ -1753,7 +1770,7 @@ function togglePvMode() {
 
 function populateEcoflowPvBatterySelect() {
   const sel = document.getElementById('pv-ecoflow-battery');
-  const candidates = cfg.batteries.filter(b => b.source === 'ecoflow' && (b.ecoflow_mode === 'bluetooth' || b.ecoflow_mode === 'hybrid'));
+  const candidates = cfg.batteries.filter(b => b.source === 'ecoflow');
   sel.innerHTML = candidates.length
     ? candidates.map(b => `<option value="${b.id}">${b.name}</option>`).join('')
     : `<option value="">${t('opt_no_ecoflow_ble_batteries')}</option>`;
@@ -1898,6 +1915,8 @@ function resetBatteryForm() {
   document.getElementById('b-ecoflow-sn-row').style.display = 'none';
   document.getElementById('b-ecoflow-address-row').style.display = 'none';
   document.getElementById('b-ecoflow-selected').style.display = 'none';
+  document.getElementById('b-ecoflow-autofill').style.display = 'none';
+  document.getElementById('b-ecoflow-autofill-result').textContent = '';
   toggleBatterySource();
   pendingEcoflowSn = null;
   pendingEcoflowMainSn = null;
@@ -1954,6 +1973,7 @@ function editBattery(id) {
     pendingEcoflowSn = b.ecoflow_sn || null;
     pendingEcoflowMainSn = b.ecoflow_main_sn || null;
     pendingEcoflowAddress = b.ecoflow_ble_address || null;
+    document.getElementById('b-ecoflow-autofill').style.display = pendingEcoflowAddress ? 'block' : 'none';
   }
   toggleBatterySource();
   // toggleBatterySource() ya llama a toggleEcoflowMode(), que borra la
@@ -1964,6 +1984,7 @@ function editBattery(id) {
     pendingEcoflowMainSn = b.ecoflow_main_sn || null;
     pendingEcoflowAddress = b.ecoflow_ble_address || null;
     document.getElementById('b-ecoflow-selected').style.display = 'block';
+    document.getElementById('b-ecoflow-autofill').style.display = pendingEcoflowAddress ? 'block' : 'none';
   }
 
   editingBatteryId = id;
@@ -3051,6 +3072,34 @@ function addEcoflowBatteryFromDiscovery(device) {
     document.getElementById('b-ecoflow-address-row').style.display = 'flex';
     document.getElementById('b-ecoflow-address-display').textContent = t('ecoflow_ble_pending');
     pendingEcoflowAddress = null;
+  }
+  // Solo se puede autorrellenar con la bateria ya conectable por BLE
+  // (la capacidad/limites de potencia no estan en el snapshot de Cloud).
+  document.getElementById('b-ecoflow-autofill').style.display = pendingEcoflowAddress ? 'block' : 'none';
+}
+
+async function autofillEcoflowSpecs() {
+  const btn = document.getElementById('b-ecoflow-autofill-btn');
+  const result = document.getElementById('b-ecoflow-autofill-result');
+  if (!pendingEcoflowAddress) return;
+  btn.disabled = true;
+  result.textContent = t('ecoflow_autofill_working');
+  try {
+    const res = await fetch('api/ecoflow/specs', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address: pendingEcoflowAddress }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { result.textContent = data.error || t('ecoflow_autofill_failed'); return; }
+    const filled = [];
+    if (data.capacity_wh != null) { document.getElementById('b-capacity').value = data.capacity_wh; filled.push(t('label_capacity')); }
+    if (data.max_charge_w != null) { document.getElementById('b-maxcharge').value = data.max_charge_w; filled.push(t('label_max_charge')); }
+    if (data.max_discharge_w != null) { document.getElementById('b-maxdischarge').value = data.max_discharge_w; filled.push(t('label_max_discharge')); }
+    result.textContent = filled.length ? t('ecoflow_autofill_ok', { fields: filled.join(', ') }) : t('ecoflow_autofill_none');
+  } catch (err) {
+    result.textContent = t('ecoflow_autofill_failed');
+  } finally {
+    btn.disabled = false;
   }
 }
 

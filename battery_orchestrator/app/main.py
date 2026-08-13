@@ -1718,7 +1718,10 @@ def api_ecoflow_specs():
     if not (address and user_id):
         return jsonify({"error": "Falta la dirección Bluetooth o el userId de la cuenta EcoFlow"}), 400
 
-    state = ecoflow_ble.get_state(address, user_id)
+    # fresh=True: boton pulsado a proposito por el usuario, una vez -- a
+    # diferencia del camino de lectura normal (planificacion, /api/live),
+    # aqui SI tiene sentido esperar a una conexion BLE real si hace falta.
+    state = ecoflow_ble.get_state(address, user_id, fresh=True)
     if not state:
         return jsonify({"error": "No se pudo hablar con el puente BLE o con la batería"}), 502
 
@@ -1761,7 +1764,7 @@ def api_ecoflow_pv_channels():
     if ecoflow_mode in ("bluetooth", "hybrid"):
         address, user_id = b.get("ecoflow_ble_address"), cfg.get("ecoflow_user_id")
         if address and user_id:
-            state = ecoflow_ble.get_state(address, user_id)
+            state = ecoflow_ble.get_state(address, user_id, fresh=True)  # boton pulsado a proposito
             if state:
                 ble_channels = {
                     ch: info for ch, info in (state.get("pv_channels") or {}).items()

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.46
+Tapado el agujero real de la caché BLE: con `fresh=False` (el camino de lectura normal — planificación, `/api/live`, previsión solar) todavía se podía colar a esperar una conexión BLE de verdad si la caché estaba vacía (justo tras un arranque, o tras el enfriamiento de la 0.11.45). Ahora `fresh=False` **nunca** conecta ni espera — lee solo la caché, `None` al instante si no hay nada. Bluetooth y Cloud quedan así completamente desacoplados: Cloud (MQTT) ya estaba siempre conectado de fondo con lectura instantánea; Bluetooth ahora también — solo `_live_sensor_loop` (cada ~10s, en su propio hilo) abre conexión BLE de verdad, y en cuanto detecta que vuelve a responder el resto de la app empieza a usarla sola, sin ningún cambio manual. Los botones de acción directa del usuario ("Buscar puertos MPPT", "Autorrellenar desde la batería") sí siguen esperando a una conexión real cuando hace falta, porque ahí el usuario ha pedido esa espera a propósito.
+
 ## 0.11.45
 Causa real de los `500 Server Error` del puente BLE (revisado el log de HA Core, no solo el del add-on): `HomeAssistantError: No se pudo conectar con <dirección> en 25s` — un timeout de conexión BLE genuino, no un bug de Python. El problema es que `_live_sensor_loop` (v0.11.42+) reintentaba conectar cada ~10s sin ningún respiro, así que un fallo puntual se convertía en un martilleo constante que probablemente empeoraba la inestabilidad en vez de arreglarla. Ahora hay un enfriamiento de 60s tras un fallo: durante ese tiempo se devuelve lo último en caché (o `None`) sin reintentar, dejando paso limpio al fallback a Cloud en modo Híbrido en vez de bloquear repetidamente en el intento de BLE.
 

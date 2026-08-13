@@ -82,48 +82,40 @@ def discover() -> list[dict] | None:
 
 def get_state(address: str, user_id: str, *, fresh: bool = False) -> dict | None:
     """
-    Conecta (si hace falta) y devuelve el ultimo estado conocido — `None`
-    si el puente no responde o el dispositivo no esta al alcance, nunca
-    un cero inventado.
+    Devuelve el ultimo estado conocido de esta bateria — `None` si
+    todavia no hay ningun dato de verdad, nunca un cero inventado.
 
-    `fresh=False` (por defecto): si ya hay un estado en cache para esta
-    direccion, se devuelve al instante SIN abrir conexion nueva —
-    conectar por BLE es lento (hasta 30-40s de emparejamiento) y, sobre
-    todo, evita que varios sitios de la app pidan el mismo dato a la vez
-    desde hilos distintos. Solo `_live_sensor_loop` (main.py) pide
-    `fresh=True`, una vez cada ~10s — el UNICO sitio que refresca la
-    caché de verdad; el lock por direccion de aqui abajo asegura ademas
-    que nunca se solapan dos conexiones reales a la MISMA bateria aunque
-    dos peticiones frescas coincidieran en el tiempo.
+    `fresh=False` (por defecto — lo usa TODO el camino de lectura normal:
+    planificacion, `/api/live`, previsión solar...): SOLO lee la caché,
+    JAMAS abre una conexion BLE nueva ni espera a nada — si no hay nada
+    en caché todavia, se devuelve `None` al instante. Es lo que hace
+    posible que, en modo Híbrido, un Bluetooth caido no bloquee ni un
+    segundo la lectura: el llamante ve `None` enseguida y cae a Cloud sin
+    esperar ningun timeout. Bluetooth y Cloud coexisten sin pisarse — uno
+    no bloquea al otro.
 
-    Si la ULTIMA conexion fresca fallo, no se reintenta hasta pasado
-    `FRESH_RETRY_COOLDOWN_SECONDS` (se devuelve lo que haya en cache
-    mientras tanto, aunque este algo desactualizado) — sin este
-    enfriamiento, un fallo puntual de BLE se convertiria en un intento de
-    reconexion cada pocos segundos sin descanso.
+    `fresh=True` (solo lo usa `_live_sensor_loop`, cada ~10s en su propio
+    hilo de fondo): esta es la UNICA via que de verdad conecta por BLE
+    (hasta 30-40s de emparejamiento) y actualiza la caché para que el
+    resto de la app la vaya viendo — con lock por direccion (nunca dos
+    conexiones a la vez a la MISMA bateria) y un enfriamiento de
+    `FRESH_RETRY_COOLDOWN_SECONDS` tras un fallo (para no reintentar
+    conectar cada 10s sin descanso si Bluetooth esta caido; en cuanto
+    vuelva a responder, esta misma via lo detecta sola y retoma BLE).
     """
     if not fresh:
         with _state_cache_lock:
-            cached = _state_cache.get(address)
-        if cached is not None:
-            return cached
+            return _state_cache.get(address)
 
     with _lock_for(address):
-        if not fresh:
-            # Puede que otro hilo ya la haya refrescado mientras esperabamos el lock.
+        last_attempt = _last_fresh_attempt.get(address)
+        if (
+            last_attempt is not None
+            and _last_fresh_failed.get(address)
+            and (time.time() - last_attempt) < FRESH_RETRY_COOLDOWN_SECONDS
+        ):
             with _state_cache_lock:
-                cached = _state_cache.get(address)
-            if cached is not None:
-                return cached
-        else:
-            last_attempt = _last_fresh_attempt.get(address)
-            if (
-                last_attempt is not None
-                and _last_fresh_failed.get(address)
-                and (time.time() - last_attempt) < FRESH_RETRY_COOLDOWN_SECONDS
-            ):
-                with _state_cache_lock:
-                    return _state_cache.get(address)  # puede ser None, es correcto asi
+                return _state_cache.get(address)  # puede ser None, es correcto asi
         _last_fresh_attempt[address] = time.time()
         state = ha_client.call_service_with_response(
             DOMAIN, "get_state",

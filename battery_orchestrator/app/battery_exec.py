@@ -51,6 +51,11 @@ class Battery:
     ecoflow_access_key: str | None = None    # credenciales de cuenta EcoFlow (globales), solo si hace falta cloud
     ecoflow_secret_key: str | None = None
     ecoflow_user_id: str | None = None       # userId de cuenta EcoFlow (global), solo si hace falta bluetooth
+    # De donde vino el ULTIMO SOC leido con exito ("bluetooth" | "cloud"),
+    # solo informativo -- para el iconito BT/API del dashboard. Se
+    # actualiza cada vez que se llama a read_soc_pct() en una bateria
+    # EcoFlow; None si no es EcoFlow o si esta ultima lectura fallo.
+    last_ecoflow_source: str | None = None
 
     def read_soc_pct(self) -> float | None:
         """None si el sensor esta 'unavailable'/'unknown' o no responde (o,
@@ -94,12 +99,22 @@ class Battery:
         return None
 
     def _read_ecoflow_soc_pct(self) -> float | None:
+        self.last_ecoflow_source = None
         if self.ecoflow_mode == "bluetooth":
-            return self._read_ecoflow_soc_pct_via_ble()
+            val = self._read_ecoflow_soc_pct_via_ble()
+            self.last_ecoflow_source = "bluetooth" if val is not None else None
+            return val
         if self.ecoflow_mode == "hybrid":
             val = self._read_ecoflow_soc_pct_via_ble()
-            return val if val is not None else self._read_ecoflow_soc_pct_via_cloud()
-        return self._read_ecoflow_soc_pct_via_cloud()  # "cloud" (o valor no reconocido: mejor caer aqui que no leer nada)
+            if val is not None:
+                self.last_ecoflow_source = "bluetooth"
+                return val
+            val = self._read_ecoflow_soc_pct_via_cloud()
+            self.last_ecoflow_source = "cloud" if val is not None else None
+            return val
+        val = self._read_ecoflow_soc_pct_via_cloud()  # "cloud" (o valor no reconocido: mejor caer aqui que no leer nada)
+        self.last_ecoflow_source = "cloud" if val is not None else None
+        return val
 
     def read_live_power_w(self) -> float | None:
         """
@@ -246,7 +261,8 @@ def plan_distribution(batteries: list[Battery], charge_w: float, discharge_w: fl
     # las pequeñas.
     per_battery: list[dict] = [
         {"id": b.id, "name": b.name, "soc_pct": None, "power_w": 0, "capacity_wh": b.capacity_wh,
-         "enabled": False, "note": "sensor de SOC no disponible, se omite este ciclo"}
+         "enabled": False, "note": "sensor de SOC no disponible, se omite este ciclo",
+         "ecoflow_source": b.last_ecoflow_source if b.source == "ecoflow" else None}
         for b in unavailable
     ]
 
@@ -261,7 +277,8 @@ def plan_distribution(batteries: list[Battery], charge_w: float, discharge_w: fl
         action = "charge"
         per_battery += [
             {"id": b.id, "name": b.name, "soc_pct": socs[b.id], "power_w": round(assigned[b.id]),
-             "capacity_wh": b.capacity_wh, "enabled": assigned[b.id] > 1, "note": "reparto por capacidad"}
+             "capacity_wh": b.capacity_wh, "enabled": assigned[b.id] > 1, "note": "reparto por capacidad",
+             "ecoflow_source": b.last_ecoflow_source if b.source == "ecoflow" else None}
             for b in available
         ]
     elif discharge_w > 0 and available:
@@ -279,12 +296,14 @@ def plan_distribution(batteries: list[Battery], charge_w: float, discharge_w: fl
             else:
                 power_w, enabled, note = 0, False, "sin margen (al minimo)"
             per_battery.append({"id": b.id, "name": b.name, "soc_pct": socs[b.id], "power_w": power_w,
-                                 "capacity_wh": b.capacity_wh, "enabled": enabled, "note": note})
+                                 "capacity_wh": b.capacity_wh, "enabled": enabled, "note": note,
+                                 "ecoflow_source": b.last_ecoflow_source if b.source == "ecoflow" else None})
     else:
         action = "idle"
         per_battery += [
             {"id": b.id, "name": b.name, "soc_pct": socs[b.id], "power_w": 0, "capacity_wh": b.capacity_wh,
-             "enabled": False, "note": "sin accion"}
+             "enabled": False, "note": "sin accion",
+             "ecoflow_source": b.last_ecoflow_source if b.source == "ecoflow" else None}
             for b in available
         ]
 

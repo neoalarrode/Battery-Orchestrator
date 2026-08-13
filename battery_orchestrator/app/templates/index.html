@@ -367,7 +367,8 @@
     backdrop-filter: var(--glass-blur-soft); -webkit-backdrop-filter: var(--glass-blur-soft);
     border-radius: 10px; padding: 10px 14px; min-width: 0;
   }
-  .battery-mini .bm-name { font-weight: 600; font-size: .85rem; flex: 1 1 auto; min-width: 80px; }
+  .battery-mini .bm-name { font-weight: 600; font-size: .85rem; flex: 1 1 auto; min-width: 80px; display: inline-flex; align-items: center; gap: 5px; }
+  .ecoflow-source-icon { flex: none; color: var(--muted); fill: currentColor; opacity: .75; }
   .battery-mini .bm-bar-track { flex: 2 1 70px; height: 7px; border-radius: 5px; background: var(--border); overflow: hidden; min-width: 50px; }
   .battery-mini .bm-bar-fill { height: 100%; border-radius: 5px; position: relative; overflow: hidden; }
   .battery-mini .bm-pct { font-family: var(--font-mono); font-size: .8rem; font-weight: 700; min-width: 42px; text-align: right; font-variant-numeric: tabular-nums; }
@@ -1150,6 +1151,7 @@ es: {
 
   battery_status_charging: "cargando {w}W", battery_status_discharge: "descarga ≤{w}W",
   battery_status_idle: "sin acción", battery_status_no_data: "sin datos",
+  ecoflow_source_bluetooth: "Datos por Bluetooth", ecoflow_source_cloud: "Datos por Cloud (API)",
 
   stat_soc: "SOC agregado", stat_tier: "Tramo actual", stat_price: "Precio", stat_solar: "Solar", stat_consumption: "Consumo",
   stat_charging: "Cargando", stat_discharging: "Descargando", stat_idle: "En reposo",
@@ -1443,6 +1445,7 @@ en: {
 
   battery_status_charging: "charging {w}W", battery_status_discharge: "discharge ≤{w}W",
   battery_status_idle: "no action", battery_status_no_data: "no data",
+  ecoflow_source_bluetooth: "Data via Bluetooth", ecoflow_source_cloud: "Data via Cloud (API)",
 
   stat_soc: "Aggregate SOC", stat_tier: "Current tier", stat_price: "Price", stat_solar: "Solar", stat_consumption: "Load",
   stat_charging: "Charging", stat_discharging: "Discharging", stat_idle: "Idle",
@@ -2823,6 +2826,22 @@ function renderPowerMeter() {
 const BATTERY_DEVIATION_AMBER_PCT = 5;
 const BATTERY_DEVIATION_RED_PCT = 15;
 
+// Iconito de por donde esta llegando el dato de una bateria EcoFlow AHORA
+// MISMO -- un globo si vino de Cloud (API), el simbolo de Bluetooth si
+// vino de BLE. `null`/`undefined` (bateria no-EcoFlow, o EcoFlow sin
+// ninguna lectura todavia) no pinta nada. Mismo estilo de icono de linea
+// que el resto de la app (currentColor, sin depender de una libreria).
+const ECOFLOW_SOURCE_ICONS = {
+  bluetooth: '<path d="M13 5.83 14.88 7.71 13 9.59V5.83M13 14.41l1.88 1.88L13 18.17v-3.76M17.71 7.71 12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71L13.42 12l4.29-4.29Z"/>',
+  cloud: '<path d="M16.36 14c.08-.66.14-1.32.14-2s-.06-1.34-.14-2h3.38c.16.64.26 1.31.26 2s-.1 1.36-.26 2M14.59 19.56c.6-1.11 1.06-2.31 1.38-3.56h2.95c-.96 1.65-2.49 2.93-4.33 3.56M14.34 14H9.66c-.1-.66-.16-1.32-.16-2s.06-1.35.16-2h4.68c.09.65.16 1.32.16 2s-.07 1.34-.16 2M12 19.96c-.83-1.2-1.5-2.53-1.91-3.96h3.82c-.41 1.43-1.08 2.76-1.91 3.96M8 8H5.08C6.03 6.34 7.57 5.06 9.4 4.44 8.8 5.55 8.35 6.75 8 8M5.08 16H8c.35 1.25.8 2.45 1.4 3.56-1.83-.63-3.37-1.91-4.32-3.56M4.26 14C4.1 13.36 4 12.69 4 12s.1-1.36.26-2h3.38C7.56 10.66 7.5 11.32 7.5 12s.06 1.34.14 2M12 4.03c.83 1.2 1.5 2.54 1.91 3.97h-3.82c.41-1.43 1.08-2.77 1.91-3.97M18.92 8h-2.95c-.32-1.25-.78-2.45-1.38-3.56 1.84.63 3.37 1.91 4.33 3.56M12 2A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2Z"/>',
+};
+function ecoflowSourceIcon(source) {
+  const path = ECOFLOW_SOURCE_ICONS[source];
+  if (!path) return '';
+  const label = t(source === 'bluetooth' ? 'ecoflow_source_bluetooth' : 'ecoflow_source_cloud');
+  return `<svg class="ecoflow-source-icon" width="12" height="12" viewBox="0 0 24 24" aria-label="${label}"><title>${label}</title>${path}</svg>`;
+}
+
 function renderBatteryBreakdown(distribution) {
   const host = document.getElementById('battery-breakdown');
   const entries = distribution && distribution.per_battery ? distribution.per_battery : [];
@@ -2846,7 +2865,7 @@ function renderBatteryBreakdown(distribution) {
 
   const rows = entries.map(e => {
     if (e.soc_pct === null || e.soc_pct === undefined) {
-      return `<div class="battery-mini"><div class="bm-name">${e.name}</div><span class="bm-status idle">${t('battery_status_no_data')}</span></div>`;
+      return `<div class="battery-mini"><div class="bm-name">${e.name}${ecoflowSourceIcon(e.ecoflow_source)}</div><span class="bm-status idle">${t('battery_status_no_data')}</span></div>`;
     }
     const statusClass = action === 'charge' && e.enabled ? 'charge' : action === 'discharge' && e.enabled ? 'discharge' : 'idle';
     const statusText = statusClass === 'charge' ? t('battery_status_charging', { w: e.power_w }) : statusClass === 'discharge' ? t('battery_status_discharge', { w: e.power_w }) : t('battery_status_idle');
@@ -2860,7 +2879,7 @@ function renderBatteryBreakdown(distribution) {
 
     return `
     <div class="battery-mini">
-      <div class="bm-name">${e.name}</div>
+      <div class="bm-name">${e.name}${ecoflowSourceIcon(e.ecoflow_source)}</div>
       <div class="bm-bar-track"><div class="bm-bar-fill" style="width:${e.soc_pct}%; background:${barColor}"></div></div>
       <div class="bm-pct">${e.soc_pct.toFixed ? e.soc_pct.toFixed(1) : e.soc_pct}%</div>
       <span class="bm-status ${statusClass}">${statusText}</span>

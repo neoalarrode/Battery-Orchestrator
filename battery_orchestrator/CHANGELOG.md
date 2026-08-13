@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.49
+Icono junto al nombre de cada batería EcoFlow en la tarjeta "Baterías" de Estado actual — un globo si el dato de este ciclo vino de Cloud (API), el símbolo de Bluetooth si vino de BLE. No aparece en baterías por Home Assistant (no aplica) ni si todavía no hay ninguna lectura EcoFlow.
+
 ## 0.11.48
 Causa real de que una batería EcoFlow en Híbrido se quedara sin datos con Bluetooth caído, aun teniendo el SN de Cloud bien vinculado: MQTT solo reenvía por incrementos los campos que CAMBIAN — si el SOC de una unidad lleva tiempo sin variar, puede que ese campo en concreto nunca se haya visto desde que la sesión se suscribió, aunque el resto del estado de esa batería llegue "fresco" por otros campos. `get_live_state` ya no se conforma con "ha llegado algo reciente": ahora acepta qué campos hacen falta de verdad (SOC, potencia agregada, puertos MPPT) y cae al REST si NINGUNO de ellos está presente, aunque el resto esté fresco.
 

@@ -1307,6 +1307,11 @@ def _live_battery_totals(cfg: dict, *, fresh: bool = False) -> dict:
             # ese truco, ya es por unidad de verdad.
             soc, power, net_power = None, None, None
             ecoflow_mode = b.get("ecoflow_mode")
+            # De donde ha venido el dato de ESTE ciclo -- para el iconito
+            # BT/Cloud del dashboard, no afecta a nada mas. Si el SOC vino
+            # de un lado se queda con ese; si el SOC no llego de ninguno
+            # pero si la potencia, se usa esa como pista.
+            ecoflow_source = None
 
             if ecoflow_mode in ("bluetooth", "hybrid"):
                 address, user_id = b.get("ecoflow_ble_address"), cfg.get("ecoflow_user_id")
@@ -1320,10 +1325,12 @@ def _live_battery_totals(cfg: dict, *, fresh: bool = False) -> dict:
                         if state.get("battery_level_main") is not None:
                             try:
                                 soc = float(state["battery_level_main"])
+                                ecoflow_source = "bluetooth"
                             except (TypeError, ValueError):
                                 pass
                         if state.get("battery_power") is not None:
                             net_power = float(state["battery_power"])
+                            ecoflow_source = ecoflow_source or "bluetooth"
 
             if ecoflow_mode in ("cloud", "hybrid") and (soc is None or net_power is None):
                 access_key, secret_key = cfg.get("ecoflow_access_key"), cfg.get("ecoflow_secret_key")
@@ -1338,6 +1345,7 @@ def _live_battery_totals(cfg: dict, *, fresh: bool = False) -> dict:
                                 if state.get(field) is not None:
                                     try:
                                         soc = float(state[field])
+                                        ecoflow_source = "cloud"
                                     except (TypeError, ValueError):
                                         pass
                                     break
@@ -1346,6 +1354,7 @@ def _live_battery_totals(cfg: dict, *, fresh: bool = False) -> dict:
                         if main_state and main_state.get("powGetBpCms") is not None:
                             net_power = float(main_state["powGetBpCms"])
                             ecoflow_main_sns_counted.add(main_sn)
+                            ecoflow_source = ecoflow_source or "cloud"
 
             if net_power is not None:
                 power = abs(net_power) if net_power < 0 else None  # power_w = solo descarga, mismo criterio que el resto
@@ -1375,7 +1384,10 @@ def _live_battery_totals(cfg: dict, *, fresh: bool = False) -> dict:
                 if charge is not None or power is not None:
                     net_power = abs(charge or 0.0) - abs(power or 0.0)
 
-        battery_live.append({"id": b["id"], "name": b["name"], "soc_pct": soc, "power_w": power, "net_power_w": net_power})
+        battery_live.append({
+            "id": b["id"], "name": b["name"], "soc_pct": soc, "power_w": power, "net_power_w": net_power,
+            "ecoflow_source": ecoflow_source if source == "ecoflow" else None,
+        })
         if net_power is not None:
             live_battery_data_ok = True
             if net_power > 0:

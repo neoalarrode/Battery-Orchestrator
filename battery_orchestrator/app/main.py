@@ -19,6 +19,7 @@ import config_store
 import deferrable_exec
 import deferrable_scheduler
 import deferrable_store
+import ecoflow_cloud
 import forecast_store
 import ha_client
 import history_store
@@ -102,20 +103,31 @@ def _publish_sensor_throttled(entity_id: str, state, attributes: dict) -> None:
     _last_published_at[entity_id] = now_ts
 
 
-def _battery_from_cfg(b: dict) -> battery_exec.Battery:
+def _battery_from_cfg(b: dict, cfg: dict) -> battery_exec.Battery:
+    """
+    `cfg` (config completa, no solo la entrada de esta bateria) hace falta
+    para las baterias EcoFlow: las credenciales de la cuenta (Access/Secret
+    Key) son globales de la instalacion, no se repiten en cada bateria.
+    """
+    source = b.get("source") or "ha"
     return battery_exec.Battery(
         id=b["id"],
         name=b["name"],
         capacity_wh=float(b["capacity_wh"]),
-        soc_sensor=b["soc_sensor"],
-        charge_switch=b["charge_switch"],
-        discharge_switch=b["discharge_switch"],
+        soc_sensor=b.get("soc_sensor") or "",
+        charge_switch=b.get("charge_switch") or "",
+        discharge_switch=b.get("discharge_switch") or "",
         max_charge_w=float(b.get("max_charge_w", 1200)),
         max_discharge_w=float(b.get("max_discharge_w", 1200)),
         min_soc_pct=float(b.get("min_soc_pct", 3)),
         max_soc_pct=float(b.get("max_soc_pct", 100)),
         charge_power_limit_entity=b.get("charge_power_limit_entity") or None,
         discharge_power_limit_entity=b.get("discharge_power_limit_entity") or None,
+        source=source,
+        ecoflow_sn=b.get("ecoflow_sn") or None,
+        ecoflow_main_sn=b.get("ecoflow_main_sn") or None,
+        ecoflow_access_key=cfg.get("ecoflow_access_key") or None if source == "ecoflow_cloud" else None,
+        ecoflow_secret_key=cfg.get("ecoflow_secret_key") or None if source == "ecoflow_cloud" else None,
     )
 
 
@@ -216,7 +228,7 @@ def run_cycle():
                                  error="No hay baterias configuradas todavia.")
         return
 
-    batteries = [_battery_from_cfg(b) for b in batteries_cfg]
+    batteries = [_battery_from_cfg(b, cfg) for b in batteries_cfg]
     horizon = int(cfg["general"]["horizon_hours"])
 
     now = datetime.now()
@@ -1149,6 +1161,42 @@ def api_climate_discover():
     cfg["climate_orchestrator_zones_discovered_at"] = datetime.now().isoformat()
     config_store.save_config(cfg)
     return jsonify({"zones": zone_ids, "count": len(zone_ids)})
+
+
+@app.post("/api/ecoflow/discover")
+def api_ecoflow_discover():
+    """
+    Boton "Buscar baterías EcoFlow" en la configuracion — lista los
+    dispositivos visibles con las credenciales ya guardadas (Access/Secret
+    Key), sin darlos de alta como bateria todavia: eso es un paso aparte
+    (`POST /api/batteries` con `source: "ecoflow_cloud"`), para que el
+    usuario pueda elegir cuales de verdad quiere gestionar desde aqui, no
+    todo lo que haya en la cuenta.
+    """
+    cfg = config_store.load_config()
+    access_key = cfg.get("ecoflow_access_key")
+    secret_key = cfg.get("ecoflow_secret_key")
+    if not access_key or not secret_key:
+        return jsonify({"error": "Faltan las credenciales de EcoFlow (Access Key / Secret Key)"}), 400
+    try:
+        devices = ecoflow_cloud.list_devices(access_key, secret_key)
+    except (ecoflow_cloud.EcoFlowError, requests.RequestException) as e:
+        log.warning(f"Fallo al buscar dispositivos EcoFlow: {e}")
+        return jsonify({"error": "No se pudo consultar la API de EcoFlow, revisa las credenciales"}), 502
+
+    already_added = {b.get("ecoflow_sn") for b in cfg["batteries"] if b.get("source") == "ecoflow_cloud"}
+    result = []
+    for d in devices:
+        sn = d.get("sn")
+        main_sn = ecoflow_cloud.get_main_sn(access_key, secret_key, sn) or sn
+        result.append({
+            "sn": sn,
+            "main_sn": main_sn,
+            "name": d.get("deviceName") or sn,
+            "online": bool(d.get("online")),
+            "already_added": sn in already_added,
+        })
+    return jsonify({"devices": result, "count": len(result)})
 
 
 @app.get("/")

@@ -65,6 +65,17 @@ plain text.
 11. Once you trust the decisions, turn off simulation mode.
 12. Download a backup of your configuration from "Settings → Backup" — useful if you ever reinstall the add-on.
 
+## EcoFlow batteries
+
+If you have an EcoFlow battery (STREAM family), no Home Assistant sensor or switch needs to be declared: the app manages it directly through the EcoFlow Cloud API.
+
+1. Create a developer account at [developer-eu.ecoflow.com](https://developer-eu.ecoflow.com) and generate an Access Key and a Secret Key.
+2. In "Settings → EcoFlow batteries", paste both keys and click "Save".
+3. Click "Search EcoFlow batteries" — every device visible with that account shows up. Click "Add as battery" on the one you want to manage: the "+ Add battery" form opens already set to "EcoFlow" as the source and linked to that device — you only need to fill in the real capacity (Wh) and, if you want, adjust the power/SOC limits, same as with any other battery.
+4. Everything else behaves exactly like a Home-Assistant-declared battery: same capacity-proportional charge sharing, same simulation mode, same health estimate.
+
+**Technical note**: charge/discharge control uses the same "scheduled task" model as the official EcoFlow app (enable/disable, power limit, target SOC) — a command EcoFlow doesn't document in its public API but has been verified to work reliably. If you have several linked EcoFlow units (a BKW system), commands are always sent to the group's "main" device, which the app resolves on its own.
+
 ## Installation type per panel/string
 
 The installation type is declared on each **solar panel/array**, not on the battery — because the same installation can have both types of panels at once (e.g. one string wired directly into a battery and another feeding a separate self-consumption installation). Each panel is one of two types:

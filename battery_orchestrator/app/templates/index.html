@@ -545,37 +545,54 @@
 
   <details id="add-battery-panel">
     <summary class="add-toggle" id="add-battery-summary" data-i18n="add_battery_toggle">+ Añadir batería</summary>
+
+    <label data-i18n="label_battery_source">Origen</label>
+    <select id="b-source" onchange="toggleBatterySource()">
+      <option value="ha" data-i18n="opt_source_ha">Home Assistant (sensores/switches declarados a mano)</option>
+      <option value="ecoflow_cloud" data-i18n="opt_source_ecoflow">EcoFlow (gestionada directamente, vía Cloud)</option>
+    </select>
+
+    <div id="b-ecoflow-fields" style="display:none">
+      <p class="help" data-i18n="help_ecoflow_battery">Vinculada a EcoFlow — se añade desde el botón "Buscar baterías EcoFlow" más abajo, no hace falta declarar ningún sensor ni switch de Home Assistant para esta batería.</p>
+      <div class="kv"><span data-i18n="kv_ecoflow_device">Dispositivo</span><code id="b-ecoflow-name-display"></code></div>
+      <div class="kv"><span data-i18n="kv_ecoflow_sn">Número de serie</span><code id="b-ecoflow-sn-display"></code></div>
+    </div>
+
     <div class="grid2" style="margin-top:10px">
       <div>
         <label data-i18n="label_name">Nombre</label><input id="b-name" placeholder="Ultra">
         <label data-i18n="label_capacity">Capacidad (Wh)</label><input id="b-capacity" type="number" placeholder="6000">
-        <label data-i18n="label_soc_sensor">Sensor SOC (%)</label><input id="b-soc" placeholder="sensor.mi_bateria_nivel">
-        <label data-i18n="label_charge_switch">Switch de carga</label><input id="b-charge-sw" placeholder="switch.mi_bateria_charging_task">
-        <label data-i18n="label_discharge_switch">Switch de descarga</label><input id="b-discharge-sw" placeholder="switch.mi_bateria_discharging_task">
+        <div id="b-ha-fields">
+          <label data-i18n="label_soc_sensor">Sensor SOC (%)</label><input id="b-soc" placeholder="sensor.mi_bateria_nivel">
+          <label data-i18n="label_charge_switch">Switch de carga</label><input id="b-charge-sw" placeholder="switch.mi_bateria_charging_task">
+          <label data-i18n="label_discharge_switch">Switch de descarga</label><input id="b-discharge-sw" placeholder="switch.mi_bateria_discharging_task">
+        </div>
       </div>
       <div>
         <label data-i18n="label_max_charge">Potencia máx. carga (W)</label><input id="b-maxcharge" type="number" value="1200">
         <label data-i18n="label_max_discharge">Potencia máx. descarga (W)</label><input id="b-maxdischarge" type="number" value="1200">
         <label data-i18n="label_min_soc">SOC mínimo (%)</label><input id="b-minsoc" type="number" value="3">
         <label data-i18n="label_max_soc">SOC máximo (%)</label><input id="b-maxsoc" type="number" value="100">
-        <label data-i18n="label_charge_limit_entity">Entidad límite potencia carga (opcional)</label><input id="b-charge-limit" placeholder="number...charging_power_limit">
-        <label data-i18n="label_discharge_limit_entity">Entidad límite potencia descarga (opcional)</label><input id="b-discharge-limit" placeholder="number...discharging_power_limit">
-        <label data-i18n="label_power_sensor_mode">Sensor de potencia (opcional)</label>
-        <select id="b-power-mode" onchange="toggleBatteryPowerSensorMode()">
-          <option value="none" data-i18n="opt_power_mode_none">Ninguno</option>
-          <option value="separate" data-i18n="opt_power_mode_separate">Dos sensores (carga y descarga por separado)</option>
-          <option value="combined" data-i18n="opt_power_mode_combined">Un sensor combinado (con signo: + carga, − descarga)</option>
-        </select>
+        <div id="b-ha-fields-2">
+          <label data-i18n="label_charge_limit_entity">Entidad límite potencia carga (opcional)</label><input id="b-charge-limit" placeholder="number...charging_power_limit">
+          <label data-i18n="label_discharge_limit_entity">Entidad límite potencia descarga (opcional)</label><input id="b-discharge-limit" placeholder="number...discharging_power_limit">
+          <label data-i18n="label_power_sensor_mode">Sensor de potencia (opcional)</label>
+          <select id="b-power-mode" onchange="toggleBatteryPowerSensorMode()">
+            <option value="none" data-i18n="opt_power_mode_none">Ninguno</option>
+            <option value="separate" data-i18n="opt_power_mode_separate">Dos sensores (carga y descarga por separado)</option>
+            <option value="combined" data-i18n="opt_power_mode_combined">Un sensor combinado (con signo: + carga, − descarga)</option>
+          </select>
 
-        <div id="b-power-separate-fields">
-          <label data-i18n="label_discharge_sensor">Sensor de descarga</label><input id="b-power-sensor" placeholder="sensor.mi_bateria_load_from_battery">
-          <p class="help" data-i18n-html="help_discharge_sensor">Potencia que la batería aporta a la casa ahora mismo (siempre positiva o cero, p.ej. <code>..._load_from_battery</code>). Se usa para completar el cálculo de consumo real en "Consumo de la casa".</p>
-          <label data-i18n="label_charge_sensor">Sensor de carga (opcional)</label><input id="b-charge-power-sensor" placeholder="sensor.mi_bateria_charging_power">
-          <p class="help" data-i18n="help_charge_sensor">Potencia que la batería está absorbiendo ahora mismo (siempre positiva o cero). Sin este, la app no tiene forma de saber en vivo cuánto se está cargando — solo verás la última orden mandada.</p>
-        </div>
-        <div id="b-power-combined-fields" style="display:none">
-          <label data-i18n="label_net_power_sensor">Sensor de potencia neto</label><input id="b-net-power-sensor" placeholder="sensor.mi_bateria_power">
-          <p class="help" data-i18n="help_net_power_sensor">Un único sensor con signo — positivo mientras carga, negativo mientras descarga (p.ej. el típico "battery power" de muchos inversores). Con este basta, no hace falta declarar los otros dos.</p>
+          <div id="b-power-separate-fields">
+            <label data-i18n="label_discharge_sensor">Sensor de descarga</label><input id="b-power-sensor" placeholder="sensor.mi_bateria_load_from_battery">
+            <p class="help" data-i18n-html="help_discharge_sensor">Potencia que la batería aporta a la casa ahora mismo (siempre positiva o cero, p.ej. <code>..._load_from_battery</code>). Se usa para completar el cálculo de consumo real en "Consumo de la casa".</p>
+            <label data-i18n="label_charge_sensor">Sensor de carga (opcional)</label><input id="b-charge-power-sensor" placeholder="sensor.mi_bateria_charging_power">
+            <p class="help" data-i18n="help_charge_sensor">Potencia que la batería está absorbiendo ahora mismo (siempre positiva o cero). Sin este, la app no tiene forma de saber en vivo cuánto se está cargando — solo verás la última orden mandada.</p>
+          </div>
+          <div id="b-power-combined-fields" style="display:none">
+            <label data-i18n="label_net_power_sensor">Sensor de potencia neto</label><input id="b-net-power-sensor" placeholder="sensor.mi_bateria_power">
+            <p class="help" data-i18n="help_net_power_sensor">Un único sensor con signo — positivo mientras carga, negativo mientras descarga (p.ej. el típico "battery power" de muchos inversores). Con este basta, no hace falta declarar los otros dos.</p>
+          </div>
         </div>
       </div>
     </div>
@@ -585,6 +602,21 @@
       <button class="ghost" onclick="cancelBatteryForm()" type="button" data-i18n="btn_cancel">Cancelar</button>
     </div>
   </details>
+</div>
+
+<div class="card">
+  <h2 data-i18n="card_ecoflow_title">Baterías EcoFlow</h2>
+  <p class="help" data-i18n-html="help_ecoflow_general">Gestión directa por el API Cloud de EcoFlow — sin sensores ni switches de Home Assistant de por medio. Crea un Access Key y Secret Key en <a href="https://developer-eu.ecoflow.com" target="_blank" rel="noopener">developer-eu.ecoflow.com</a> y pégalos aquí.</p>
+  <label data-i18n="label_ecoflow_access_key">Access Key</label>
+  <input id="ecoflow-access-key" placeholder="Access Key">
+  <label data-i18n="label_ecoflow_secret_key">Secret Key</label>
+  <input id="ecoflow-secret-key" type="password" placeholder="Secret Key">
+  <div class="actions">
+    <button onclick="saveEcoflowCredentials()" data-i18n="btn_save">Guardar</button>
+    <button class="secondary" onclick="discoverEcoflowDevices()" id="ecoflow-discover-btn" data-i18n="btn_discover_ecoflow">Buscar baterías EcoFlow</button>
+  </div>
+  <p class="help" id="ecoflow-discover-result"></p>
+  <div id="ecoflow-devices-list"></div>
 </div>
 
 <div class="card">
@@ -874,6 +906,22 @@ es: {
   cycles_line_since: " · desde {date}",
 
   card_baterias_title: "Baterías", add_battery_toggle: "+ Añadir batería",
+  label_battery_source: "Origen",
+  opt_source_ha: "Home Assistant (sensores/switches declarados a mano)",
+  opt_source_ecoflow: "EcoFlow (gestionada directamente, vía Cloud)",
+  help_ecoflow_battery: 'Vinculada a EcoFlow — se añade desde el botón "Buscar baterías EcoFlow" más abajo, no hace falta declarar ningún sensor ni switch de Home Assistant para esta batería.',
+  kv_ecoflow_device: "Dispositivo", kv_ecoflow_sn: "Número de serie", kv_source: "Origen",
+  error_ecoflow_no_device: 'Elige la batería desde "Buscar baterías EcoFlow" — no se puede añadir una EcoFlow sin pasar por el descubrimiento.',
+  card_ecoflow_title: "Baterías EcoFlow",
+  help_ecoflow_general: 'Gestión directa por el API Cloud de EcoFlow — sin sensores ni switches de Home Assistant de por medio. Crea un Access Key y Secret Key en <a href="https://developer-eu.ecoflow.com" target="_blank" rel="noopener">developer-eu.ecoflow.com</a> y pégalos aquí.',
+  label_ecoflow_access_key: "Access Key", label_ecoflow_secret_key: "Secret Key",
+  btn_discover_ecoflow: "Buscar baterías EcoFlow", btn_add_as_battery: "Añadir como batería",
+  ecoflow_discovery_searching: "Buscando…",
+  ecoflow_discovery_error: "Error del servidor ({status}) al buscar baterías EcoFlow.",
+  ecoflow_discovery_found_none: "No se ha encontrado ningún dispositivo con estas credenciales.",
+  ecoflow_discovery_found_one: "1 dispositivo encontrado.",
+  ecoflow_discovery_found_n: "{n} dispositivos encontrados.",
+  ecoflow_online: "en línea", ecoflow_offline: "sin conexión", ecoflow_already_added: "ya añadida",
   label_name: "Nombre", label_capacity: "Capacidad (Wh)", label_soc_sensor: "Sensor SOC (%)",
   label_charge_switch: "Switch de carga", label_discharge_switch: "Switch de descarga",
   label_max_charge: "Potencia máx. carga (W)", label_max_discharge: "Potencia máx. descarga (W)",
@@ -1114,6 +1162,22 @@ en: {
   cycles_line_since: " · since {date}",
 
   card_baterias_title: "Batteries", add_battery_toggle: "+ Add battery",
+  label_battery_source: "Source",
+  opt_source_ha: "Home Assistant (sensors/switches declared by hand)",
+  opt_source_ecoflow: "EcoFlow (managed directly, via Cloud)",
+  help_ecoflow_battery: 'Linked to EcoFlow — added from the "Search EcoFlow batteries" button below, no Home Assistant sensor or switch needs to be declared for this battery.',
+  kv_ecoflow_device: "Device", kv_ecoflow_sn: "Serial number", kv_source: "Source",
+  error_ecoflow_no_device: 'Pick the battery from "Search EcoFlow batteries" — an EcoFlow battery can\'t be added without going through discovery.',
+  card_ecoflow_title: "EcoFlow batteries",
+  help_ecoflow_general: 'Direct management via the EcoFlow Cloud API — no Home Assistant sensors or switches involved. Create an Access Key and Secret Key at <a href="https://developer-eu.ecoflow.com" target="_blank" rel="noopener">developer-eu.ecoflow.com</a> and paste them here.',
+  label_ecoflow_access_key: "Access Key", label_ecoflow_secret_key: "Secret Key",
+  btn_discover_ecoflow: "Search EcoFlow batteries", btn_add_as_battery: "Add as battery",
+  ecoflow_discovery_searching: "Searching…",
+  ecoflow_discovery_error: "Server error ({status}) while searching for EcoFlow batteries.",
+  ecoflow_discovery_found_none: "No devices found with these credentials.",
+  ecoflow_discovery_found_one: "1 device found.",
+  ecoflow_discovery_found_n: "{n} devices found.",
+  ecoflow_online: "online", ecoflow_offline: "offline", ecoflow_already_added: "already added",
   label_name: "Name", label_capacity: "Capacity (Wh)", label_soc_sensor: "SOC sensor (%)",
   label_charge_switch: "Charge switch", label_discharge_switch: "Discharge switch",
   label_max_charge: "Max. charge power (W)", label_max_discharge: "Max. discharge power (W)",
@@ -1453,6 +1517,11 @@ async function onLangChange() {
 
 let cfg = null;
 let editingBatteryId = null;
+// sn / sn-principal del dispositivo EcoFlow elegido desde "Buscar baterías
+// EcoFlow" — el formulario de baterias no tiene campos de texto para
+// esto (se rellena solo desde el descubrimiento, nunca a mano).
+let pendingEcoflowSn = null;
+let pendingEcoflowMainSn = null;
 let editingPvArrayId = null;
 let editingDeferrableLoadId = null;
 let lastStatus = null;
@@ -1528,6 +1597,8 @@ async function loadConfig() {
   const loadMode = cfg.load_sensor_mode || (cfg.export_sensor_mode === 'combined' ? 'combined' : cfg.net_grid_sensor ? 'combined' : 'separate');
   document.getElementById('load-sensor-mode').value = loadMode;
   toggleLoadSensorMode();
+  document.getElementById('ecoflow-access-key').value = cfg.ecoflow_access_key || '';
+  document.getElementById('ecoflow-secret-key').value = cfg.ecoflow_secret_key || '';
   renderClimateDiscoveryState(cfg.climate_orchestrator_zones || [], cfg.climate_orchestrator_zones_discovered_at || null);
   document.getElementById('g-contracted').value = cfg.general.contracted_power_w || 0;
   document.getElementById('g-horizon').value = cfg.general.horizon_hours;
@@ -1573,15 +1644,20 @@ function renderBatteries() {
         <span class="meta">${b.capacity_wh} Wh</span>
       </summary>
       <div class="item-body">
+        ${b.source === 'ecoflow_cloud' ? `
+        <div class="kv"><span>${t('kv_source')}</span><code>EcoFlow Cloud</code></div>
+        <div class="kv"><span>${t('kv_ecoflow_sn')}</span><code>${b.ecoflow_sn || ''}</code></div>
+        ` : `
         <div class="kv"><span>${t('kv_soc')}</span><code>${b.soc_sensor}</code></div>
         <div class="kv"><span>${t('kv_charge_switch')}</span><code>${b.charge_switch}</code></div>
         <div class="kv"><span>${t('kv_discharge_switch')}</span><code>${b.discharge_switch}</code></div>
+        `}
         <div class="kv"><span>${t('kv_max_charge')}</span><code>${b.max_charge_w} W</code></div>
         <div class="kv"><span>${t('kv_max_discharge')}</span><code>${b.max_discharge_w} W</code></div>
         <div class="kv"><span>${t('kv_min_max_soc')}</span><code>${b.min_soc_pct}% / ${b.max_soc_pct}%</code></div>
         ${b.charge_power_limit_entity ? `<div class="kv"><span>${t('kv_charge_limit')}</span><code>${b.charge_power_limit_entity}</code></div>` : ''}
         ${b.discharge_power_limit_entity ? `<div class="kv"><span>${t('kv_discharge_limit')}</span><code>${b.discharge_power_limit_entity}</code></div>` : ''}
-        ${batteryPowerSensorSummary(b) ? `<div class="kv"><span>${t('kv_power_sensor')}</span><code>${batteryPowerSensorSummary(b)}</code></div>` : `<p class="help">${t('no_discharge_sensor_note')}</p>`}
+        ${b.source !== 'ecoflow_cloud' ? (batteryPowerSensorSummary(b) ? `<div class="kv"><span>${t('kv_power_sensor')}</span><code>${batteryPowerSensorSummary(b)}</code></div>` : `<p class="help">${t('no_discharge_sensor_note')}</p>`) : ''}
         <div class="actions">
           <button class="secondary" onclick="editBattery('${b.id}')" type="button">${t('btn_edit')}</button>
           <button class="danger" onclick="deleteBattery('${b.id}')" type="button">${t('btn_delete_battery')}</button>
@@ -1606,6 +1682,14 @@ function renderPvArrays() {
         <button class="danger" onclick="deletePvArray('${a.id}')" type="button">${t('btn_delete_battery').split(' ').slice(0,1).join(' ') === 'Delete' ? 'Delete' : 'Eliminar'}</button>
       </div>
     </div>`).join('');
+}
+
+function toggleBatterySource() {
+  const source = document.getElementById('b-source').value;
+  const isEcoflow = source === 'ecoflow_cloud';
+  document.getElementById('b-ha-fields').style.display = isEcoflow ? 'none' : 'block';
+  document.getElementById('b-ha-fields-2').style.display = isEcoflow ? 'none' : 'block';
+  document.getElementById('b-ecoflow-fields').style.display = isEcoflow ? 'block' : 'none';
 }
 
 function toggleBatteryPowerSensorMode() {
@@ -1658,6 +1742,12 @@ function resetBatteryForm() {
   document.getElementById('b-maxsoc').value = 100;
   document.getElementById('b-power-mode').value = 'none';
   toggleBatteryPowerSensorMode();
+  document.getElementById('b-source').value = 'ha';
+  document.getElementById('b-ecoflow-name-display').textContent = '';
+  document.getElementById('b-ecoflow-sn-display').textContent = '';
+  toggleBatterySource();
+  pendingEcoflowSn = null;
+  pendingEcoflowMainSn = null;
   editingBatteryId = null;
   document.getElementById('add-battery-summary').textContent = t('add_battery_toggle');
   document.getElementById('battery-form-submit-btn').textContent = t('btn_save_battery');
@@ -1693,6 +1783,16 @@ function editBattery(id) {
   document.getElementById('b-power-mode').value = mode;
   toggleBatteryPowerSensorMode();
 
+  const source = b.source || 'ha';
+  document.getElementById('b-source').value = source;
+  if (source === 'ecoflow_cloud') {
+    document.getElementById('b-ecoflow-name-display').textContent = b.name;
+    document.getElementById('b-ecoflow-sn-display').textContent = b.ecoflow_sn || '';
+    pendingEcoflowSn = b.ecoflow_sn || null;
+    pendingEcoflowMainSn = b.ecoflow_main_sn || null;
+  }
+  toggleBatterySource();
+
   editingBatteryId = id;
   document.getElementById('add-battery-summary').textContent = t('editing_battery', { name: b.name });
   document.getElementById('battery-form-submit-btn').textContent = t('btn_save_changes');
@@ -1704,25 +1804,42 @@ function editBattery(id) {
 
 async function addBattery() {
   showBatteryFormError('');
+  const source = document.getElementById('b-source').value;
   const powerMode = document.getElementById('b-power-mode').value;
   const battery = {
     name: document.getElementById('b-name').value.trim(),
     capacity_wh: parseFloat(document.getElementById('b-capacity').value),
-    soc_sensor: document.getElementById('b-soc').value.trim(),
-    charge_switch: document.getElementById('b-charge-sw').value.trim(),
-    discharge_switch: document.getElementById('b-discharge-sw').value.trim(),
     max_charge_w: parseFloat(document.getElementById('b-maxcharge').value) || 1200,
     max_discharge_w: parseFloat(document.getElementById('b-maxdischarge').value) || 1200,
     min_soc_pct: parseFloat(document.getElementById('b-minsoc').value) || 3,
     max_soc_pct: parseFloat(document.getElementById('b-maxsoc').value) || 100,
-    charge_power_limit_entity: document.getElementById('b-charge-limit').value.trim() || null,
-    discharge_power_limit_entity: document.getElementById('b-discharge-limit').value.trim() || null,
-    power_sensor_mode: powerMode,
-    power_sensor: powerMode === 'separate' ? (document.getElementById('b-power-sensor').value.trim() || null) : null,
-    charge_power_sensor: powerMode === 'separate' ? (document.getElementById('b-charge-power-sensor').value.trim() || null) : null,
-    net_power_sensor: powerMode === 'combined' ? (document.getElementById('b-net-power-sensor').value.trim() || null) : null,
+    source: source,
   };
-  if (!battery.name || !battery.soc_sensor || !battery.charge_switch || !battery.discharge_switch) {
+  if (source === 'ecoflow_cloud') {
+    battery.ecoflow_sn = pendingEcoflowSn;
+    battery.ecoflow_main_sn = pendingEcoflowMainSn;
+    battery.soc_sensor = null; battery.charge_switch = null; battery.discharge_switch = null;
+    battery.charge_power_limit_entity = null; battery.discharge_power_limit_entity = null;
+    battery.power_sensor_mode = null; battery.power_sensor = null; battery.charge_power_sensor = null; battery.net_power_sensor = null;
+  } else {
+    battery.soc_sensor = document.getElementById('b-soc').value.trim();
+    battery.charge_switch = document.getElementById('b-charge-sw').value.trim();
+    battery.discharge_switch = document.getElementById('b-discharge-sw').value.trim();
+    battery.charge_power_limit_entity = document.getElementById('b-charge-limit').value.trim() || null;
+    battery.discharge_power_limit_entity = document.getElementById('b-discharge-limit').value.trim() || null;
+    battery.power_sensor_mode = powerMode;
+    battery.power_sensor = powerMode === 'separate' ? (document.getElementById('b-power-sensor').value.trim() || null) : null;
+    battery.charge_power_sensor = powerMode === 'separate' ? (document.getElementById('b-charge-power-sensor').value.trim() || null) : null;
+    battery.net_power_sensor = powerMode === 'combined' ? (document.getElementById('b-net-power-sensor').value.trim() || null) : null;
+  }
+  if (!battery.name) {
+    showBatteryFormError(t('error_battery_required')); return;
+  }
+  if (source === 'ecoflow_cloud') {
+    if (!battery.ecoflow_sn || !battery.ecoflow_main_sn) {
+      showBatteryFormError(t('error_ecoflow_no_device')); return;
+    }
+  } else if (!battery.soc_sensor || !battery.charge_switch || !battery.discharge_switch) {
     showBatteryFormError(t('error_battery_required')); return;
   }
   if (!battery.capacity_wh || battery.capacity_wh <= 0) {
@@ -2605,6 +2722,68 @@ async function discoverClimateZones() {
   } finally {
     btn.disabled = false;
   }
+}
+
+async function saveEcoflowCredentials() {
+  cfg.ecoflow_access_key = document.getElementById('ecoflow-access-key').value.trim();
+  cfg.ecoflow_secret_key = document.getElementById('ecoflow-secret-key').value.trim();
+  await saveConfig();
+}
+
+async function discoverEcoflowDevices() {
+  const btn = document.getElementById('ecoflow-discover-btn');
+  const result = document.getElementById('ecoflow-discover-result');
+  const list = document.getElementById('ecoflow-devices-list');
+  // Guarda las credenciales primero — el descubrimiento en el servidor
+  // lee las que haya en config.json, no las que haya sueltas en el
+  // formulario sin guardar todavia.
+  await saveEcoflowCredentials();
+  btn.disabled = true;
+  result.textContent = t('ecoflow_discovery_searching');
+  list.innerHTML = '';
+  try {
+    const res = await fetch('api/ecoflow/discover', { method: 'POST' });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      result.textContent = body.error || t('ecoflow_discovery_error', { status: res.status });
+      return;
+    }
+    const data = await res.json();
+    const devices = data.devices || [];
+    result.textContent = devices.length === 0 ? t('ecoflow_discovery_found_none')
+      : devices.length === 1 ? t('ecoflow_discovery_found_one', { n: devices.length })
+      : t('ecoflow_discovery_found_n', { n: devices.length });
+    list.innerHTML = devices.map(d => `
+      <div class="item-card">
+        <div>
+          <div class="item-name">${d.name}</div>
+          <div class="meta">${d.sn} — ${d.online ? t('ecoflow_online') : t('ecoflow_offline')}</div>
+        </div>
+        <div class="actions" style="margin-top:0">
+          ${d.already_added
+            ? `<span class="pill pill-ok">${t('ecoflow_already_added')}</span>`
+            : `<button class="secondary" type="button" onclick='addEcoflowBatteryFromDiscovery(${JSON.stringify(d)})'>${t('btn_add_as_battery')}</button>`}
+        </div>
+      </div>`).join('');
+  } catch (err) {
+    result.textContent = t('ecoflow_discovery_error', { status: '?' });
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function addEcoflowBatteryFromDiscovery(device) {
+  resetBatteryForm();
+  document.getElementById('b-source').value = 'ecoflow_cloud';
+  toggleBatterySource();
+  document.getElementById('b-name').value = device.name;
+  document.getElementById('b-ecoflow-name-display').textContent = device.name;
+  document.getElementById('b-ecoflow-sn-display').textContent = device.sn;
+  pendingEcoflowSn = device.sn;
+  pendingEcoflowMainSn = device.main_sn;
+  const panel = document.getElementById('add-battery-panel');
+  panel.open = true;
+  panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 async function refreshLive() {

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.30
+**Baterías EcoFlow gestionadas directamente desde Battery Orchestrator**, sin declarar ningún sensor ni switch de Home Assistant — cablea por completo el módulo `ecoflow_cloud.py` de la v0.11.29:
+- Nueva tarjeta "Baterías EcoFlow" en la configuración: Access Key/Secret Key de tu cuenta de desarrollador de EcoFlow, y un botón "Buscar baterías EcoFlow" que descubre automáticamente todos tus dispositivos.
+- "+ Añadir batería" tiene ahora un desplegable de **Origen** (Home Assistant / EcoFlow). Al añadir una batería EcoFlow desde el descubrimiento, se abre ya vinculada al dispositivo elegido — solo hace falta rellenar la capacidad real y, si quieres, los límites.
+- El planificador trata una batería EcoFlow exactamente igual que cualquier otra: mismo reparto de carga por capacidad, mismo modo simulación, misma estimación de salud. Por debajo, en vez de encender/apagar un switch, activa o desactiva la tarea de carga/descarga programada de EcoFlow y ajusta su límite de potencia y SOC objetivo — verificado contra una instalación real antes de publicarse, incluido un ciclo completo en modo simulación de principio a fin.
+- Documentado en DOCS.md/DOCS.en.md ("Baterías EcoFlow" / "EcoFlow batteries").
+
 ## 0.11.29
 Primera pieza del soporte para baterías EcoFlow (STREAM): nuevo módulo `ecoflow_cloud.py`, cliente directo contra el API Cloud de EcoFlow (REST + MQTT, sin pasar por Home Assistant). **Todavía no está conectado a la interfaz** — es la base ya verificada contra una instalación real, el cableado a la configuración y al planificador llega en una próxima versión. Incluye:
 - Descubrimiento de dispositivos y resolución del dispositivo "principal" de un grupo (necesario para mandar comandos en sistemas con varias unidades enlazadas).

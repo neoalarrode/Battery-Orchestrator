@@ -24,6 +24,7 @@ import ecoflow_cloud
 import ecoflow_login
 import forecast_store
 import ha_client
+import ha_statistics
 import history_store
 import lifetime_store
 import pv_source
@@ -1530,6 +1531,71 @@ def api_battery_health():
             "since": cyc.get("since"),
         })
     return jsonify(combined)
+
+
+@app.post("/api/energy/backfill_history")
+def api_energy_backfill_history():
+    """
+    Boton manual en Configuración: reconstruye el historico del Panel de
+    Energia de HA para sensor.battery_orchestrator_energy_charged/
+    discharged en vez de dejar que su primera publicacion aparezca como
+    un salto de golpe (el total acumulado entero de una vez, feo en la
+    grafica). Se reparte sobre las horas REALES en que se movio esa
+    energia usando el historico horario ya guardado (`history_store`,
+    hasta 8 dias de detalle) — lo de antes de esos 8 dias, sin detalle
+    horario, se pone como un unico escalon justo antes de que empiece el
+    detalle real (no se inventa un reparto que no se puede verificar).
+
+    Accion pensada para UNA sola vez — repetirla no duplica energia (HA
+    sobrescribe el mismo statistic_id para las mismas horas), pero
+    tampoco aporta nada si ya se hizo y no ha cambiado el historico desde
+    entonces.
+    """
+    cfg = config_store.load_config()
+    batteries = [_battery_from_cfg(b, cfg) for b in cfg["batteries"]]
+    totals = lifetime_store.get_aggregate_totals([_stable_battery_key(b) for b in batteries])
+    entries = history_store.get_all()
+
+    results = {}
+    for direction, field, total_wh in (
+        ("charged", "charge_w", totals["charged_wh"]),
+        ("discharged", "discharge_w", totals["discharged_wh"]),
+    ):
+        hourly = []
+        for e in entries:
+            dt_str = e.get("dt")
+            wh = e.get(field)
+            if not dt_str or wh is None:
+                continue
+            try:
+                dt = datetime.fromisoformat(dt_str).astimezone()  # naive local -> tz-aware, HA lo exige
+            except ValueError:
+                continue
+            hourly.append((dt, max(0.0, float(wh))))  # W durante 1h = Wh, cada entrada YA es una hora
+        hourly.sort(key=lambda x: x[0])
+
+        covered_wh = sum(wh for _, wh in hourly)
+        running_wh = max(0.0, total_wh - covered_wh)  # todo lo de ANTES del detalle horario, de golpe
+
+        points = []
+        if hourly:
+            points.append({
+                "start": (hourly[0][0] - timedelta(hours=1)).isoformat(),
+                "sum": round(running_wh / 1000, 3),
+            })
+            for dt, wh in hourly:
+                running_wh += wh
+                points.append({"start": dt.isoformat(), "sum": round(running_wh / 1000, 3)})
+
+        entity_id = f"sensor.battery_orchestrator_energy_{direction}"
+        ok = ha_statistics.import_statistics(entity_id, "kWh", points)
+        results[direction] = {"ok": ok, "points": len(points), "final_kwh": round(running_wh / 1000, 3)}
+
+    all_ok = all(r["ok"] for r in results.values())
+    if all_ok:
+        cfg["_energy_history_backfilled_at"] = datetime.now().isoformat()
+        config_store.save_config(cfg)
+    return jsonify({"ok": all_ok, **results})
 
 
 @app.get("/api/savings")

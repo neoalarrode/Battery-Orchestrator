@@ -904,6 +904,16 @@
   </div>
 </div>
 
+<div class="card">
+  <h2 data-i18n="card_energy_history_title">Historial del Panel de Energía</h2>
+  <p class="help" data-i18n="help_energy_history">Los sensores de energía cargada/descargada acumulada empiezan a publicarse desde 0 en el Panel de Energía de Home Assistant — este botón reparte lo ya acumulado sobre las horas reales en que se movió (hasta 8 días de detalle), en vez de que aparezca de golpe en una sola hora y afee la gráfica. Solo hace falta una vez.</p>
+  <div class="actions">
+    <button class="secondary" type="button" onclick="backfillEnergyHistory()" id="energy-backfill-btn" data-i18n="btn_backfill_energy_history">Reconstruir historial de energía</button>
+  </div>
+  <p class="help" id="energy-backfill-result"></p>
+  <p class="help" id="energy-backfill-last" style="display:none"></p>
+</div>
+
 </div>
 
 <div class="toast" id="toast"></div>
@@ -1133,6 +1143,14 @@ es: {
   help_backup: "Descarga toda tu configuración (baterías, tarifa, solar, consumo) en un archivo, o restáurala si reinstalas el add-on.",
   btn_download_config: "Descargar configuración", btn_restore_config: "Restaurar desde archivo",
   toast_import_invalid: "El archivo no es un JSON válido: {msg}", toast_import_error: "Error al importar: {detail}",
+
+  card_energy_history_title: "Historial del Panel de Energía",
+  help_energy_history: "Los sensores de energía cargada/descargada acumulada empiezan a publicarse desde 0 en el Panel de Energía de Home Assistant — este botón reparte lo ya acumulado sobre las horas reales en que se movió (hasta 8 días de detalle), en vez de que aparezca de golpe en una sola hora y afee la gráfica. Solo hace falta una vez.",
+  btn_backfill_energy_history: "Reconstruir historial de energía",
+  energy_history_working: "Reconstruyendo…",
+  energy_history_ok: "Hecho — {charged} kWh cargados y {discharged} kWh descargados repartidos sobre su historial real.",
+  energy_history_failed: "No se pudo reconstruir el historial — revisa el log del add-on.",
+  energy_history_last_backfill: "Reconstruido por última vez el {date}.",
   toast_config_restored: "Configuración restaurada.", toast_config_saved: "Configuración guardada.",
   toast_server_error_save: "Error del servidor ({status}) al guardar.",
 
@@ -1427,6 +1445,14 @@ en: {
   help_backup: "Download your whole configuration (batteries, tariff, solar, consumption) as a file, or restore it if you reinstall the add-on.",
   btn_download_config: "Download configuration", btn_restore_config: "Restore from file",
   toast_import_invalid: "The file isn't valid JSON: {msg}", toast_import_error: "Error importing: {detail}",
+
+  card_energy_history_title: "Energy dashboard history",
+  help_energy_history: "The accumulated charged/discharged energy sensors start publishing from 0 on Home Assistant's Energy dashboard — this button spreads what's already accumulated over the real hours it happened (up to 8 days of detail), instead of it showing up all at once in a single hour and uglifying the graph. Only needed once.",
+  btn_backfill_energy_history: "Rebuild energy history",
+  energy_history_working: "Rebuilding…",
+  energy_history_ok: "Done — {charged} kWh charged and {discharged} kWh discharged spread over their real history.",
+  energy_history_failed: "Couldn't rebuild the history — check the add-on log.",
+  energy_history_last_backfill: "Last rebuilt on {date}.",
   toast_config_restored: "Configuration restored.", toast_config_saved: "Configuration saved.",
   toast_server_error_save: "Server error ({status}) saving.",
 
@@ -1749,6 +1775,36 @@ async function loadConfig() {
   document.getElementById('g-priority').value = cfg.general.priority_mode || 'ahorro';
   document.getElementById('g-paced').checked = !!cfg.general.paced_charging;
   updatePriorityHelp();
+  const backfillLast = document.getElementById('energy-backfill-last');
+  if (cfg._energy_history_backfilled_at) {
+    backfillLast.style.display = 'block';
+    backfillLast.textContent = t('energy_history_last_backfill', { date: new Date(cfg._energy_history_backfilled_at).toLocaleString() });
+  } else {
+    backfillLast.style.display = 'none';
+  }
+}
+
+async function backfillEnergyHistory() {
+  const btn = document.getElementById('energy-backfill-btn');
+  const result = document.getElementById('energy-backfill-result');
+  btn.disabled = true;
+  result.textContent = t('energy_history_working');
+  try {
+    const res = await fetch('api/energy/backfill_history', { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      result.textContent = data.error || t('energy_history_failed');
+      return;
+    }
+    result.textContent = t('energy_history_ok', {
+      charged: data.charged.final_kwh, discharged: data.discharged.final_kwh,
+    });
+    await loadConfig();
+  } catch (err) {
+    result.textContent = t('energy_history_failed');
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function toggleTariffMode() {

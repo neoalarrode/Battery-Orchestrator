@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.51
+Nuevo botón "Reconstruir historial de energía" (Configuración → Historial del Panel de Energía): reparte lo ya acumulado en `sensor.battery_orchestrator_energy_charged/discharged` sobre las horas reales en que se movió esa energía (hasta 8 días de detalle horario, vía `history_store`), en vez de que aparezca de golpe como un único escalón feo en la gráfica del Panel de Energía de HA. Lo de antes de esos 8 días, sin detalle horario disponible, se pone como un único escalón justo antes de empezar el detalle real — no se inventa un reparto que no se puede verificar. Acción manual, pensada para una sola vez.
+
+Nota técnica: usa por primera vez el WebSocket de HA (`recorder/import_statistics`, sin equivalente REST) en vez de la API REST habitual — nuevo módulo `ha_statistics.py` y dependencia `websocket-client`. No se ha podido probar en real desde el entorno de desarrollo (necesita el `SUPERVISOR_TOKEN` de dentro del add-on) — pruébalo tú y revisa la gráfica de energía después.
+
 ## 0.11.50
 SOC por Cloud corregido: `cmsBattSoc` (primer campo mirado hasta ahora) es el SOC AGREGADO de todo el grupo BKW, no el de la unidad individual — mismo fallo que ya se corrigió en BLE en la v0.11.37 (`battery_level` vs `battery_level_main`), aquí pasó desapercibido porque no se había visto un caso donde diera un número claramente erróneo (0%) hasta ahora. Orden nuevo: `bmsBattSoc` (SOC real de esta unidad) primero, `cmsBattSoc` como último recurso.
 

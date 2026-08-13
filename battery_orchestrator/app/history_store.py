@@ -54,6 +54,14 @@ def record(now: datetime, entry: dict) -> None:
     _save(data)
 
 
+def get_all() -> list[dict]:
+    """Todo lo que quede retenido (hasta MAX_AGE_HOURS, 8 dias), ordenado
+    por hora — para reconstruir un historico real en vez de un salto de
+    golpe (ver ha_statistics.py)."""
+    data = _load()
+    return [v for k, v in sorted(data.items())]
+
+
 def get_today(now: datetime) -> list[dict]:
     """Entradas ya ejecutadas de HOY (desde las 00:00 hasta la hora actual, sin incluirla)."""
     data = _load()

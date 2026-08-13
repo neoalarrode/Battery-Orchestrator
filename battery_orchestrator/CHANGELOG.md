@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.43
+**Arreglo real** del `TypeError: _live_solar_now_w() missing 1 required positional argument: 'cfg'` en `/api/live` — el decorador `@app.get("/api/live")` había quedado pegado a `_live_solar_now_w` en vez de a `api_live` tras una refactorización de la v0.11.40 (Flask registraba la función equivocada como manejador de la ruta). No era ningún problema de caché de Home Assistant ni del add-on — era un bug real en el código, mis disculpas por la vuelta perdida insistiendo en lo contrario. Revisado el resto de rutas una por una: no hay ningún otro decorador descolocado.
+
 ## 0.11.42
 - **Nuevo `sensor.battery_orchestrator_solar_energy`** (kWh, `state_class: total_increasing`) — energía solar acumulada de por vida, aparte de `sensor.battery_orchestrator_solar_power` (W, instantáneo). El Panel de Energía de HA pide un sensor acumulado para "Producción de energía solar", no sirve el de potencia. Se integra en el bucle rápido (~10s) multiplicando la potencia en vivo por el tiempo real transcurrido, sin asumir un intervalo fijo.
 - **Descubrimiento de puertos MPPT y autorrellenar mucho más rápido**: el estado BLE de una batería EcoFlow ahora se cachea — `_live_sensor_loop` ya mantiene la conexión BLE viva y actualizada cada ~10s de fondo, así que "Buscar puertos MPPT" y "Autorrellenar desde la batería" sirven ese último dato conocido al instante en vez de abrir una conexión nueva cada vez (que podía tardar hasta 30s). Solo se paga esa espera la primera vez, antes de que el ciclo de fondo haya visto la batería.

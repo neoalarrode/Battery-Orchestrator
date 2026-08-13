@@ -1242,7 +1242,6 @@ def api_status():
         return jsonify(_last_status)
 
 
-@app.get("/api/live")
 def _live_solar_now_w(cfg: dict) -> float | None:
     """
     Solar en vivo AHORA MISMO: arrays con sensor de HA + arrays vinculados
@@ -1381,6 +1380,7 @@ def _live_battery_totals(cfg: dict) -> dict:
     }
 
 
+@app.get("/api/live")
 def api_live():
     """
     Lectura RAPIDA de solo lectura: nada de previsión, planificacion ni

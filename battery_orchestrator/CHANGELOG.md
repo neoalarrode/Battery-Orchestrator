@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.29
+Primera pieza del soporte para baterías EcoFlow (STREAM): nuevo módulo `ecoflow_cloud.py`, cliente directo contra el API Cloud de EcoFlow (REST + MQTT, sin pasar por Home Assistant). **Todavía no está conectado a la interfaz** — es la base ya verificada contra una instalación real, el cableado a la configuración y al planificador llega en una próxima versión. Incluye:
+- Descubrimiento de dispositivos y resolución del dispositivo "principal" de un grupo (necesario para mandar comandos en sistemas con varias unidades enlazadas).
+- Lectura en vivo por MQTT (mucho más completa que el snapshot REST — incluye vatios y la programación de carga/descarga, cosas que el REST no expone) con caída a REST como red de seguridad si MQTT no ha dicho nada todavía.
+- **Control real de las tareas de carga/descarga programadas** (activar/desactivar, límite de potencia por batería, SOC objetivo) vía el comando `cfgAllTimerTask` — no documentado por EcoFlow en ningún sitio, verificado a mano contra una cuenta real antes de darlo por bueno. Nunca escribe a ciegas: si todavía no se conoce la programación actual del grupo, no manda ningún comando.
+- Conexión MQTT persistente y reutilizada (EcoFlow limita a 10 identificadores de cliente por cuenta y día).
+
 ## 0.11.28
 Nuevo: 4 sensores **agregados** (todas las baterías juntas, no uno por batería) pensados específicamente para poder darlos de alta en el **Panel de Energía oficial de Home Assistant** (Ajustes → Paneles → Energía → Baterías):
 - `sensor.battery_orchestrator_energy_charged` / `..._energy_discharged`: energía acumulada en kWh, con `device_class: energy` y `state_class: total_increasing` — justo lo que pide ese panel para "energía que entra"/"energía que sale" de la batería. Reutilizan el mismo contador de por vida que ya alimentaba "ciclos equivalentes" (`lifetime_store`), solo sumado entre baterías — ningún dato nuevo, ninguna cuenta duplicada.

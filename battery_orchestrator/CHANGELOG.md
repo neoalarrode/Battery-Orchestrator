@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.42
+- **Nuevo `sensor.battery_orchestrator_solar_energy`** (kWh, `state_class: total_increasing`) — energía solar acumulada de por vida, aparte de `sensor.battery_orchestrator_solar_power` (W, instantáneo). El Panel de Energía de HA pide un sensor acumulado para "Producción de energía solar", no sirve el de potencia. Se integra en el bucle rápido (~10s) multiplicando la potencia en vivo por el tiempo real transcurrido, sin asumir un intervalo fijo.
+- **Descubrimiento de puertos MPPT y autorrellenar mucho más rápido**: el estado BLE de una batería EcoFlow ahora se cachea — `_live_sensor_loop` ya mantiene la conexión BLE viva y actualizada cada ~10s de fondo, así que "Buscar puertos MPPT" y "Autorrellenar desde la batería" sirven ese último dato conocido al instante en vez de abrir una conexión nueva cada vez (que podía tardar hasta 30s). Solo se paga esa espera la primera vez, antes de que el ciclo de fondo haya visto la batería.
+
 ## 0.11.41
 Dos mejoras sobre los paneles vinculados a puertos MPPT de EcoFlow (Configuración → Solar):
 

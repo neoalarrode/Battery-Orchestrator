@@ -29,6 +29,7 @@ import lifetime_store
 import pv_source
 import savings_store
 import scheduler
+import solar_energy_store
 import tariff_source
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -196,7 +197,7 @@ def _live_battery_charge_discharge_w(batteries_cfg: list[dict], cfg: dict) -> tu
             if ecoflow_mode in ("bluetooth", "hybrid"):
                 address, user_id = b.get("ecoflow_ble_address"), cfg.get("ecoflow_user_id")
                 if address and user_id:
-                    state = ecoflow_ble.get_state(address, user_id)
+                    state = _ecoflow_ble_state(address, user_id)
                     if state and state.get("battery_power") is not None:
                         net_power = float(state["battery_power"])
             if net_power is None and ecoflow_mode in ("cloud", "hybrid"):
@@ -253,6 +254,36 @@ def _live_export_w(cfg: dict, known_net_grid_w: float | None = None) -> float | 
     if cfg.get("export_sensor"):
         return ha_client.get_numeric_state(cfg.get("export_sensor"), default=None)
     return None
+
+
+_ecoflow_ble_state_cache: dict[str, dict] = {}
+_ecoflow_ble_state_cache_lock = threading.Lock()
+
+
+def _ecoflow_ble_state(address: str, user_id: str, *, fresh: bool = False) -> dict | None:
+    """
+    Envoltorio con cache sobre `ecoflow_ble.get_state()` — conectar por
+    BLE la primera vez es lento (hasta ~30s de emparejamiento), asi que
+    en vez de pagar ese coste cada vez que algo pide el estado de una
+    bateria (SOC, potencia, puertos MPPT, especificaciones...), se
+    reutiliza el ultimo estado conocido: `_live_sensor_loop` ya conecta y
+    refresca CADA bateria BLE cada ~10s de fondo (`fresh=True`), asi que
+    el resto de lecturas (descubrir puertos MPPT, autorrellenar
+    capacidad/limites...) pueden servirse de ese cache al instante en vez
+    de esperar una conexion nueva -- solo se paga el coste de conectar de
+    verdad si TODAVIA no hay ningun dato en cache (bateria recien
+    vinculada, antes de que el bucle de fondo la haya visto ni una vez).
+    """
+    if not fresh:
+        with _ecoflow_ble_state_cache_lock:
+            cached = _ecoflow_ble_state_cache.get(address)
+        if cached is not None:
+            return cached
+    state = ecoflow_ble.get_state(address, user_id)
+    if state:
+        with _ecoflow_ble_state_cache_lock:
+            _ecoflow_ble_state_cache[address] = state
+    return state
 
 
 _ecoflow_ble_reconcile_last_try: dict[str, datetime] = {}
@@ -350,7 +381,7 @@ def _ecoflow_pv_channels_state(cfg: dict, battery_id: str) -> dict[str, float]:
     if ecoflow_mode in ("bluetooth", "hybrid"):
         address, user_id = b.get("ecoflow_ble_address"), cfg.get("ecoflow_user_id")
         if address and user_id:
-            state = ecoflow_ble.get_state(address, user_id)
+            state = _ecoflow_ble_state(address, user_id)
             for ch, info in (state or {}).get("pv_channels", {}).items():
                 if info.get("power_w") is not None:
                     result[ch] = float(info["power_w"])
@@ -995,6 +1026,13 @@ def background_loop():
 
 
 LIVE_SENSOR_PUBLISH_INTERVAL_SECONDS = 10
+# Tope de cuanto tiempo "de golpe" se deja integrar en una sola vuelta del
+# bucle -- si el add-on estuvo parado un rato (reinicio, fallo...) no se
+# quiere sumar esas horas enteras como si hubiera habido sol todo ese
+# tiempo a la ultima potencia conocida; se descarta ese hueco.
+SOLAR_ENERGY_MAX_GAP_SECONDS = LIVE_SENSOR_PUBLISH_INTERVAL_SECONDS * 3
+
+_solar_energy_last_ts: float | None = None
 
 
 def _live_sensor_loop():
@@ -1005,9 +1043,13 @@ def _live_sensor_loop():
     vivo (para el Panel de Energia, automatizaciones, tarjetas del
     dashboard...), no tiene sentido que espere al ciclo completo de
     decision para actualizarse. `energy_charged`/`energy_discharged` (los
-    acumulados) siguen publicandose solo desde `run_cycle`, porque solo
-    cambian cuando de verdad se manda una orden de carga/descarga.
+    acumulados de bateria) siguen publicandose solo desde `run_cycle`,
+    porque solo cambian cuando de verdad se manda una orden de
+    carga/descarga -- la energia SOLAR en cambio se integra aqui mismo,
+    multiplicando la potencia en vivo por el tiempo real transcurrido
+    desde la ultima vuelta (ver solar_energy_store.py).
     """
+    global _solar_energy_last_ts
     while True:
         try:
             cfg = config_store.load_config()
@@ -1035,6 +1077,7 @@ def _live_sensor_loop():
                         min_interval=LIVE_SENSOR_PUBLISH_INTERVAL_SECONDS - 1,
                     )
             solar_w = _live_solar_now_w(cfg)
+            now_ts = time.time()
             if solar_w is not None:
                 _publish_sensor_throttled(
                     "sensor.battery_orchestrator_solar_power", solar_w,
@@ -1044,6 +1087,24 @@ def _live_sensor_loop():
                     },
                     min_interval=LIVE_SENSOR_PUBLISH_INTERVAL_SECONDS - 1,
                 )
+                # Energia ACUMULADA (kWh, total_increasing) -- distinta del
+                # sensor de potencia de arriba: la pide el Panel de Energia
+                # oficial de HA para "Produccion de energia solar".
+                if _solar_energy_last_ts is not None:
+                    elapsed_s = min(now_ts - _solar_energy_last_ts, SOLAR_ENERGY_MAX_GAP_SECONDS)
+                    if elapsed_s > 0:
+                        solar_energy_store.accumulate(solar_w * elapsed_s / 3600)
+                total = solar_energy_store.get_total_wh()
+                _publish_sensor_throttled(
+                    "sensor.battery_orchestrator_solar_energy", round(total["wh"] / 1000, 3),
+                    {
+                        "device_class": "energy", "state_class": "total_increasing",
+                        "unit_of_measurement": "kWh", "since": total["since"],
+                        "friendly_name": "Battery Orchestrator Energía de producción solar",
+                    },
+                    min_interval=LIVE_SENSOR_PUBLISH_INTERVAL_SECONDS - 1,
+                )
+            _solar_energy_last_ts = now_ts
         except Exception:
             log.exception("Fallo publicando los sensores en vivo")
         time.sleep(LIVE_SENSOR_PUBLISH_INTERVAL_SECONDS)
@@ -1231,7 +1292,10 @@ def _live_battery_totals(cfg: dict) -> dict:
             if ecoflow_mode in ("bluetooth", "hybrid"):
                 address, user_id = b.get("ecoflow_ble_address"), cfg.get("ecoflow_user_id")
                 if address and user_id:
-                    state = ecoflow_ble.get_state(address, user_id)
+                    # fresh=True: esta es la funcion que mantiene el cache
+                    # caliente (ver _ecoflow_ble_state) -- se llama cada
+                    # ~5-10s desde /api/live y desde _live_sensor_loop.
+                    state = _ecoflow_ble_state(address, user_id, fresh=True)
                     if state:
                         # battery_level_main = SOC de ESTA unidad;
                         # battery_level = SOC agregado de todo el grupo
@@ -1678,7 +1742,7 @@ def api_ecoflow_specs():
     if not (address and user_id):
         return jsonify({"error": "Falta la dirección Bluetooth o el userId de la cuenta EcoFlow"}), 400
 
-    state = ecoflow_ble.get_state(address, user_id)
+    state = _ecoflow_ble_state(address, user_id)
     if not state:
         return jsonify({"error": "No se pudo hablar con el puente BLE o con la batería"}), 502
 

@@ -81,7 +81,7 @@ class Battery:
         client = ecoflow_cloud.get_client(self.ecoflow_access_key, self.ecoflow_secret_key)
         if client is None:
             return None
-        state = client.get_live_state(self.ecoflow_sn)
+        state = client.get_live_state(self.ecoflow_sn, required_fields=ECOFLOW_SOC_FIELDS)
         if not state:
             return None
         for field in ECOFLOW_SOC_FIELDS:

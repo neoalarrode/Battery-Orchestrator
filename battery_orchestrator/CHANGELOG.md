@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.48
+Causa real de que una batería EcoFlow en Híbrido se quedara sin datos con Bluetooth caído, aun teniendo el SN de Cloud bien vinculado: MQTT solo reenvía por incrementos los campos que CAMBIAN — si el SOC de una unidad lleva tiempo sin variar, puede que ese campo en concreto nunca se haya visto desde que la sesión se suscribió, aunque el resto del estado de esa batería llegue "fresco" por otros campos. `get_live_state` ya no se conforma con "ha llegado algo reciente": ahora acepta qué campos hacen falta de verdad (SOC, potencia agregada, puertos MPPT) y cae al REST si NINGUNO de ellos está presente, aunque el resto esté fresco.
+
+De paso, nueva reconciliación automática en sentido inverso a la ya existente: una batería Híbrida dada de alta solo por Bluetooth (sin SN de Cloud vinculado) ahora se completa sola en cuanto haya una lectura BLE conocida, sin tener que volver a pasar por el descubrimiento a mano.
+
 ## 0.11.47
 `get_live_state` (Cloud) ya no se queda solo a la escucha del MQTT en frío: si no hay ningún dato fresco todavía (arranque del add-on, o un corte largo de MQTT — hasta ahora se devolvía `None` y a esperar), pregunta activamente al snapshot REST (`quota/all`) en vez de quedarse sin nada mientras llega el próximo mensaje, que podía tardar minutos. Limitado a como mucho una consulta cada 20s por batería para no agotar la cuota de la API. Al vivir dentro de `get_live_state` (la única fuente de estado Cloud de toda la app), beneficia por igual al planificador, al dashboard en vivo y a todo lo demás sin tocar nada más.
 

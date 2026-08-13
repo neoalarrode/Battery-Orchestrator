@@ -205,7 +205,7 @@ def _live_battery_charge_discharge_w(batteries_cfg: list[dict], cfg: dict) -> tu
                 access_key, secret_key = cfg.get("ecoflow_access_key"), cfg.get("ecoflow_secret_key")
                 if main_sn and main_sn not in ecoflow_main_sns_counted and access_key and secret_key:
                     client = ecoflow_cloud.get_client(access_key, secret_key)
-                    state = client.get_live_state(main_sn) if client else None
+                    state = client.get_live_state(main_sn, required_fields=("powGetBpCms",)) if client else None
                     if state and state.get("powGetBpCms") is not None:
                         net_power = float(state["powGetBpCms"])
                         ecoflow_main_sns_counted.add(main_sn)
@@ -307,6 +307,46 @@ def _reconcile_ecoflow_ble_addresses(cfg: dict) -> None:
         config_store.save_config(cfg)
 
 
+def _reconcile_ecoflow_sn_from_ble(cfg: dict) -> None:
+    """
+    Espejo de `_reconcile_ecoflow_ble_addresses` en la otra direccion: una
+    bateria Hibrida dada de alta solo por Bluetooth (antes de que el
+    usuario cambiara a Hibrido, o simplemente sin haber pasado nunca por
+    el descubrimiento de Cloud) tiene direccion BLE pero NO `ecoflow_sn`
+    -- sin el, el fallback a Cloud (`_read_ecoflow_soc_pct_via_cloud` en
+    battery_exec.py) no tiene con que identificar el dispositivo y se
+    queda sin datos en cuanto Bluetooth falla, aunque Cloud funcione
+    perfectamente. El propio estado BLE ya trae el SN del dispositivo
+    (`state["sn"]`, ver adapter.py del puente) -- en cuanto se tenga una
+    lectura conocida (de la cache, sin forzar una conexion nueva solo
+    para esto) se usa para completar el hueco solo, sin que el usuario
+    tenga que volver a pasar por el descubrimiento a mano.
+    """
+    pending = [
+        b for b in cfg["batteries"]
+        if b.get("source") == "ecoflow" and b.get("ecoflow_mode") == "hybrid"
+        and b.get("ecoflow_ble_address") and not b.get("ecoflow_sn")
+    ]
+    if not pending:
+        return
+
+    user_id = cfg.get("ecoflow_user_id")
+    if not user_id:
+        return
+
+    changed = False
+    for b in pending:
+        state = ecoflow_ble.get_state(b["ecoflow_ble_address"], user_id)  # cache, no fuerza conexion
+        sn = state.get("sn") if state else None
+        if sn:
+            b["ecoflow_sn"] = sn
+            b.setdefault("ecoflow_main_sn", sn)
+            changed = True
+            log.info(f"[{b.get('name')}] SN vinculado automaticamente desde BLE ({sn}) — ya puede caer a Cloud si Bluetooth falla")
+    if changed:
+        config_store.save_config(cfg)
+
+
 def _stable_battery_key(b) -> str:
     """
     Identidad ESTABLE de una bateria para los acumulados "de por vida"
@@ -361,7 +401,7 @@ def _ecoflow_pv_channels_state(cfg: dict, battery_id: str) -> dict[str, float]:
         sn = b.get("ecoflow_sn")
         if access_key and secret_key and sn:
             client = ecoflow_cloud.get_client(access_key, secret_key)
-            state = client.get_live_state(sn) if client else None
+            state = client.get_live_state(sn, required_fields=tuple(ecoflow_cloud.PV_CHANNEL_QUOTA_FIELDS.values())) if client else None
             if state:
                 for ch, val in ecoflow_cloud.pv_channels_from_state(state).items():
                     result.setdefault(ch, val)  # BLE manda si ya lo trajo
@@ -404,6 +444,7 @@ def run_cycle():
     """Un ciclo completo: leer estado, planificar, repartir, ejecutar."""
     cfg = config_store.load_config()
     _reconcile_ecoflow_ble_addresses(cfg)
+    _reconcile_ecoflow_sn_from_ble(cfg)
     batteries_cfg = cfg["batteries"]
     dry_run = bool(cfg["general"]["dry_run"])
     cycle_hours = cfg["general"]["cycle_seconds"] / 3600
@@ -1291,7 +1332,7 @@ def _live_battery_totals(cfg: dict, *, fresh: bool = False) -> dict:
                     sn = b.get("ecoflow_sn")
                     main_sn = b.get("ecoflow_main_sn")
                     if soc is None:
-                        state = client.get_live_state(sn) if (client and sn) else None
+                        state = client.get_live_state(sn, required_fields=battery_exec.ECOFLOW_SOC_FIELDS) if (client and sn) else None
                         if state:
                             for field in battery_exec.ECOFLOW_SOC_FIELDS:
                                 if state.get(field) is not None:
@@ -1301,7 +1342,7 @@ def _live_battery_totals(cfg: dict, *, fresh: bool = False) -> dict:
                                         pass
                                     break
                     if net_power is None and main_sn and main_sn not in ecoflow_main_sns_counted:
-                        main_state = client.get_live_state(main_sn) if client else None
+                        main_state = client.get_live_state(main_sn, required_fields=("powGetBpCms",)) if client else None
                         if main_state and main_state.get("powGetBpCms") is not None:
                             net_power = float(main_state["powGetBpCms"])
                             ecoflow_main_sns_counted.add(main_sn)
@@ -1782,7 +1823,7 @@ def api_ecoflow_pv_channels():
         access_key, secret_key, sn = cfg.get("ecoflow_access_key"), cfg.get("ecoflow_secret_key"), b.get("ecoflow_sn")
         if access_key and secret_key and sn:
             client = ecoflow_cloud.get_client(access_key, secret_key)
-            state = client.get_live_state(sn) if client else None
+            state = client.get_live_state(sn, required_fields=tuple(ecoflow_cloud.PV_CHANNEL_QUOTA_FIELDS.values())) if client else None
             if state:
                 cloud_channels = ecoflow_cloud.pv_channels_from_state(state)
             else:

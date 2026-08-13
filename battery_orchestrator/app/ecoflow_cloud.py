@@ -348,7 +348,7 @@ class EcoFlowCloudClient:
 
     # -- lectura ------------------------------------------------------------
 
-    def get_live_state(self, sn: str) -> dict | None:
+    def get_live_state(self, sn: str, required_fields: tuple[str, ...] | None = None) -> dict | None:
         """
         Estado en vivo de este dispositivo — MQTT si hay algo fresco, si
         no PREGUNTA ACTIVAMENTE al snapshot REST (`get_quota_all`) en vez
@@ -361,23 +361,40 @@ class EcoFlowCloudClient:
         app (planificador incluido, via battery_exec.py) — arreglarlo
         aqui beneficia a todos los que lo llaman sin tocar nada mas.
 
+        `required_fields`: MQTT solo reenvia por incrementos los campos
+        que CAMBIAN — un dispositivo cuyo SOC (o el campo que sea) lleva
+        mucho sin variar puede llevar "fresco" en general (llegan otros
+        mensajes) sin que ese campo en concreto se haya visto nunca desde
+        que esta sesion se suscribio. Si se pasan campos aqui y NINGUNO
+        esta presente en lo que ya hay de MQTT, se cae al REST aunque el
+        resto del estado este technically "fresco" — sin esto, un campo
+        que nunca cambia se queda sin dato para siempre en vez de una
+        vez, aunque el REST sí lo traiga.
+
         La llamada REST esta limitada a como mucho una vez cada
         `REST_FALLBACK_COOLDOWN_SECONDS` por dispositivo, para no
         agotar la cuota de la API mientras se sigue esperando el primer
-        mensaje MQTT real.
+        mensaje MQTT real (o el campo que falte).
         """
         self.ensure_subscribed(sn)
         with self._lock:
             ts = self._live_state_ts.get(sn)
-            if ts is not None and (time.time() - ts) <= LIVE_STATE_STALE_SECONDS:
-                return dict(self._live_state.get(sn, {}))
+            mqtt_state = dict(self._live_state.get(sn, {})) if ts is not None and (time.time() - ts) <= LIVE_STATE_STALE_SECONDS else None
+
+        if mqtt_state is not None:
+            has_required = required_fields is None or any(mqtt_state.get(f) is not None for f in required_fields)
+            if has_required:
+                return mqtt_state
 
         now = time.time()
         last_rest_call = self._rest_fallback_last_call.get(sn)
         if last_rest_call is not None and (now - last_rest_call) < REST_FALLBACK_COOLDOWN_SECONDS:
-            return None
+            return mqtt_state  # lo que hubiera de MQTT (puede ser None), no se reintenta REST todavia
         self._rest_fallback_last_call[sn] = now
-        return get_quota_all(self.access_key, self.secret_key, sn)
+        rest_state = get_quota_all(self.access_key, self.secret_key, sn)
+        if rest_state and mqtt_state:
+            return {**mqtt_state, **rest_state}  # se completa, no se pierde lo que ya traia MQTT
+        return rest_state or mqtt_state
 
     def get_all_timer_task(self, main_sn: str) -> dict | None:
         self.ensure_subscribed(main_sn)

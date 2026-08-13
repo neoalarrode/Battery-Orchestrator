@@ -1025,9 +1025,13 @@ def api_live():
                 if address and user_id:
                     state = ecoflow_ble.get_state(address, user_id)
                     if state:
-                        if state.get("battery_level") is not None:
+                        # battery_level_main = SOC de ESTA unidad;
+                        # battery_level = SOC agregado de todo el grupo
+                        # BKW si hay varias enlazadas — no sirve por
+                        # bateria (ver comentario mas arriba).
+                        if state.get("battery_level_main") is not None:
                             try:
-                                soc = float(state["battery_level"])
+                                soc = float(state["battery_level_main"])
                             except (TypeError, ValueError):
                                 pass
                         if state.get("battery_power") is not None:

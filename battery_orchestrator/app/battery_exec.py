@@ -65,7 +65,11 @@ class Battery:
         if not (self.ecoflow_ble_address and self.ecoflow_user_id):
             return None
         state = ecoflow_ble.get_state(self.ecoflow_ble_address, self.ecoflow_user_id)
-        val = state.get("battery_level") if state else None
+        # "battery_level" es el SOC agregado del grupo BKW (todas las
+        # unidades enlazadas); "battery_level_main" es el de ESTA unidad,
+        # que es lo que coincide con lo que muestra la app oficial de
+        # EcoFlow y con lo que Battery Orchestrator espera por bateria.
+        val = state.get("battery_level_main") if state else None
         try:
             return float(val) if val is not None else None
         except (TypeError, ValueError):

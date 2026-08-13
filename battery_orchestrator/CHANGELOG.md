@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.37
+El SOC de una batería EcoFlow por Bluetooth usaba `battery_level`, que en un sistema con varias unidades EcoFlow enlazadas (BKW) es el **SOC agregado de todo el grupo**, no el de esa unidad — daba un valor que no coincidía con el de la app oficial. Ahora usa `battery_level_main`, el SOC real de la unidad, verificado contra una lectura real (81% agregado vs 82% real de esa unidad).
+
 ## 0.11.36
 Arreglado el 404 real de "Obtener userId automáticamente" (v0.11.34): la llamada usaba una ruta absoluta (`/api/ecoflow/resolve_user_id`) en vez de relativa como el resto de la app (`api/...`) — bajo el Ingress de Home Assistant la página vive en `.../api/hassio_ingress/<token>/`, así que una ruta con barra inicial se salta ese prefijo y apunta a la raíz del dominio, donde no existe nada. No era la caché (aunque ese arreglo de la v0.11.35 también hacía falta): la petición sí llegaba a salir del navegador, solo que a la URL equivocada.
 

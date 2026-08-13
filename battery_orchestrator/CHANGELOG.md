@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.52
+Causa real de que el planificador subestimara el consumo: la reconstrucción del histórico (`true_load_forecast`) suma de vuelta la descarga de cada batería a partir de su sensor de HA — pero las baterías EcoFlow no tienen ningún sensor de HA propio (se leen por BLE/Cloud), así que desde que se migraron las baterías antiguas a EcoFlow, esa reconstrucción las trataba como si no existieran: solo veía lo que se importaba de red en esas horas, nunca lo que la batería cubría por su cuenta.
+
+Nuevos sensores agregados `sensor.battery_orchestrator_ecoflow_discharge_power`/`_charge_power` (solo la parte EcoFlow, para no duplicar lo que ya cubren los sensores de HA de baterías no-EcoFlow) que se suman de vuelta en la reconstrucción del consumo, en los dos modos ("consumo_instantaneo" y "consumo de la casa combinado").
+
+**Importante**: estos sensores son nuevos, así que no hay pasado que reconstruir con ellos (HA no permite importar histórico de estado, a diferencia de las estadísticas de energía) — el consumo previsto seguirá siendo bajo hasta que pasen unos días y HA acumule historial real de estos sensores nuevos.
+
 ## 0.11.51
 Nuevo botón "Reconstruir historial de energía" (Configuración → Historial del Panel de Energía): reparte lo ya acumulado en `sensor.battery_orchestrator_energy_charged/discharged` sobre las horas reales en que se movió esa energía (hasta 8 días de detalle horario, vía `history_store`), en vez de que aparezca de golpe como un único escalón feo en la gráfica del Panel de Energía de HA. Lo de antes de esos 8 días, sin detalle horario disponible, se pone como un único escalón justo antes de empezar el detalle real — no se inventa un reparto que no se puede verificar. Acción manual, pensada para una sola vez.
 

@@ -494,9 +494,14 @@ def run_cycle():
     live_charge_w, live_discharge_w, live_battery_data_ok = _live_battery_charge_discharge_w(batteries_cfg, cfg)
     net_grid_now_w = None  # solo se rellena en modo "combined"; se reutiliza mas abajo para el vertido
 
+    has_ecoflow_battery = any((b.get("source") or "ha") == "ecoflow" for b in batteries_cfg)
+    ecoflow_discharge_sensor = "sensor.battery_orchestrator_ecoflow_discharge_power" if has_ecoflow_battery else None
+    ecoflow_charge_sensor = "sensor.battery_orchestrator_ecoflow_charge_power" if has_ecoflow_battery else None
+
     if load_sensor_mode == "combined" and net_grid_sensor:
         load_forecast = ha_client.true_load_forecast_from_grid(
-            net_grid_sensor, solar_sensors_for_load, batteries_cfg, horizon, days=history_days
+            net_grid_sensor, solar_sensors_for_load, batteries_cfg, horizon, days=history_days,
+            ecoflow_discharge_sensor=ecoflow_discharge_sensor, ecoflow_charge_sensor=ecoflow_charge_sensor,
         )
         net_grid_now_w = ha_client.get_numeric_state(net_grid_sensor, default=None)
         if net_grid_now_w is not None and pv_now_actual is not None and live_battery_data_ok:
@@ -505,6 +510,12 @@ def run_cycle():
             live_base_load_w = None
     elif load_sensor:
         battery_discharge_sensors = [s for s in (_battery_discharge_sensor(b) for b in batteries_cfg) if s]
+        if ecoflow_discharge_sensor:
+            # Ver comentario homologo en true_load_forecast_from_grid — el
+            # consumo_instantaneo YA excluye la carga (por eso este modo
+            # solo necesita sensores de DESCARGA, nunca de carga), asi que
+            # basta con sumar el agregado EcoFlow igual que cualquier otro.
+            battery_discharge_sensors = battery_discharge_sensors + [ecoflow_discharge_sensor]
         load_forecast = ha_client.true_load_forecast(
             load_sensor, solar_sensors_for_load, battery_discharge_sensors, horizon, days=history_days
         )
@@ -1088,6 +1099,36 @@ def _live_sensor_loop():
                         },
                         min_interval=LIVE_SENSOR_PUBLISH_INTERVAL_SECONDS - 1,
                     )
+                # Descarga/carga SOLO de baterias EcoFlow, siempre >= 0 —
+                # las EcoFlow no tienen sensor de HA propio (se leen por
+                # BLE/Cloud), asi que sin este agregado la reconstruccion
+                # del consumo historico (true_load_forecast) las trata
+                # como si no existieran y subestima el consumo real en
+                # las horas que cubrian solas. Se publica siempre que haya
+                # AL MENOS una bateria EcoFlow declarada, aunque este
+                # ciclo de 0W, para que el sensor exista desde ya y HA
+                # empiece a acumular su propio historico cuanto antes.
+                if any((b.get("source") or "ha") == "ecoflow" for b in cfg["batteries"]):
+                    _publish_sensor_throttled(
+                        "sensor.battery_orchestrator_ecoflow_discharge_power",
+                        round(live["ecoflow_live_discharge_w"]),
+                        {
+                            "device_class": "power", "state_class": "measurement",
+                            "unit_of_measurement": "W",
+                            "friendly_name": "Battery Orchestrator Descarga EcoFlow",
+                        },
+                        min_interval=LIVE_SENSOR_PUBLISH_INTERVAL_SECONDS - 1,
+                    )
+                    _publish_sensor_throttled(
+                        "sensor.battery_orchestrator_ecoflow_charge_power",
+                        round(live["ecoflow_live_charge_w"]),
+                        {
+                            "device_class": "power", "state_class": "measurement",
+                            "unit_of_measurement": "W",
+                            "friendly_name": "Battery Orchestrator Carga EcoFlow",
+                        },
+                        min_interval=LIVE_SENSOR_PUBLISH_INTERVAL_SECONDS - 1,
+                    )
             solar_w = _live_solar_now_w(cfg)
             now_ts = time.time()
             if solar_w is not None:
@@ -1294,6 +1335,16 @@ def _live_battery_totals(cfg: dict, *, fresh: bool = False) -> dict:
     total_capacity_wh, current_soc_wh = 0.0, 0.0
     live_charge_w = 0.0
     live_discharge_w = 0.0
+    # Solo la parte EcoFlow de lo de arriba -- para poder publicar un
+    # sensor agregado que la reconstruccion de consumo historico
+    # (ha_client.true_load_forecast) pueda sumar de vuelta. Las baterias
+    # EcoFlow no tienen sensor de HA propio (no aplica, se leen por BLE/
+    # Cloud), asi que sin este agregado esa reconstruccion las trata como
+    # si no existieran -- subestima el consumo real en las horas que una
+    # bateria EcoFlow cubria sola, justo lo que hacia que el planificador
+    # calculase de menos.
+    ecoflow_live_charge_w = 0.0
+    ecoflow_live_discharge_w = 0.0
     live_battery_data_ok = False
     ecoflow_main_sns_counted: set[str] = set()
     for b in cfg["batteries"]:
@@ -1393,8 +1444,12 @@ def _live_battery_totals(cfg: dict, *, fresh: bool = False) -> dict:
             live_battery_data_ok = True
             if net_power > 0:
                 live_charge_w += net_power
+                if source == "ecoflow":
+                    ecoflow_live_charge_w += net_power
             else:
                 live_discharge_w += abs(net_power)
+                if source == "ecoflow":
+                    ecoflow_live_discharge_w += abs(net_power)
         if soc is not None:
             cap = float(b.get("capacity_wh", 0))
             total_capacity_wh += cap
@@ -1407,6 +1462,8 @@ def _live_battery_totals(cfg: dict, *, fresh: bool = False) -> dict:
         "live_charge_w": live_charge_w,
         "live_discharge_w": live_discharge_w,
         "live_battery_data_ok": live_battery_data_ok,
+        "ecoflow_live_charge_w": ecoflow_live_charge_w,
+        "ecoflow_live_discharge_w": ecoflow_live_discharge_w,
     }
 
 

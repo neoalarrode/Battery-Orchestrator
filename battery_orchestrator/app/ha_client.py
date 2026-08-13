@@ -418,7 +418,9 @@ def true_load_forecast(base_consumption_sensor: str, solar_sensors: list[str],
 
 
 def true_load_forecast_from_grid(net_grid_sensor: str, solar_sensors: list[str],
-                                  batteries_cfg: list[dict], horizon_hours: int, days: int = 21) -> list[float]:
+                                  batteries_cfg: list[dict], horizon_hours: int, days: int = 21,
+                                  ecoflow_discharge_sensor: str | None = None,
+                                  ecoflow_charge_sensor: str | None = None) -> list[float]:
     """
     Igual que `true_load_forecast`, pero para el modo "unificado" del
     sensor de consumo (ver "Consumo de la casa" en Configuración): en vez
@@ -464,6 +466,19 @@ def true_load_forecast_from_grid(net_grid_sensor: str, solar_sensors: list[str],
             if b.get("charge_power_sensor"):
                 charge = hourly_average_forecast(b.get("charge_power_sensor"), horizon_hours, days, default=0.0, abs_values=True)
                 total = [total[i] - charge[i] for i in range(horizon_hours)]
+
+    # Baterias EcoFlow: no tienen sensor de HA propio (bucle de arriba las
+    # ignora, `power_sensor`/`net_power_sensor` vienen vacios a proposito),
+    # asi que su descarga/carga se suma aqui a partir del agregado que
+    # publica el propio addon (ver _live_sensor_loop en main.py) — sin
+    # esto, cualquier consumo que una bateria EcoFlow cubriera sola
+    # desaparece de la reconstruccion del historico.
+    if ecoflow_discharge_sensor:
+        discharge = hourly_average_forecast(ecoflow_discharge_sensor, horizon_hours, days, default=0.0)
+        total = [total[i] + discharge[i] for i in range(horizon_hours)]
+    if ecoflow_charge_sensor:
+        charge = hourly_average_forecast(ecoflow_charge_sensor, horizon_hours, days, default=0.0)
+        total = [total[i] - charge[i] for i in range(horizon_hours)]
 
     # El consumo real nunca es negativo — un resultado negativo aqui solo
     # puede venir de ruido de medida entre sensores independientes (p.ej.

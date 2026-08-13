@@ -13,10 +13,15 @@ import ecoflow_cloud
 import ha_client
 
 # Campos del estado en vivo de EcoFlow Cloud que pueden traer el SOC, por
-# orden de preferencia — distintos modelos/firmwares de la familia STREAM
-# reportan uno u otro (ver hallazgos en ecoflow_cloud.py: el snapshot REST
-# y el feed MQTT no siempre coinciden en que campo rellenan primero).
-ECOFLOW_SOC_FIELDS = ("cmsBattSoc", "bmsBattSoc", "soc", "f32ShowSoc")
+# orden de preferencia. IMPORTANTE: "cmsBattSoc" es el SOC AGREGADO de
+# todo el grupo BKW si hay varias unidades enlazadas (equivalente al
+# "battery_level" de BLE), no sirve por bateria individual -- puede venir
+# a 0 o con un valor que no es el de ESTA unidad. "bmsBattSoc" es el SOC
+# real de esta unidad en concreto (equivalente al "battery_level_main" de
+# BLE, mismo criterio ya corregido ahi en la v0.11.37) y va primero por
+# eso. "soc"/"f32ShowSoc" son alternativas de otros modelos/firmwares que
+# no traen ninguno de los dos anteriores.
+ECOFLOW_SOC_FIELDS = ("bmsBattSoc", "soc", "f32ShowSoc", "cmsBattSoc")
 
 
 @dataclass

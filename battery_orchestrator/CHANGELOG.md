@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.50
+SOC por Cloud corregido: `cmsBattSoc` (primer campo mirado hasta ahora) es el SOC AGREGADO de todo el grupo BKW, no el de la unidad individual — mismo fallo que ya se corrigió en BLE en la v0.11.37 (`battery_level` vs `battery_level_main`), aquí pasó desapercibido porque no se había visto un caso donde diera un número claramente erróneo (0%) hasta ahora. Orden nuevo: `bmsBattSoc` (SOC real de esta unidad) primero, `cmsBattSoc` como último recurso.
+
 ## 0.11.49
 Icono junto al nombre de cada batería EcoFlow en la tarjeta "Baterías" de Estado actual — un globo si el dato de este ciclo vino de Cloud (API), el símbolo de Bluetooth si vino de BLE. No aparece en baterías por Home Assistant (no aplica) ni si todavía no hay ninguna lectura EcoFlow.
 

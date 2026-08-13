@@ -21,6 +21,7 @@ import deferrable_scheduler
 import deferrable_store
 import ecoflow_ble
 import ecoflow_cloud
+import ecoflow_login
 import forecast_store
 import ha_client
 import history_store
@@ -1306,7 +1307,7 @@ def api_ecoflow_discover_ble():
     if devices is None:
         return jsonify({
             "error": "No se pudo hablar con el puente BLE — ¿está instalado "
-                     "\"Battery Orchestrator - Puente BLE EcoFlow\" en Home Assistant?",
+                     "\"Battery Orchestrator - Puente BLE\" en Home Assistant?",
         }), 502
 
     already_added = {
@@ -1323,6 +1324,32 @@ def api_ecoflow_discover_ble():
         for d in devices
     ]
     return jsonify({"devices": result, "count": len(result)})
+
+
+@app.post("/api/ecoflow/resolve_user_id")
+def api_ecoflow_resolve_user_id():
+    """
+    Resuelve el userId de la cuenta EcoFlow a partir de email/contraseña —
+    mismo flujo que la app oficial de EcoFlow (ver ecoflow_login.py). La
+    contraseña llega en esta petición y NUNCA se guarda: se usa solo para
+    esta llamada y se descarta; lo único que se persiste en config.json es
+    el userId ya resuelto (un identificador, no un secreto) — igual que
+    ya se guardaba si se pegaba a mano.
+    """
+    body = request.get_json(force=True) or {}
+    email = (body.get("email") or "").strip()
+    password = body.get("password") or ""
+    if not email or not password:
+        return jsonify({"error": "Faltan el email o la contraseña"}), 400
+    try:
+        user_id = ecoflow_login.resolve_user_id(email, password)
+    except ecoflow_login.EcoFlowLoginError as e:
+        return jsonify({"error": str(e)}), 400
+
+    cfg = config_store.load_config()
+    cfg["ecoflow_user_id"] = user_id
+    config_store.save_config(cfg)
+    return jsonify({"user_id": user_id})
 
 
 @app.get("/")

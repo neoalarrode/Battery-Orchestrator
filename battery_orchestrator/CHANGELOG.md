@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.31
+Las baterías EcoFlow ya alimentan también `/api/live` (antes solo funcionaban en el ciclo de planificación): SOC agregado y potencia en vivo, junto con el resto de baterías, en el widget de "Baterías" de "Estado actual" y en el "Flujo de energía ahora mismo". En sistemas EcoFlow con varias unidades enlazadas, la potencia (que EcoFlow reporta agregada para todo el grupo, no por unidad) solo se cuenta una vez — nunca se duplica por tener varias baterías del mismo grupo declaradas. Verificado contra una instalación real: el SOC tarda algo más en llegar la primera vez (EcoFlow lo manda en su reporte periódico completo, más lento que la potencia), pero se rellena solo en cuanto llega, sin inventar ningún dato mientras tanto.
+
 ## 0.11.30
 **Baterías EcoFlow gestionadas directamente desde Battery Orchestrator**, sin declarar ningún sensor ni switch de Home Assistant — cablea por completo el módulo `ecoflow_cloud.py` de la v0.11.29:
 - Nueva tarjeta "Baterías EcoFlow" en la configuración: Access Key/Secret Key de tu cuenta de desarrollador de EcoFlow, y un botón "Buscar baterías EcoFlow" que descubre automáticamente todos tus dispositivos.

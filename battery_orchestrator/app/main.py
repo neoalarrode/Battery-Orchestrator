@@ -148,7 +148,7 @@ def _battery_discharge_sensor(b: dict) -> str | None:
     return b.get("power_sensor") or None
 
 
-def _live_battery_charge_discharge_w(batteries_cfg: list[dict]) -> tuple[float, float, bool]:
+def _live_battery_charge_discharge_w(batteries_cfg: list[dict], cfg: dict) -> tuple[float, float, bool]:
     """
     Carga y descarga TOTAL de todas las baterias AHORA MISMO, leido en vivo
     de HA (nunca de la previsión del planificador) — misma logica de
@@ -163,23 +163,44 @@ def _live_battery_charge_discharge_w(batteries_cfg: list[dict]) -> tuple[float, 
     "las baterias SI tienen sensor y ahora mismo miden 0W" (0.0 real) —
     quien llama necesita saber cual de los dos casos es para decidir si
     cae a la previsión del planificador o no.
+
+    Baterias EcoFlow (ver ecoflow_cloud.py): `powGetBpCms` es la potencia
+    AGREGADA de todo el grupo (system real-time aggregated battery power),
+    no hay forma de saber por el API cuanto pone CADA unidad enlazada por
+    separado — asi que solo se cuenta UNA VEZ por grupo (la entrada cuyo
+    `ecoflow_sn` coincide con el `ecoflow_main_sn`, sea cual sea el orden
+    en que el usuario las haya declarado), nunca sumando el mismo dato
+    varias veces por tener varias baterias del mismo grupo declaradas.
     """
     total_charge_w = 0.0
     total_discharge_w = 0.0
     any_data = False
+    ecoflow_main_sns_counted: set[str] = set()
     for b in batteries_cfg:
-        mode = b.get("power_sensor_mode") or ("separate" if b.get("power_sensor") or b.get("charge_power_sensor") else "none")
+        source = b.get("source") or "ha"
         net_power = None
-        if mode == "combined" and b.get("net_power_sensor"):
-            net_power = ha_client.get_numeric_state(b.get("net_power_sensor"), default=None)
-        elif mode == "separate":
-            charge = (
-                ha_client.get_numeric_state(b.get("charge_power_sensor"), default=None)
-                if b.get("charge_power_sensor") else None
-            )
-            power = ha_client.get_numeric_state(b.get("power_sensor"), default=None) if b.get("power_sensor") else None
-            if charge is not None or power is not None:
-                net_power = abs(charge or 0.0) - abs(power or 0.0)
+        if source == "ecoflow_cloud":
+            main_sn = b.get("ecoflow_main_sn")
+            access_key = cfg.get("ecoflow_access_key")
+            secret_key = cfg.get("ecoflow_secret_key")
+            if main_sn and main_sn not in ecoflow_main_sns_counted and access_key and secret_key:
+                client = ecoflow_cloud.get_client(access_key, secret_key)
+                state = client.get_live_state(main_sn) if client else None
+                if state and state.get("powGetBpCms") is not None:
+                    net_power = float(state["powGetBpCms"])
+                    ecoflow_main_sns_counted.add(main_sn)
+        else:
+            mode = b.get("power_sensor_mode") or ("separate" if b.get("power_sensor") or b.get("charge_power_sensor") else "none")
+            if mode == "combined" and b.get("net_power_sensor"):
+                net_power = ha_client.get_numeric_state(b.get("net_power_sensor"), default=None)
+            elif mode == "separate":
+                charge = (
+                    ha_client.get_numeric_state(b.get("charge_power_sensor"), default=None)
+                    if b.get("charge_power_sensor") else None
+                )
+                power = ha_client.get_numeric_state(b.get("power_sensor"), default=None) if b.get("power_sensor") else None
+                if charge is not None or power is not None:
+                    net_power = abs(charge or 0.0) - abs(power or 0.0)
         if net_power is None:
             continue
         any_data = True
@@ -262,7 +283,7 @@ def run_cycle():
     net_grid_sensor = cfg.get("net_grid_sensor")
     history_days = cfg["general"]["history_days_for_load"]
     solar_sensors_for_load = [a.get("current_sensor") for a in cfg["pv_arrays"] if a.get("current_sensor")]
-    live_charge_w, live_discharge_w, live_battery_data_ok = _live_battery_charge_discharge_w(batteries_cfg)
+    live_charge_w, live_discharge_w, live_battery_data_ok = _live_battery_charge_discharge_w(batteries_cfg, cfg)
     net_grid_now_w = None  # solo se rellena en modo "combined"; se reutiliza mas abajo para el vertido
 
     if load_sensor_mode == "combined" and net_grid_sensor:
@@ -967,31 +988,63 @@ def api_live():
     live_charge_w = 0.0
     live_discharge_w = 0.0
     live_battery_data_ok = False
+    ecoflow_main_sns_counted: set[str] = set()
     for b in cfg["batteries"]:
-        soc = ha_client.get_numeric_state(b["soc_sensor"], default=None)
-        power = ha_client.get_numeric_state(b.get("power_sensor"), default=None) if b.get("power_sensor") else None
+        source = b.get("source") or "ha"
 
-        # net_power_w: potencia CON SIGNO (positiva cargando, negativa
-        # descargando), pensada para poder ver en vivo tambien la carga,
-        # no solo la descarga (que es lo unico que da power_sensor). Se
-        # calcula segun el modo que haya elegido el usuario para esta
-        # bateria — "combined" (un sensor con signo ya de por si) o
-        # "separate" (dos sensores, cada uno siempre positivo o cero).
-        # Instalaciones de antes de que existiera este desplegable no
-        # tienen "power_sensor_mode" guardado: se tratan como "separate"
-        # con solo el de descarga relleno, que es exactamente su
-        # comportamiento de siempre (no se pierde nada al actualizar).
-        mode = b.get("power_sensor_mode") or ("separate" if b.get("power_sensor") or b.get("charge_power_sensor") else "none")
-        net_power = None
-        if mode == "combined" and b.get("net_power_sensor"):
-            net_power = ha_client.get_numeric_state(b.get("net_power_sensor"), default=None)
-        elif mode == "separate":
-            charge = (
-                ha_client.get_numeric_state(b.get("charge_power_sensor"), default=None)
-                if b.get("charge_power_sensor") else None
-            )
-            if charge is not None or power is not None:
-                net_power = abs(charge or 0.0) - abs(power or 0.0)
+        if source == "ecoflow_cloud":
+            # Ver comentario homologo en _live_battery_charge_discharge_w:
+            # el SOC es siempre por unidad (cada bateria tiene el suyo),
+            # pero la potencia (`powGetBpCms`) es AGREGADA de todo el
+            # grupo — solo se cuenta una vez por grupo, en la unidad
+            # "principal", para no duplicarla si hay varias baterias del
+            # mismo grupo declaradas por separado.
+            soc, power, net_power = None, None, None
+            access_key, secret_key = cfg.get("ecoflow_access_key"), cfg.get("ecoflow_secret_key")
+            if access_key and secret_key:
+                client = ecoflow_cloud.get_client(access_key, secret_key)
+                sn = b.get("ecoflow_sn")
+                main_sn = b.get("ecoflow_main_sn")
+                state = client.get_live_state(sn) if (client and sn) else None
+                if state:
+                    for field in battery_exec.ECOFLOW_SOC_FIELDS:
+                        if state.get(field) is not None:
+                            try:
+                                soc = float(state[field])
+                            except (TypeError, ValueError):
+                                pass
+                            break
+                if main_sn and main_sn not in ecoflow_main_sns_counted:
+                    main_state = client.get_live_state(main_sn) if client else None
+                    if main_state and main_state.get("powGetBpCms") is not None:
+                        net_power = float(main_state["powGetBpCms"])
+                        power = abs(net_power) if net_power < 0 else None  # power_w = solo descarga, mismo criterio que el resto
+                        ecoflow_main_sns_counted.add(main_sn)
+        else:
+            soc = ha_client.get_numeric_state(b["soc_sensor"], default=None)
+            power = ha_client.get_numeric_state(b.get("power_sensor"), default=None) if b.get("power_sensor") else None
+
+            # net_power_w: potencia CON SIGNO (positiva cargando, negativa
+            # descargando), pensada para poder ver en vivo tambien la carga,
+            # no solo la descarga (que es lo unico que da power_sensor). Se
+            # calcula segun el modo que haya elegido el usuario para esta
+            # bateria — "combined" (un sensor con signo ya de por si) o
+            # "separate" (dos sensores, cada uno siempre positivo o cero).
+            # Instalaciones de antes de que existiera este desplegable no
+            # tienen "power_sensor_mode" guardado: se tratan como "separate"
+            # con solo el de descarga relleno, que es exactamente su
+            # comportamiento de siempre (no se pierde nada al actualizar).
+            mode = b.get("power_sensor_mode") or ("separate" if b.get("power_sensor") or b.get("charge_power_sensor") else "none")
+            net_power = None
+            if mode == "combined" and b.get("net_power_sensor"):
+                net_power = ha_client.get_numeric_state(b.get("net_power_sensor"), default=None)
+            elif mode == "separate":
+                charge = (
+                    ha_client.get_numeric_state(b.get("charge_power_sensor"), default=None)
+                    if b.get("charge_power_sensor") else None
+                )
+                if charge is not None or power is not None:
+                    net_power = abs(charge or 0.0) - abs(power or 0.0)
 
         battery_live.append({"id": b["id"], "name": b["name"], "soc_pct": soc, "power_w": power, "net_power_w": net_power})
         if net_power is not None:

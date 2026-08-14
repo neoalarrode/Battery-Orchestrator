@@ -8,7 +8,15 @@
       "description": "Carga y descarga adaptativa de baterias por precio, sol y consumo real",
       "path": "battery_orchestrator",
       "repo": "neoalarrode/Home-Orchestrator",
-      "version": "0.11.58"
+      "version": "0.11.59"
+    },
+    {
+      "slug": "climate",
+      "name": "Climate Orchestrator",
+      "description": "Termostatos adaptativos por zona, expuestos como climate.* nativos de HA (HomeKit/Matter) via MQTT Discovery",
+      "path": "battery_orchestrator",
+      "repo": "neoalarrode/Home-Orchestrator",
+      "version": "0.1.0"
     }
   ]
 }

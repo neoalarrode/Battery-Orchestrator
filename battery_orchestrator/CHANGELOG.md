@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.11.59
+**Segundo plugin real: Climate**, montado en `/plugins/climate` junto a Battery (que sigue en la raíz, sin cambios de comportamiento). Puerto de todo Climate Orchestrator (el custom_component HACS separado) a este plugin, con dos cambios de fondo respecto al original:
+
+- **Todo por WebSocket, nunca REST** — `ha_websocket.py` se amplía con una capa de petición/respuesta (`call_service`, `get_states`, `get_history` con formato comprimido y relleno de atributos diff-codificados) para cubrir lo que antes hacía `hass.services.async_call`/`hass.states.get`/`history.get_significant_states` dentro de HA Core.
+- **Termostatos nativos vía MQTT Discovery** (no REST, no un sensor secundario) — cada zona se publica como una entidad `climate.*` real, con HomeKit/Matter incluido, usando el aprovisionamiento automático de credenciales del broker local añadido en 0.11.57 (`services: mqtt:want`).
+
+Piezas nuevas: `climate/zone_store.py` (config+estado de cada zona, namespaced bajo `plugins.climate` en el mismo config.json compartido — mismo criterio de migración automática que Battery), `climate/zone_runner.py` (la lógica de decisión completa, 1:1 con el custom_component salvo el puerto async→sync), `climate/mqtt_climate.py` (discovery + publicación de estado + comandos), `climate_plugin.py` (arranque, WebSocket/MQTT compartidos entre zonas, ciclo reactivo + refresco periódico por zona con jitter). API nueva: `GET/POST /api/zones`, `PUT/DELETE /api/zones/<id>`, `GET /api/status` — todo bajo `/plugins/climate`.
+
+`core_app.py` ahora fusiona las apps Flask de los plugins con `DispatcherMiddleware` en vez de servir solo la primera.
+
+Sin zonas configuradas todavía (el registro empieza vacío) — el plugin arranca y se conecta, pero no hace nada hasta que se den de alta zonas. Las 2 zonas reales de producción (`climate.salon_salon`, `climate.dormitorio_4`) siguen en el custom_component de Climate Orchestrator de siempre; no se tocan hasta verificar este plugin a fondo con una zona de pruebas primero.
+
 ## 0.11.58
 **Bug real, confirmado**: `sensor.battery_orchestrator_energy_charged`/`_discharged` no correspondían con `sensor.battery_orchestrator_power` porque no medían lo mismo. La acumulación usaba la potencia PLANIFICADA (`distribution["per_battery"]`, lo que el ciclo decidió mandar) multiplicada por el `cycle_seconds` NOMINAL — no la potencia real medida, y en descarga ni siquiera se repartía de verdad entre baterías, solo se estimaba proporcional a la potencia máxima declarada de cada una (el propio comentario del código ya lo admitía).
 

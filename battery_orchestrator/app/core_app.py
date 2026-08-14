@@ -2,16 +2,19 @@
 Punto de entrada del nucleo Home Orchestrator (`run.sh` llama a este
 fichero en vez de a `main.py` directamente, desde esta version).
 
-Con un solo plugin instalado (Battery, el caso de hoy), el nucleo sirve
-la app Flask de ese plugin tal cual -- fusionar varias apps Flask como
-blueprints bajo una app compartida del nucleo es una decision de diseño
-que no hace falta resolver todavia con un unico plugin real; se aborda
-cuando Climate (u otro) sea el segundo plugin de verdad.
+Con dos plugins instalados (Battery + Climate, desde esta version), el
+nucleo fusiona sus apps Flask con `DispatcherMiddleware` de werkzeug:
+Battery se sirve en la raiz (compatibilidad con `ingress_port` en
+config.yaml, que ya apuntaba ahi antes de que existiera ningun otro
+plugin) y cada plugin siguiente se monta bajo `/plugins/<slug>`.
 """
 
 from __future__ import annotations
 
 import logging
+
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
+from werkzeug.serving import run_simple
 
 import plugin_loader
 
@@ -27,12 +30,19 @@ def main() -> None:
     for p in plugins:
         p.start_background_threads()
 
-    # Fase 1: exactamente un plugin (Battery). Se sirve su app Flask
-    # directa, en el mismo puerto de siempre (8099, coherente con
-    # ingress_port en config.yaml).
-    primary = plugins[0]
-    log.info("Home Orchestrator arrancando con el plugin '%s' v%s", primary.name, primary.version)
-    primary.flask_app().run(host="0.0.0.0", port=8099, threaded=True)
+    primary, rest = plugins[0], plugins[1:]
+    log.info("Home Orchestrator arrancando con el plugin '%s' v%s en la raiz", primary.name, primary.version)
+
+    mounts = {}
+    for p in rest:
+        log.info("Plugin '%s' v%s montado en /plugins/%s", p.name, p.version, p.slug)
+        mounts[f"/plugins/{p.slug}"] = p.flask_app().wsgi_app
+
+    app = primary.flask_app()
+    if mounts:
+        app.wsgi_app = DispatcherMiddleware(app.wsgi_app, mounts)
+
+    run_simple("0.0.0.0", 8099, app, threaded=True)
 
 
 if __name__ == "__main__":

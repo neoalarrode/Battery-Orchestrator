@@ -73,10 +73,11 @@ class HAMqttClient:
     paho-mqtt reconecta solo con su propio backoff interno.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, client_id: str = "home_orchestrator_battery") -> None:
         self._client = None
         self._lock = threading.Lock()
         self.connected = False
+        self._client_id = client_id
 
     def connect(self) -> bool:
         creds = _fetch_broker_credentials()
@@ -86,7 +87,7 @@ class HAMqttClient:
 
         import paho.mqtt.client as mqtt
 
-        client_id = "home_orchestrator_battery"
+        client_id = self._client_id
         c = mqtt.Client(client_id=client_id, callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
         if creds.get("username"):
             c.username_pw_set(creds["username"], creds.get("password") or "")

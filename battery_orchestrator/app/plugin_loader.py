@@ -23,8 +23,9 @@ log = logging.getLogger("plugin_loader")
 
 def load_all_plugins() -> list:
     from battery_plugin import BatteryPlugin
+    from climate_plugin import ClimatePlugin
 
-    plugins = [BatteryPlugin()]
+    plugins = [BatteryPlugin(), ClimatePlugin()]
     for p in plugins:
         log.info("Plugin cargado: %s v%s (%s)", p.name, p.version, p.slug)
     return plugins

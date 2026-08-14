@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.82
+Sha256 de Climate re-pineado al tag `v0.11.81` (histórico local de Tuya para el modelo térmico) — verificado con una descarga real antes de fijarlo.
+
 ## 0.11.81
 **El modelo térmico de Climate ya aprende de dispositivos Tuya consumidos internamente**: `device_manager.py` guarda su propio historial local por datapoint (capado por cuenta y por 14 días), y `thermal_model.py` lo consulta igual que ya consulta el recorder de HA cuando el actuador es una referencia de otro plugin — sin esto, un termostato Tuya usado vía `climate_entities` no generaba ningún histórico del que aprender su inercia térmica real. Verificado con un histórico simulado (3 tramos de calentamiento reales): el modelo aprende ~1.0°C/h de verdad, sin ninguna llamada a HA.
 

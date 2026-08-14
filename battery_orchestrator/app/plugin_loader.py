@@ -99,7 +99,7 @@ PLUGIN_CATALOG = {
         "version": "0.2.3",  # version PROPIA del plugin (ClimatePlugin.version) -- distinta de "tag", que es la version del REPO de la que se descarga
         "downloadable": True,
         "tag": "v0.11.81",
-        "sha256": None,  # se rellena tras publicar v0.11.81 y calcular el sha256 real de su tarball
+        "sha256": "0d52e19b1a080fd567e89241fab0e0a005e94e7e6453df2aff14b80d4773c65f",  # sha256 real del tarball de v0.11.81, verificado contra una descarga real antes de fijarlo aqui
         "files": ["climate_plugin.py", "climate", "climate_templates"],
     },
     "tuya": {

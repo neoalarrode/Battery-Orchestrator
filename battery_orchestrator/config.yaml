@@ -1,7 +1,7 @@
-name: "Home Orchestrator — Battery"
-version: "0.11.62"
+name: "Home Orchestrator — Energy"
+version: "0.11.63"
 slug: "battery_orchestrator"
-description: "Carga y descarga adaptativa de baterias por precio, sol y consumo real, sin cajas negras — plugin Battery de Home Orchestrator"
+description: "Baterias, solar y cargas diferibles, sin cajas negras — plugin Energy de Home Orchestrator"
 url: "https://github.com/neoalarrode/Home-Orchestrator"
 arch:
   - aarch64
@@ -13,7 +13,7 @@ boot: auto
 ingress: true
 ingress_port: 8099
 panel_icon: mdi:battery-charging-high
-panel_title: "Home Orchestrator — Battery"
+panel_title: "Home Orchestrator — Energy"
 homeassistant_api: true
 services:
   - mqtt:want

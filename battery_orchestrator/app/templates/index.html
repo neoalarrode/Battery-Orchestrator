@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Battery Orchestrator</title>
+<title>Energy Orchestrator</title>
 <!-- Favicon en linea (mismo cuadrado degradado violeta->cian y rayo que el
      "brand-mark" de la cabecera) — sin depender de servir un archivo aparte. -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%3E%3Cdefs%3E%3ClinearGradient%20id%3D%27g%27%20x1%3D%270%27%20y1%3D%270%27%20x2%3D%2724%27%20y2%3D%2724%27%20gradientUnits%3D%27userSpaceOnUse%27%3E%3Cstop%20offset%3D%270%27%20stop-color%3D%27%238b5cf6%27%2F%3E%3Cstop%20offset%3D%271%27%20stop-color%3D%27%2322d3ee%27%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%2724%27%20height%3D%2724%27%20rx%3D%276%27%20fill%3D%27url%28%23g%29%27%2F%3E%3Cpath%20d%3D%27M13%202%204%2014h6l-1%208%209-12h-6l1-8Z%27%20fill%3D%27%230b0a16%27%2F%3E%3C%2Fsvg%3E">
@@ -462,12 +462,12 @@
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="currentColor"/>
       </svg>
-    </span>Battery Orchestrator</h1>
+    </span>Energy Orchestrator</h1>
     <div class="subtitle" data-i18n="topbar_subtitle">Carga y descarga adaptativa por precio, sol y consumo real — sin cajas negras.</div>
   </div>
   <div class="topbar-right">
     <nav class="plugin-switch" aria-label="Cambiar de plugin">
-      <a href="/" class="current"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="currentColor"/></svg>Battery</a>
+      <a href="/" class="current"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="currentColor"/></svg>Energy</a>
       <a href="/plugins/climate/"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v7.1a4 4 0 1 0 6 0V6a3 3 0 0 0-3-3Zm0 2a1 1 0 0 1 1 1v7.6l.6.5a2 2 0 1 1-3.2 0l.6-.5V6a1 1 0 0 1 1-1Z" fill="currentColor"/></svg>Climate</a>
     </nav>
     <select class="lang-select" id="lang-select" onchange="onLangChange()" aria-label="Idioma / Language"></select>
@@ -481,6 +481,7 @@
   <button class="tab-btn" data-tab="prevision" data-i18n="tab_prevision" onclick="switchTab('prevision')" type="button">Previsión</button>
   <button class="tab-btn" data-tab="salud" data-i18n="tab_salud" onclick="switchTab('salud')" type="button">Salud de batería</button>
   <button class="tab-btn" id="tab-config-btn" data-tab="config" data-i18n="tab_config" onclick="switchTab('config')" type="button">Configuración</button>
+  <button class="tab-btn" id="tab-store-btn" data-tab="store" data-i18n="tab_store" onclick="switchTab('store')" type="button">Tienda</button>
 </nav>
 
 <div class="tab-panel active" data-tab="inicio">
@@ -589,7 +590,7 @@
     <div class="plugin-grid">
       <button type="button" class="plugin-tile" onclick="openPluginConfig('battery')">
         <span class="plugin-tile-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="currentColor"/></svg></span>
-        <span class="plugin-tile-name">Battery</span>
+        <span class="plugin-tile-name">Energy</span>
         <span class="plugin-tile-desc" data-i18n="plugin_battery_desc">Baterías, tarifa, solar, cargas diferibles</span>
       </button>
       <a class="plugin-tile" href="/plugins/climate/">
@@ -989,6 +990,14 @@
 
 </div>
 
+<div class="tab-panel" data-tab="store">
+<div class="card">
+  <h2><span data-i18n="card_store_title">Tienda de plugins</span></h2>
+  <p class="help" data-i18n="card_store_hint">Instala o quita plugins de Home Orchestrator — solo del catálogo oficial (mismo repositorio), nunca de fuentes externas. Instalar/quitar necesita reiniciar el add-on para aplicarse.</p>
+  <div id="store-grid" class="plugin-grid"></div>
+</div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1002,12 +1011,17 @@ const I18N = {
 es: {
   topbar_eyebrow: "Gestión energética del hogar",
   topbar_subtitle: "Carga y descarga adaptativa por precio, sol y consumo real — sin cajas negras.",
-  tab_estado: "Estado actual", tab_prevision: "Previsión", tab_salud: "Salud de batería", tab_config: "Configuración",
+  tab_estado: "Estado actual", tab_prevision: "Previsión", tab_salud: "Salud de batería", tab_config: "Configuración", tab_store: "Tienda",
   lang_auto: "🌐 Auto", lang_es: "🇪🇸 Español", lang_en: "🇬🇧 English",
 
   card_plugins_title: "Plugins instalados", card_plugins_hint: "Cada plugin tiene su propia configuración — entra en el suyo para verla, en vez de todo mezclado.",
   plugin_battery_desc: "Baterías, tarifa, solar, cargas diferibles", plugin_climate_desc: "Zonas, sensores, actuadores, presets",
   back_to_plugins: "◂ Plugins",
+
+  card_store_title: "Tienda de plugins", card_store_hint: "Instala o quita plugins de Home Orchestrator — solo del catálogo oficial (mismo repositorio), nunca de fuentes externas. Instalar/quitar necesita reiniciar el add-on para aplicarse.",
+  store_loading: "Cargando catálogo…", store_error: "No se pudo cargar la tienda de plugins",
+  store_installed: "Instalado", store_not_installed: "No instalado", store_required: "Núcleo — no se puede quitar",
+  store_install: "Instalar", store_uninstall: "Quitar", store_restart_needed: "Hecho — reinicia el add-on para aplicarlo",
 
   card_estado_title: "Estado actual", btn_run_now: "Ejecutar ciclo ahora",
   card_flow_title: "Flujo de energía ahora mismo",
@@ -1310,12 +1324,17 @@ es: {
 en: {
   topbar_eyebrow: "Home energy management",
   topbar_subtitle: "Adaptive battery charge/discharge by price, sun and real consumption — no black boxes.",
-  tab_estado: "Current status", tab_prevision: "Forecast", tab_salud: "Battery health", tab_config: "Settings",
+  tab_estado: "Current status", tab_prevision: "Forecast", tab_salud: "Battery health", tab_config: "Settings", tab_store: "Store",
   lang_auto: "🌐 Auto", lang_es: "🇪🇸 Español", lang_en: "🇬🇧 English",
 
   card_plugins_title: "Installed plugins", card_plugins_hint: "Each plugin has its own settings — go into the one you need instead of everything mixed together.",
   plugin_battery_desc: "Batteries, tariff, solar, deferrable loads", plugin_climate_desc: "Zones, sensors, actuators, presets",
   back_to_plugins: "◂ Plugins",
+
+  card_store_title: "Plugin store", card_store_hint: "Install or remove Home Orchestrator plugins — official catalog only (same repository), never external sources. Installing/removing needs an add-on restart to take effect.",
+  store_loading: "Loading catalog…", store_error: "Couldn't load the plugin store",
+  store_installed: "Installed", store_not_installed: "Not installed", store_required: "Core — can't be removed",
+  store_install: "Install", store_uninstall: "Remove", store_restart_needed: "Done — restart the add-on to apply it",
 
   card_estado_title: "Current status", btn_run_now: "Run cycle now",
   card_flow_title: "Energy flow right now",
@@ -1792,6 +1811,57 @@ function switchTab(name) {
   if (name === 'prevision' && lastStatus) renderSocChart(lastStatus.plan || []);
   if (name === 'salud') loadBatteryHealth();
   if (name === 'config') backToPluginPicker();
+  if (name === 'store') loadStore();
+}
+
+// --- Tienda de plugins: instalar/quitar, distinto de "Configuración"
+// (que es solo para los plugins YA instalados, ver openPluginConfig). ---
+function pluginIconSvg(slug) {
+  const icons = {
+    battery: '<path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="currentColor"/>',
+    climate: '<path d="M12 3a3 3 0 0 0-3 3v7.1a4 4 0 1 0 6 0V6a3 3 0 0 0-3-3Zm0 2a1 1 0 0 1 1 1v7.6l.6.5a2 2 0 1 1-3.2 0l.6-.5V6a1 1 0 0 1 1-1Z" fill="currentColor"/>',
+  };
+  const path = icons[slug] || '<circle cx="12" cy="12" r="7" fill="currentColor"/>';
+  return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">${path}</svg>`;
+}
+
+async function loadStore() {
+  const grid = document.getElementById('store-grid');
+  grid.innerHTML = `<p class="empty">${t('store_loading')}</p>`;
+  let plugins;
+  try {
+    plugins = await (await fetch('api/core/plugins')).json();
+  } catch (e) {
+    grid.innerHTML = `<p class="empty">${t('store_error')}</p>`;
+    return;
+  }
+  grid.innerHTML = plugins.map(p => `
+    <div class="plugin-tile" style="cursor:default">
+      <span class="plugin-tile-icon">${pluginIconSvg(p.slug)}</span>
+      <span class="plugin-tile-name">${escapeHtml(p.name)}</span>
+      <span class="plugin-tile-desc">${escapeHtml(p.description)}</span>
+      <span class="pill ${p.installed ? 'pill-ok' : 'pill-readonly'}" style="margin-top:8px">${p.installed ? t('store_installed') : t('store_not_installed')}</span>
+      ${p.required
+        ? `<span class="help" style="margin-top:8px">${t('store_required')}</span>`
+        : `<button type="button" class="${p.installed ? 'danger' : 'secondary'}" style="margin-top:10px" onclick="togglePluginInstall('${p.slug}', ${p.installed ? 'false' : 'true'})">${p.installed ? t('store_uninstall') : t('store_install')}</button>`}
+    </div>
+  `).join('');
+}
+
+async function togglePluginInstall(slug, install) {
+  const action = install ? 'install' : 'uninstall';
+  const r = await fetch(`api/core/plugins/${slug}/${action}`, {method: 'POST'});
+  if (r.ok) {
+    toast(t('store_restart_needed'));
+    loadStore();
+  } else {
+    const body = await r.json().catch(() => ({}));
+    toast(body.error || t('store_error'));
+  }
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
 // Dentro de "Configuración": primero los iconos de los plugins instalados,
@@ -3590,11 +3660,13 @@ async function refreshStatus() {
 
 function applyWallpanelMode() {
   document.getElementById('tab-config-btn').style.display = 'none';
+  document.getElementById('tab-store-btn').style.display = 'none';
   document.getElementById('run-now-btn').style.display = 'none';
   document.getElementById('wallpanel-pill').style.display = '';
   // por si el panel de Configuración se habia quedado activo (no deberia,
   // pero por si acaso): forzar la pestaña de "Estado actual".
   if (document.querySelector('.tab-panel[data-tab="config"]').classList.contains('active')) switchTab('inicio');
+  if (document.querySelector('.tab-panel[data-tab="store"]').classList.contains('active')) switchTab('inicio');
 }
 
 (async () => {

@@ -1223,6 +1223,34 @@ def api_save_config():
     return jsonify(cfg)
 
 
+@app.get("/api/core/plugins")
+def api_list_plugins():
+    """Catalogo de plugins de Home Orchestrator (instalados o no) -- la
+    tienda de plugins de la interfaz vive en esta misma app (raiz del
+    nucleo) porque es la unica que se sirve siempre, sea cual sea el
+    resto de plugins instalados."""
+    import plugin_loader
+    return jsonify(plugin_loader.list_catalog())
+
+
+@app.post("/api/core/plugins/<slug>/install")
+def api_install_plugin(slug):
+    import plugin_loader
+    if slug not in plugin_loader.PLUGIN_REGISTRY:
+        return jsonify({"error": "plugin desconocido"}), 404
+    config_store.set_plugin_installed(slug, True)
+    return jsonify({"installed": True, "restart_required": True})
+
+
+@app.post("/api/core/plugins/<slug>/uninstall")
+def api_uninstall_plugin(slug):
+    import plugin_loader
+    if slug in plugin_loader.REQUIRED_PLUGINS:
+        return jsonify({"error": "este plugin es el nucleo, no se puede quitar"}), 400
+    config_store.set_plugin_installed(slug, False)
+    return jsonify({"installed": False, "restart_required": True})
+
+
 @app.get("/api/config/export")
 def api_export_config():
     cfg = config_store.load_config()

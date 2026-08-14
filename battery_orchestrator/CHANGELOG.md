@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.63
+**Renombrado a "Energy"**: el plugin ya no se llama "Battery" de cara al usuario (título, cabecera, selector de plugins, tienda) — pasa a "Energy Orchestrator", porque ya no solo gestiona baterías: también solar y cargas diferibles. Cambio solo de nombre visible; el slug interno (`battery`), el namespace de configuración (`plugins.battery`), el slug del add-on (`battery_orchestrator`) y todos los entity_id existentes (`sensor.battery_orchestrator_*`) se quedan exactamente igual — cero migración, cero riesgo para automatizaciones o integraciones ya montadas sobre esos nombres.
+
+**Tienda de plugins real** (pestaña "Tienda", nueva): antes solo existía un selector para configurar plugins YA instalados; ahora hay una sección aparte, con la misma estética, que lista el catálogo completo (instalados y no) con botón Instalar/Quitar. Instalar/quitar escribe en `core.installed_plugins` (nuevo campo, con migración automática — su ausencia se interpreta como "todo lo que ya traía el addon", cero cambio para instalaciones existentes) y `plugin_loader.py` ya respeta esa lista al arrancar. Energy no se puede quitar (es el núcleo, sirve la raíz). Todavía no descarga nada de red — activa/desactiva plugins que ya vienen en la imagen; la descarga real es el siguiente paso.
+
 ## 0.11.62
 **La pestaña "Configuración" pasa a ser un selector de plugins**, no el formulario en bruto directamente: al entrar aparecen los plugins instalados como tarjetas (icono + nombre + qué configura cada uno) — Battery se queda en la misma página (su formulario de siempre, ahora detrás de un clic, con un "◂ Plugins" para volver) y Climate lleva a su propia página. Prepara el terreno para que futuros plugins encajen en el mismo sitio sin mezclar su configuración con la de los demás.
 

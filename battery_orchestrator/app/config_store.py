@@ -199,6 +199,43 @@ def save_config(cfg: dict) -> None:
         _write_raw(raw)
 
 
+# ---------------------------------------------------------- nucleo/plugins -
+# Que plugins carga el nucleo al arrancar (ver plugin_loader.py) -- vive en
+# "core", no bajo el namespace de ningun plugin concreto, porque decide
+# sobre TODOS ellos por igual. Sin este campo (instalaciones de antes de
+# la tienda de plugins) se asume que estan instalados todos los que ya
+# traia el addon, para no desactivar nada en un arranque existente.
+DEFAULT_INSTALLED_PLUGINS = ["battery", "climate"]
+
+
+def get_installed_plugins() -> list[str]:
+    with _lock:
+        raw = _read_raw()
+        if not _is_namespaced(raw):
+            return list(DEFAULT_INSTALLED_PLUGINS)
+        core = raw.get("core") or {}
+        installed = core.get("installed_plugins")
+        return list(installed) if installed is not None else list(DEFAULT_INSTALLED_PLUGINS)
+
+
+def set_plugin_installed(slug: str, installed: bool) -> list[str]:
+    with _lock:
+        raw = _read_raw()
+        if not _is_namespaced(raw):
+            raw = {"schema_version": SCHEMA_ROOT_VERSION, "core": {}, "plugins": {}}
+        raw.setdefault("core", {})
+        current = raw["core"].get("installed_plugins")
+        current = list(current) if current is not None else list(DEFAULT_INSTALLED_PLUGINS)
+        if installed and slug not in current:
+            current.append(slug)
+        elif not installed and slug in current:
+            current.remove(slug)
+        raw["core"]["installed_plugins"] = current
+        raw["schema_version"] = SCHEMA_ROOT_VERSION
+        _write_raw(raw)
+        return current
+
+
 def _migrate_legacy_export_sensor_mode(cfg: dict) -> bool:
     """
     La v0.11.25 guardaba "export_sensor_mode" ("none"/"separate"/"combined")

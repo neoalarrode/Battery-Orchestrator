@@ -30,7 +30,11 @@ def main() -> None:
     for p in plugins:
         p.start_background_threads()
 
-    primary, rest = plugins[0], plugins[1:]
+    # "battery" siempre va en la raiz (ver plugin_loader.REQUIRED_PLUGINS) --
+    # se busca por slug, no por posicion, para no depender del orden en que
+    # plugin_loader haya devuelto la lista.
+    primary = next(p for p in plugins if p.slug == "battery")
+    rest = [p for p in plugins if p is not primary]
     log.info("Home Orchestrator arrancando con el plugin '%s' v%s en la raiz", primary.name, primary.version)
 
     mounts = {}

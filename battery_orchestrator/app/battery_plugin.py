@@ -19,8 +19,8 @@ from plugin_base import Plugin
 
 class BatteryPlugin(Plugin):
     slug = "battery"
-    name = "Battery Orchestrator"
-    version = "0.11.62"
+    name = "Energy Orchestrator"
+    version = "0.11.63"
 
     def flask_app(self):
         return battery_main.app

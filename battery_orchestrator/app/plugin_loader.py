@@ -105,14 +105,13 @@ PLUGIN_CATALOG = {
     "tuya": {
         "name": "Tuya Orchestrator",
         "description": "Puente de ingesta para dispositivos Tuya-por-LAN — consumo interno por Climate y/o exposición opcional a HA por MQTT",
-        "version": "0.1.0",
-        # Todavia NO descargable desde la tienda: recien construido, sin
-        # tag publicado que fijar (ver pauta de dos pasos ya seguida con
-        # Energy/Climate) y, sobre todo, sin verificar contra un
-        # dispositivo Tuya real todavia -- a diferencia de los otros dos
-        # plugins, este no ha pasado la misma prueba en produccion antes
-        # de ofrecerse para instalar.
-        "downloadable": False,
+        "version": "0.2.1",
+        "downloadable": True,
+        "tag": "v0.11.89",
+        "sha256": "8e33423a698a8a1db9a9133125b09bb9186afa06ed96fc41afd45d4f466d401b",  # sha256 real del tarball de v0.11.89, verificado contra una descarga real antes de fijarlo aqui (arregla 404: .dockerignore desfasado + downloadable:False dejaban el plugin sin existir en ningun sitio)
+        # Aun sin verificar contra un dispositivo Tuya fisico real -- el
+        # usuario es quien tiene el hardware para esa prueba.
+        "files": ["tuya_plugin.py", "tuya", "tuya_templates"],
     },
 }
 

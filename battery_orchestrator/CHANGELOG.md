@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.98
+**Quinto bug real de la misma cadena, confirmado en producción: el fix anterior (republicar discovery al reconciliar) nunca llegaba a dispararse porque "Forzar decisión" (y cualquier llamada directa a `decide_and_act`) no reintentaba resolver la capacidad pendiente** — solo `handle_reactive_event`/`refresh_forecast` lo hacían, y si ninguno de los dos se disparaba a tiempo (zona con pocos eventos reactivos, o el usuario probando con el botón manual), la zona se quedaba pillada en "no disponible"/solo "apagado" indefinidamente. Además, Climate arranca SIEMPRE antes que Tuya (orden fijo de plugins), así que una zona con un actuador de otro plugin se construye casi con toda seguridad ANTES de que ese dispositivo termine de conectar por LAN — la capacidad pendiente es el caso NORMAL al arrancar, no una rareza. Fix: `decide_and_act()` ahora también reintenta resolver la capacidad pendiente al principio, siempre — cualquier camino (reactivo, periódico, o forzado a mano) la desatasca.
+
 ## 0.11.97
 Sha256 de Climate re-pineado al tag `v0.11.96` (fix carrera de discovery MQTT) — verificado con una descarga real antes de fijarlo.
 

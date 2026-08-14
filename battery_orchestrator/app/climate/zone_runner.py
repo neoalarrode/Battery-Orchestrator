@@ -786,6 +786,21 @@ class ZoneRunner:
 
     def decide_and_act(self) -> None:
         if self._capability_pending:
+            # Bug real, confirmado en produccion: Climate arranca SIEMPRE
+            # antes que Tuya (orden fijo en core_app.py), asi que una zona
+            # con un actuador de otro plugin se construye casi seguro
+            # ANTES de que ese dispositivo haya terminado de conectar por
+            # LAN -- capacidad vacia en ese instante, "_capability_pending"
+            # se queda a True. Hasta ahora solo `handle_reactive_event`/
+            # `refresh_forecast` reintentaban resolverlo; una llamada
+            # DIRECTA a decide_and_act (p.ej. el boton "Forzar decision",
+            # ver climate_plugin.py:_refresh_zone) se limitaba a devolver
+            # "no disponible" sin volver a intentarlo, dejando la zona
+            # pillada indefinidamente si no llegaba ningun evento reactivo
+            # mientras tanto. Ahora se reintenta aqui tambien, siempre.
+            capability = self._refresh_hvac_modes()
+            self._reconcile_hvac_mode(capability)
+        if self._capability_pending:
             self.available = False
             self._maybe_publish_state()
             return

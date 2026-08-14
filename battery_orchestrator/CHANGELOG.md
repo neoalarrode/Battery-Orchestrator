@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.69
+Sha256 real de Energy pineado en el catálogo (calculado y verificado contra una descarga real del tag `v0.11.68` antes de fijarlo) — mismo procedimiento de dos pasos que ya se siguió con Climate. Con esto la tienda ya puede descargar/verificar Energy de verdad, no solo Climate.
+
 ## 0.11.68
 **Núcleo de verdad vacío**: Energy deja de ser obligatorio. Nuevo `core_shell.py` — la tienda de plugins y la copia de seguridad (`/api/core/*`) ya no viven dentro de Energy, viven en el núcleo mismo, como un Blueprint que se registra sobre quien sirva la raíz (`Plugin.serves_root`, hoy solo Energy) — o, si NINGÚN plugin instalado la sirve, el propio núcleo sirve una página de catálogo + restaurar copia de seguridad en su lugar. Con esto una instalación con cero plugins instalados ya no es un caso raro que había que evitar: es el estado inicial normal.
 

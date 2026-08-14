@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.71
+**Bug real: 404 al entrar en Climate desde el panel** — el selector de plugins y las llamadas a la API usaban rutas ABSOLUTAS (`/plugins/climate/`, `/api/...`). Bajo el proxy de ingress de HA (que antepone un token a toda la URL) una ruta absoluta se resuelve contra la raíz del dominio, no contra el prefijo de ingress — el enlace/petición se sale del túnel y HA responde 404. Corregido a rutas relativas en todos los sitios nuevos de esta fase (selector de plugins de Energy y Climate, formulario de zonas de Climate, catálogo del núcleo) — mismo criterio que ya seguía el resto de la app desde siempre (`fetch('api/status')`, nunca `fetch('/api/status')`).
+
+**Jerarquía de marca corregida**: la cabecera de Energy decía "Energy Orchestrator" como si fuera el nombre del sistema entero — ahora dice "Home Orchestrator" (eyebrow) + "Energy" (plugin), igual que ya hacían las páginas de Climate y del catálogo del núcleo.
+
 ## 0.11.70
 **Energy deja de venir precargado en la imagen** — la imagen ya solo trae el núcleo (`core_*.py`, `plugin_*.py`, `config_store.py`, `ha_websocket.py`, `ha_mqtt.py`). Verificado ANTES de desplegar con la prueba más exigente posible: un directorio con únicamente los ficheros del núcleo (sin Energy ni Climate) descargó los dos plugins de verdad desde GitHub, los verificó por sha256 y arrancó igual que producción — dashboard, tienda y todo.
 

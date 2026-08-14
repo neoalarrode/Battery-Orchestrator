@@ -184,7 +184,7 @@ function toast(msg) {
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 async function loadCatalog() {
-  const r = await fetch('/api/core/plugins');
+  const r = await fetch('api/core/plugins');
   const plugins = await r.json();
   document.getElementById('plugin-grid').innerHTML = plugins.map(p => `
     <div class="plugin-tile">
@@ -199,7 +199,7 @@ async function loadCatalog() {
 }
 
 async function install(slug) {
-  const r = await fetch(`/api/core/plugins/${slug}/install`, {method: 'POST'});
+  const r = await fetch(`api/core/plugins/${slug}/install`, {method: 'POST'});
   if (r.ok) { toast('Instalado — reinicia el add-on para aplicarlo'); loadCatalog(); }
   else { const b = await r.json().catch(() => ({})); toast(b.error || 'Fallo al instalar'); }
 }
@@ -210,7 +210,7 @@ async function restoreBackup(input) {
   try {
     const text = await file.text();
     const bundle = JSON.parse(text);
-    const r = await fetch('/api/core/backup/restore', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(bundle)});
+    const r = await fetch('api/core/backup/restore', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(bundle)});
     const body = await r.json();
     if (r.ok) {
       toast(`Restaurado (${body.restored_files.length} ficheros, ${body.ensured_plugins.length} plugin(s)) — reinicia el add-on`);

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Energy Orchestrator</title>
+<title>Home Orchestrator — Energy</title>
 <!-- Favicon en linea (mismo cuadrado degradado violeta->cian y rayo que el
      "brand-mark" de la cabecera) — sin depender de servir un archivo aparte. -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%3E%3Cdefs%3E%3ClinearGradient%20id%3D%27g%27%20x1%3D%270%27%20y1%3D%270%27%20x2%3D%2724%27%20y2%3D%2724%27%20gradientUnits%3D%27userSpaceOnUse%27%3E%3Cstop%20offset%3D%270%27%20stop-color%3D%27%238b5cf6%27%2F%3E%3Cstop%20offset%3D%271%27%20stop-color%3D%27%2322d3ee%27%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%2724%27%20height%3D%2724%27%20rx%3D%276%27%20fill%3D%27url%28%23g%29%27%2F%3E%3Cpath%20d%3D%27M13%202%204%2014h6l-1%208%209-12h-6l1-8Z%27%20fill%3D%27%230b0a16%27%2F%3E%3C%2Fsvg%3E">
@@ -457,18 +457,18 @@
 
 <div class="topbar">
   <div>
-    <p class="eyebrow" data-i18n="topbar_eyebrow">Gestión energética del hogar</p>
+    <p class="eyebrow" data-i18n="topbar_eyebrow">Home Orchestrator</p>
     <h1><span class="brand-mark" aria-hidden="true">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="currentColor"/>
       </svg>
-    </span>Energy Orchestrator</h1>
+    </span>Energy</h1>
     <div class="subtitle" data-i18n="topbar_subtitle">Carga y descarga adaptativa por precio, sol y consumo real — sin cajas negras.</div>
   </div>
   <div class="topbar-right">
     <nav class="plugin-switch" aria-label="Cambiar de plugin">
-      <a href="/" class="current"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="currentColor"/></svg>Energy</a>
-      <a href="/plugins/climate/"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v7.1a4 4 0 1 0 6 0V6a3 3 0 0 0-3-3Zm0 2a1 1 0 0 1 1 1v7.6l.6.5a2 2 0 1 1-3.2 0l.6-.5V6a1 1 0 0 1 1-1Z" fill="currentColor"/></svg>Climate</a>
+      <a href="./" class="current"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="currentColor"/></svg>Energy</a>
+      <a href="plugins/climate/"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v7.1a4 4 0 1 0 6 0V6a3 3 0 0 0-3-3Zm0 2a1 1 0 0 1 1 1v7.6l.6.5a2 2 0 1 1-3.2 0l.6-.5V6a1 1 0 0 1 1-1Z" fill="currentColor"/></svg>Climate</a>
     </nav>
     <select class="lang-select" id="lang-select" onchange="onLangChange()" aria-label="Idioma / Language"></select>
     <span id="wallpanel-pill" class="pill pill-readonly" style="display:none" data-i18n="wallpanel_pill">SOLO LECTURA</span>
@@ -593,7 +593,7 @@
         <span class="plugin-tile-name">Energy</span>
         <span class="plugin-tile-desc" data-i18n="plugin_battery_desc">Baterías, tarifa, solar, cargas diferibles</span>
       </button>
-      <a class="plugin-tile" href="/plugins/climate/">
+      <a class="plugin-tile" href="plugins/climate/">
         <span class="plugin-tile-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v7.1a4 4 0 1 0 6 0V6a3 3 0 0 0-3-3Zm0 2a1 1 0 0 1 1 1v7.6l.6.5a2 2 0 1 1-3.2 0l.6-.5V6a1 1 0 0 1 1-1Z" fill="currentColor"/></svg></span>
         <span class="plugin-tile-name">Climate</span>
         <span class="plugin-tile-desc" data-i18n="plugin_climate_desc">Zonas, sensores, actuadores, presets</span>
@@ -1009,7 +1009,7 @@
    ============================================================ */
 const I18N = {
 es: {
-  topbar_eyebrow: "Gestión energética del hogar",
+  topbar_eyebrow: "Home Orchestrator",
   topbar_subtitle: "Carga y descarga adaptativa por precio, sol y consumo real — sin cajas negras.",
   tab_estado: "Estado actual", tab_prevision: "Previsión", tab_salud: "Salud de batería", tab_config: "Configuración", tab_store: "Tienda",
   lang_auto: "🌐 Auto", lang_es: "🇪🇸 Español", lang_en: "🇬🇧 English",
@@ -1323,7 +1323,7 @@ es: {
   toast_deferrable_rescheduled: "Se volverá a programar en el próximo ciclo.",
 },
 en: {
-  topbar_eyebrow: "Home energy management",
+  topbar_eyebrow: "Home Orchestrator",
   topbar_subtitle: "Adaptive battery charge/discharge by price, sun and real consumption — no black boxes.",
   tab_estado: "Current status", tab_prevision: "Forecast", tab_salud: "Battery health", tab_config: "Settings", tab_store: "Store",
   lang_auto: "🌐 Auto", lang_es: "🇪🇸 Español", lang_en: "🇬🇧 English",

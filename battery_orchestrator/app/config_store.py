@@ -7,13 +7,27 @@ Se guarda en un JSON dentro del directorio persistente del addon.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 import uuid
 
+log = logging.getLogger("config_store")
+
 CONFIG_PATH = os.environ.get("CONFIG_PATH", "/data/config.json")
 
 _lock = threading.RLock()  # reentrante: load_config() llama a save_config() en el primer arranque
+
+# Nombre de este plugin dentro del fichero de config compartido por el
+# nucleo de plugins (ver DOCS del nucleo / plugins.json en la raiz del
+# repo) -- el fichero en disco pasa a tener namespace por plugin
+# (`plugins.<slug>`) para que, el dia que haya mas de un plugin
+# compartiendo instalacion, cada uno tenga su seccion propia sin pisarse.
+# TODO EL RESTO de este modulo sigue trabajando con el dict PLANO de
+# siempre (baterias/tarifa/...) -- el namespacing es un detalle de
+# `load_config`/`save_config`, invisible para el resto de la app.
+PLUGIN_KEY = "battery"
+SCHEMA_ROOT_VERSION = 2
 
 DEFAULT_CONFIG = {
     "batteries": [],
@@ -98,19 +112,52 @@ DEFAULT_DEFERRABLE_LOAD = {
 }
 
 
+def _is_namespaced(data) -> bool:
+    return isinstance(data, dict) and isinstance(data.get("plugins"), dict)
+
+
+def _read_raw() -> dict | None:
+    if not os.path.exists(CONFIG_PATH):
+        return None
+    with open(CONFIG_PATH) as f:
+        return json.load(f)
+
+
+def _write_raw(root: dict) -> None:
+    os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+    with open(CONFIG_PATH, "w") as f:
+        json.dump(root, f, indent=2, ensure_ascii=False)
+
+
 def load_config() -> dict:
     with _lock:
-        if not os.path.exists(CONFIG_PATH):
-            save_config(DEFAULT_CONFIG)
+        raw = _read_raw()
+        if raw is None:
+            _write_raw({
+                "schema_version": SCHEMA_ROOT_VERSION, "core": {},
+                "plugins": {PLUGIN_KEY: json.loads(json.dumps(DEFAULT_CONFIG))},
+            })
             return json.loads(json.dumps(DEFAULT_CONFIG))
-        with open(CONFIG_PATH) as f:
-            cfg = json.load(f)
+
+        format_migrated = False
+        if not _is_namespaced(raw):
+            # Fichero de antes del nucleo de plugins: la config de Battery
+            # estaba en la RAIZ del fichero, sin envolver. Se traslada tal
+            # cual bajo "plugins.battery" -- nunca se pierde ni se toca
+            # ningun valor, solo cambia donde vive dentro del JSON. Una
+            # sola vez: en cuanto se guarda en el formato nuevo, los
+            # siguientes arranques ya entran directos por la rama de abajo.
+            log.info("Config en formato antiguo (plano, antes del nucleo de plugins) -- migrando a plugins.%s", PLUGIN_KEY)
+            raw = {"schema_version": SCHEMA_ROOT_VERSION, "core": {}, "plugins": {PLUGIN_KEY: raw}}
+            format_migrated = True
+
+        battery_cfg = (raw.get("plugins") or {}).get(PLUGIN_KEY) or {}
         # completar claves que falten (por si se actualiza el esquema)
         merged = json.loads(json.dumps(DEFAULT_CONFIG))
-        _deep_merge(merged, cfg)
-        migrated = _migrate_legacy_pv_sensor(merged)
-        migrated = _migrate_legacy_export_sensor_mode(merged) or migrated
-        if migrated:
+        _deep_merge(merged, battery_cfg)
+        schema_migrated = _migrate_legacy_pv_sensor(merged)
+        schema_migrated = _migrate_legacy_export_sensor_mode(merged) or schema_migrated
+        if format_migrated or schema_migrated:
             save_config(merged)
         return merged
 
@@ -138,10 +185,18 @@ def _migrate_legacy_pv_sensor(cfg: dict) -> bool:
 
 
 def save_config(cfg: dict) -> None:
-    os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+    """`cfg` sigue siendo el dict PLANO de siempre (baterias/tarifa/...) --
+    todo el resto de la app sigue llamando a esta funcion exactamente igual
+    que antes, sin enterarse del namespacing. Por debajo se guarda dentro
+    de "plugins.battery", preservando lo que ya hubiera en "core" (o en
+    otros plugins, el dia que compartan fichero) en vez de machacarlo."""
     with _lock:
-        with open(CONFIG_PATH, "w") as f:
-            json.dump(cfg, f, indent=2, ensure_ascii=False)
+        raw = _read_raw()
+        if not _is_namespaced(raw):
+            raw = {"schema_version": SCHEMA_ROOT_VERSION, "core": {}, "plugins": {}}
+        raw.setdefault("plugins", {})[PLUGIN_KEY] = cfg
+        raw["schema_version"] = SCHEMA_ROOT_VERSION
+        _write_raw(raw)
 
 
 def _migrate_legacy_export_sensor_mode(cfg: dict) -> bool:

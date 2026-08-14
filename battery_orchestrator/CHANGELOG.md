@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.11.56
+**Primer paso hacia Home Orchestrator**: el proyecto se reorganiza como núcleo de plugins — Battery pasa a ser el primer plugin, cargado por un cargador propio (`plugin_loader.py`) a través de un contrato mínimo (`plugin_base.py`). Nuevo punto de entrada `core_app.py` (antes `main.py` directo); `main.py` sigue intacto por dentro, sin mover ninguno de sus ~20 módulos (`ha_client.py`, `scheduler.py`, `battery_exec.py`...) — cero cambio de comportamiento, es una fachada sobre el mismo código de siempre.
+
+**Migración automática de configuración**: `config.json` pasa de formato plano (baterías/tarifa/... en la raíz) a formato con namespace por plugin (`plugins.battery`), para que futuros plugins tengan su propia sección sin pisarse. La migración es automática y transparente al arrancar — verificada exhaustivamente contra la configuración real de producción (4 baterías, credenciales EcoFlow, tarifa, arrays solares) antes de publicar esta versión: ningún valor se pierde ni se altera, y `load_config()`/`save_config()` siguen devolviendo/aceptando el mismo dict plano de siempre, así que ningún otro módulo necesita cambiar una línea.
+
+De momento el cargador de plugins SOLO carga plugins de primera parte incluidos en este mismo repo (ver `plugins.json` en la raíz, el registro oficial) — la descarga dinámica de plugins queda para una fase posterior, pendiente de decidir cómo se verifican/firman antes de ejecutar código dentro de un proceso con credenciales reales.
+
+El add-on sigue siendo el mismo (`slug: battery_orchestrator` sin cambios) — Supervisor no lo trata como una instalación nueva, no hace falta reconfigurar nada.
+
 ## 0.11.55
 **Nuevo: ciclo de planificación reactivo, vía WebSocket** (`ha_websocket.py`, nuevo módulo). Hasta ahora todo el add-on funcionaba por sondeo: `run_cycle` solo se relanzaba cada `cycle_seconds` (30-60s típico), aunque el consumo o el solar cambiaran mucho antes. Ahora el add-on abre una conexión WebSocket persistente a HA (`/api/websocket`), se suscribe a `state_changed` de los sensores que declares (consumo, solar, SOC/potencia de baterías por HA, PVPC si aplica), y en cuanto cambian de verdad dispara una reevaluación del ciclo en segundos, no en minutos.
 

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "note": "Registro de plugins oficiales de Home Orchestrator. Solo plugins de este mismo repositorio/organizacion (neoalarrode) -- no se admiten repos personalizados de terceros, para no abrir ejecucion de codigo sin verificar dentro de un addon con credenciales reales (EcoFlow, HA...). La descarga/verificacion dinamica de plugins desde este registro es una fase posterior; por ahora el cargador (app/plugin_loader.py) solo carga el plugin de primera parte incluido en este mismo repo.",
+  "plugins": [
+    {
+      "slug": "battery",
+      "name": "Battery Orchestrator",
+      "description": "Carga y descarga adaptativa de baterias por precio, sol y consumo real",
+      "path": "battery_orchestrator",
+      "repo": "neoalarrode/Home-Orchestrator",
+      "version": "0.11.56"
+    }
+  ]
+}

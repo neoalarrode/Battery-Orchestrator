@@ -2061,15 +2061,23 @@ def _run_wallpanel_server():
         log.warning(f"No se pudo abrir el puerto wallpanel ({WALLPANEL_PORT}): {e}")
 
 
+def start_background_threads() -> None:
+    """
+    Arranca todos los hilos de fondo de Battery. Extraido a funcion propia
+    (antes vivia directo en `if __name__ == "__main__":`) para que el
+    nucleo de plugins (ver plugin_loader.py/core_app.py) pueda arrancarlos
+    sin duplicar esta lista en dos sitios -- el modo standalone de mas
+    abajo (`python3 main.py` directo, sin pasar por el nucleo, util para
+    desarrollo local) sigue funcionando exactamente igual, solo que ahora
+    llama a esta misma funcion en vez de repetir el codigo.
+    """
+    threading.Thread(target=background_loop, daemon=True).start()
+    threading.Thread(target=_live_sensor_loop, daemon=True).start()
+    threading.Thread(target=_run_wallpanel_server, daemon=True).start()
+    threading.Thread(target=_ha_ws_client.run_forever, daemon=True).start()
+    threading.Thread(target=_reactive_trigger.worker_loop, daemon=True).start()
+
+
 if __name__ == "__main__":
-    t = threading.Thread(target=background_loop, daemon=True)
-    t.start()
-    live_t = threading.Thread(target=_live_sensor_loop, daemon=True)
-    live_t.start()
-    wp = threading.Thread(target=_run_wallpanel_server, daemon=True)
-    wp.start()
-    ws_t = threading.Thread(target=_ha_ws_client.run_forever, daemon=True)
-    ws_t.start()
-    reactive_t = threading.Thread(target=_reactive_trigger.worker_loop, daemon=True)
-    reactive_t.start()
+    start_background_threads()
     app.run(host="0.0.0.0", port=8099, threaded=True)

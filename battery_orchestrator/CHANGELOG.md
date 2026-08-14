@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.75
+Sin cambios de codigo -- version puente para poder pinear el sha256 real de Energy/Climate contra un tarball que YA incluye el selector de plugins dinamico de 0.11.74 (ver 0.11.76).
+
 ## 0.11.74
 **Plugin de Tuya completo (todavía no instalable desde la tienda)**: `device_manager.py` (puente sincrono/asincrono — un solo event loop de asyncio en su propio hilo para todos los dispositivos, `tuya_lan.py` empuja los cambios solo, sin patrón reactivo propio duplicado), `mqtt_tuya.py` (Discovery genérico por dominio — switch/sensor/number/binary_sensor/select/climate, no solo termostatos), `tuya_plugin.py` + interfaz de alta de dispositivos (perfil YAML declarativo, igual que Tuya Orchestrator).
 

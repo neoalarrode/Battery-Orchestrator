@@ -1,5 +1,5 @@
 name: "Home Orchestrator — Energy"
-version: "0.11.90"
+version: "0.11.91"
 slug: "battery_orchestrator"
 description: "Baterias, solar y cargas diferibles, sin cajas negras — plugin Energy de Home Orchestrator"
 url: "https://github.com/neoalarrode/Home-Orchestrator"
@@ -17,6 +17,17 @@ panel_title: "Home Orchestrator — Energy"
 homeassistant_api: true
 services:
   - mqtt:want
+# host_network: el descubrimiento de Tuya-por-LAN (tuya/discovery.py)
+# escucha paquetes de BROADCAST UDP en los puertos 6666/6667/7000 -- eso
+# nunca llega a un contenedor en la red bridge aislada de Docker, publicar
+# esos puertos individualmente tampoco basta (un broadcast no es una
+# conexion dirigida). Es el mismo patron que usan el resto de addons de
+# descubrimiento en LAN (ESPHome, etc.). Efecto secundario: el puerto
+# 8098/tcp del wallpanel queda expuesto directamente en el host sin pasar
+# por el mapeo de Docker -- sigue siendo el mismo puerto de siempre, pero
+# ahora "ports"/"ports_description" (mas abajo) el Supervisor los ignora
+# en este modo, se dejan solo como documentacion de que puerto es.
+host_network: true
 ports:
   8098/tcp: 8098
 ports_description:

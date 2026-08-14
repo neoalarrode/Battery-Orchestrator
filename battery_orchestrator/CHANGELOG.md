@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.91
+**Cambio de red — el descubrimiento de Tuya-por-LAN no podía funcionar todavía.** `tuya/discovery.py` escucha paquetes de BROADCAST UDP en los puertos 6666/6667/7000 (así se anuncian los dispositivos Tuya en la red local), pero `config.yaml` no declaraba `host_network` ni ningún puerto UDP — el addon corría en la red bridge aislada de Docker por defecto, y un broadcast del LAN nunca llega ahí (publicar los puertos individualmente tampoco basta: un broadcast no es una conexión dirigida a un puerto concreto). Se añade `host_network: true` — mismo patrón que usan otros addons de descubrimiento en LAN (ESPHome y similares). Efecto secundario esperado: el addon pasa a compartir la pila de red del host directamente (sin el aislamiento de la NAT/bridge de Docker) — los puertos 8098 (wallpanel)/8099 (ingress) siguen siendo los mismos de siempre.
+
 ## 0.11.90
 Sha256 de Tuya re-pineado al tag `v0.11.89` (ahora descargable de verdad) — verificado con una descarga real antes de fijarlo.
 

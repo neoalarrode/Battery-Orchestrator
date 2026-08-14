@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.57
+Declara `services: [mqtt:want]` en `config.yaml` — Supervisor aprovisiona automáticamente credenciales del broker MQTT local (Mosquitto) al propio addon, vía `http://supervisor/services/mqtt`, sin ninguna acción manual del usuario. Preparación para el plugin de Climate (fase 2, MQTT Discovery) — todavía no se usa MQTT hacia el broker local en esta versión, solo se solicita el acceso.
+
 ## 0.11.56
 **Primer paso hacia Home Orchestrator**: el proyecto se reorganiza como núcleo de plugins — Battery pasa a ser el primer plugin, cargado por un cargador propio (`plugin_loader.py`) a través de un contrato mínimo (`plugin_base.py`). Nuevo punto de entrada `core_app.py` (antes `main.py` directo); `main.py` sigue intacto por dentro, sin mover ninguno de sus ~20 módulos (`ha_client.py`, `scheduler.py`, `battery_exec.py`...) — cero cambio de comportamiento, es una fachada sobre el mismo código de siempre.
 

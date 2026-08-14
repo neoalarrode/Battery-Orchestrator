@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.76
+Sha256 de Energy y Climate re-pineados al tag `v0.11.75` (ya incluye el selector de plugins dinámico de 0.11.74) — verificado con una descarga real de ambos antes de fijarlo. Corrige que el selector dinámico llevaba dos versiones desplegado sin efecto real: el código descargado en producción seguía siendo el de antes del cambio, porque nada disparó una re-descarga tras el commit anterior.
+
 ## 0.11.75
 Sin cambios de codigo -- version puente para poder pinear el sha256 real de Energy/Climate contra un tarball que YA incluye el selector de plugins dinamico de 0.11.74 (ver 0.11.76).
 

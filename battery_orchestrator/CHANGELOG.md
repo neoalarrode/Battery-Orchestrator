@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.95
+Sha256 de Climate y Tuya re-pineados al tag `v0.11.94` (fix capability/fan_modes de actuadores de otro plugin) — verificado con una descarga real antes de fijarlo.
+
 ## 0.11.94
 **Tres bugs reales, confirmados en producción contra el AC real del usuario (Salón, AirClima 12000 vía Tuya): la zona nunca ofrecía los modos de ventilador reales ni pasaba a "ventilador" en vez de apagar del todo.**
 

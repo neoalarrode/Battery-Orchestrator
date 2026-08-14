@@ -96,19 +96,19 @@ PLUGIN_CATALOG = {
     "climate": {
         "name": "Climate Orchestrator",
         "description": "Termostatos adaptativos por zona, expuestos como climate.* nativos de HA (HomeKit/Matter) vía MQTT Discovery",
-        "version": "0.2.5",  # version PROPIA del plugin (ClimatePlugin.version) -- distinta de "tag", que es la version del REPO de la que se descarga
+        "version": "0.2.6",  # version PROPIA del plugin (ClimatePlugin.version) -- distinta de "tag", que es la version del REPO de la que se descarga
         "downloadable": True,
-        "tag": "v0.11.87",
-        "sha256": "28c778cdb47ce070ca6f1b8c56452e5d777ede62ec34a03c6c2f04992aeeef0a",  # sha256 real del tarball de v0.11.87, verificado contra una descarga real antes de fijarlo aqui (modulacion de consigna + anticipar ocupacion)
+        "tag": "v0.11.94",
+        "sha256": "c8f301344913302f4c797cfa2940b95d2ae17627aff1c7c7b7ecaea8122f8216",  # sha256 real del tarball de v0.11.94, verificado contra una descarga real antes de fijarlo aqui (fix capability/fan_modes de actuadores de otro plugin)
         "files": ["climate_plugin.py", "climate", "climate_templates"],
     },
     "tuya": {
         "name": "Tuya Orchestrator",
         "description": "Puente de ingesta para dispositivos Tuya-por-LAN — consumo interno por Climate y/o exposición opcional a HA por MQTT",
-        "version": "0.2.2",
+        "version": "0.2.3",
         "downloadable": True,
-        "tag": "v0.11.92",
-        "sha256": "7da454210fdcdfdd1a127e8cb9933650156be6760684595a65dc2cc076f07610",  # sha256 real del tarball de v0.11.92, verificado contra una descarga real antes de fijarlo aqui (fix: save_devices borraba la cuenta Tuya vinculada)
+        "tag": "v0.11.94",
+        "sha256": "c8f301344913302f4c797cfa2940b95d2ae17627aff1c7c7b7ecaea8122f8216",  # sha256 real del tarball de v0.11.94, verificado contra una descarga real antes de fijarlo aqui (TuyaClimateHandle: hvac_modes/fan_modes/set_fan_mode reales)
         # Aun sin verificar contra un dispositivo Tuya fisico real -- el
         # usuario es quien tiene el hardware para esa prueba.
         "files": ["tuya_plugin.py", "tuya", "tuya_templates"],

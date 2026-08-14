@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.11.74
+**Plugin de Tuya completo (todavía no instalable desde la tienda)**: `device_manager.py` (puente sincrono/asincrono — un solo event loop de asyncio en su propio hilo para todos los dispositivos, `tuya_lan.py` empuja los cambios solo, sin patrón reactivo propio duplicado), `mqtt_tuya.py` (Discovery genérico por dominio — switch/sensor/number/binary_sensor/select/climate, no solo termostatos), `tuya_plugin.py` + interfaz de alta de dispositivos (perfil YAML declarativo, igual que Tuya Orchestrator).
+
+Verificado con pruebas reales de lógica (sin dispositivo físico a mano): perfil real → fachada `TuyaClimateHandle` computando modo/temperaturas correctamente; publicación MQTT Discovery + estado + enrutado de comandos con un broker simulado. Los tres plugins (Energy/Climate/Tuya) montados juntos arrancan limpios.
+
+**Selector de plugins de la cabecera y el panel de "Configuración" pasan a ser dinámicos** (antes: HTML fijo con Battery/Climate a mano) — se generan desde `/api/core/plugins`, mostrando solo lo que está instalado de verdad. Corrige un fallo latente: un enlace fijo a un plugin desinstalado habría quedado muerto.
+
+Tuya se queda fuera de la tienda (`downloadable: false`) hasta poder verificarlo contra un dispositivo real — mismo criterio de no ofrecer instalar algo que no se ha probado en producción todavía.
+
 ## 0.11.73
 **Arranque del plugin de Tuya** (tercer plugin, en construcción — todavía no se carga ni aparece en la tienda). Diseño: dispositivos Tuya consumidos de dos formas — internamente por Climate (nuevo tipo de actuador resuelto en el mismo proceso, sin pasar por HA) y, opcionalmente, expuestos a HA por MQTT Discovery para cualquier dominio (no solo climates: switch, sensor, number, binary_sensor, select).
 

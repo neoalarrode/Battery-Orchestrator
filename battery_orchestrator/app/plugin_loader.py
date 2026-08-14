@@ -50,8 +50,14 @@ def _climate():
     return ClimatePlugin()
 
 
+def _tuya():
+    _prefer_downloaded("tuya")
+    from tuya_plugin import TuyaPlugin
+    return TuyaPlugin()
+
+
 # Slug -> constructor.
-PLUGIN_REGISTRY = {"battery": _battery, "climate": _climate}
+PLUGIN_REGISTRY = {"battery": _battery, "climate": _climate, "tuya": _tuya}
 
 # Metadatos + procedencia verificada para la tienda de plugins de la
 # interfaz -- deliberadamente SIN instanciar nada aqui (un plugin no
@@ -73,7 +79,7 @@ PLUGIN_CATALOG = {
     "battery": {
         "name": "Energy Orchestrator",
         "description": "Baterías, solar y cargas diferibles — carga y descarga adaptativa por precio, sol y consumo real",
-        "version": "0.11.72",
+        "version": "0.11.74",
         "downloadable": True,
         "tag": "v0.11.71",
         "sha256": "263f3180c72680567b40bd71338acf9e1875bb0e3f990624337118fde1e94853",  # sha256 real del tarball de v0.11.71, verificado contra una descarga real antes de fijarlo aqui
@@ -95,6 +101,18 @@ PLUGIN_CATALOG = {
         "tag": "v0.11.71",
         "sha256": "263f3180c72680567b40bd71338acf9e1875bb0e3f990624337118fde1e94853",  # sha256 real del tarball de v0.11.71, verificado contra una descarga real antes de fijarlo aqui (re-pineado: el fix de rutas relativas tocaba climate_templates/index.html)
         "files": ["climate_plugin.py", "climate", "climate_templates"],
+    },
+    "tuya": {
+        "name": "Tuya Orchestrator",
+        "description": "Puente de ingesta para dispositivos Tuya-por-LAN — consumo interno por Climate y/o exposición opcional a HA por MQTT",
+        "version": "0.1.0",
+        # Todavia NO descargable desde la tienda: recien construido, sin
+        # tag publicado que fijar (ver pauta de dos pasos ya seguida con
+        # Energy/Climate) y, sobre todo, sin verificar contra un
+        # dispositivo Tuya real todavia -- a diferencia de los otros dos
+        # plugins, este no ha pasado la misma prueba en produccion antes
+        # de ofrecerse para instalar.
+        "downloadable": False,
     },
 }
 

@@ -244,10 +244,7 @@
     <div class="subtitle">Termostatos adaptativos por zona, expuestos como entidades <code>climate.*</code> nativas de HA (HomeKit/Matter incluido) — sin cajas negras.</div>
   </div>
   <div class="topbar-right">
-    <nav class="plugin-switch" aria-label="Cambiar de plugin">
-      <a href="../../"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="currentColor"/></svg>Energy</a>
-      <a href="./" class="current"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v7.1a4 4 0 1 0 6 0V6a3 3 0 0 0-3-3Zm0 2a1 1 0 0 1 1 1v7.6l.6.5a2 2 0 1 1-3.2 0l.6-.5V6a1 1 0 0 1 1-1Z" fill="currentColor"/></svg>Climate</a>
-    </nav>
+    <nav class="plugin-switch" id="plugin-switch-nav" aria-label="Cambiar de plugin"></nav>
   </div>
 </div>
 
@@ -589,8 +586,36 @@ async function submitZoneForm(ev) {
   return false;
 }
 
+// Selector de plugins de la cabecera -- dinamico, a partir de
+// /api/core/plugins (solo lo instalado). Esta pagina cuelga de
+// "plugins/climate/", asi que Energy queda dos niveles arriba.
+const PLUGIN_SWITCH_ICONS = {
+  battery: '<path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="currentColor"/>',
+  climate: '<path d="M12 3a3 3 0 0 0-3 3v7.1a4 4 0 1 0 6 0V6a3 3 0 0 0-3-3Zm0 2a1 1 0 0 1 1 1v7.6l.6.5a2 2 0 1 1-3.2 0l.6-.5V6a1 1 0 0 1 1-1Z" fill="currentColor"/>',
+  tuya: '<path d="M6 4h9a2 2 0 0 1 2 2v9l-7 7-9-9V6a2 2 0 0 1 2-2Zm2.5 2.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z" fill="currentColor"/>',
+};
+const PLUGIN_SWITCH_LABEL = { battery: 'Energy', climate: 'Climate', tuya: 'Tuya' };
+async function renderPluginSwitch() {
+  try {
+    // /api/core/* SOLO existe en la app raiz (Energy, o el catalogo del
+    // nucleo si no hay ninguna) -- esta pagina cuelga de "plugins/climate/",
+    // asi que hay que subir dos niveles para llegar a ella. Una ruta
+    // relativa "api/core/..." aqui pegaria contra la app de Climate
+        // (montada aparte via DispatcherMiddleware), que no tiene esas rutas.
+    const plugins = await (await fetch('../../api/core/plugins')).json();
+    const nav = document.getElementById('plugin-switch-nav');
+    nav.innerHTML = plugins.filter(p => p.installed).map(p => {
+      const href = p.slug === 'battery' ? '../../' : (p.slug === 'climate' ? './' : `../${p.slug}/`);
+      const current = p.slug === 'climate' ? ' class="current"' : '';
+      const icon = PLUGIN_SWITCH_ICONS[p.slug] || '';
+      return `<a href="${href}"${current}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">${icon}</svg>${PLUGIN_SWITCH_LABEL[p.slug] || p.name}</a>`;
+    }).join('');
+  } catch (e) { /* no bloquea el resto de la pagina */ }
+}
+
 loadZones();
 loadStatus();
+renderPluginSwitch();
 setInterval(loadZones, 8000);
 setInterval(loadStatus, 8000);
 </script>

@@ -35,7 +35,7 @@ REACTIVE_MIN_INTERVAL_SECONDS = 5
 class ClimatePlugin(Plugin):
     slug = "climate"
     name = "Climate Orchestrator"
-    version = "0.2.3"
+    version = "0.2.4"
 
     def __init__(self) -> None:
         self._runners: dict[str, ZoneRunner] = {}
@@ -180,6 +180,23 @@ class ClimatePlugin(Plugin):
             self._stop_zone(zone_id)
             ok = zone_store.delete_zone(zone_id)
             return flask.jsonify({"deleted": ok})
+
+        @app.get("/api/zones/<zone_id>/forecast")
+        def _zone_forecast(zone_id):
+            """Datos del grafico de 24h de la zona (historico real + mitad
+            futura proyectada EN VIVO con el mismo motor de decision, ver
+            climate/zone_forecast.py) -- se calcula bajo demanda, nunca en
+            el ciclo periodico normal (implica varias consultas de
+            historico a HA, deliberadamente fuera del camino caliente)."""
+            runner = self._runners.get(zone_id)
+            if not runner:
+                return flask.jsonify({"error": "zona no encontrada o no arrancada"}), 404
+            try:
+                points = runner.build_forecast_chart()
+            except Exception:
+                log.exception("Fallo calculando el grafico de zona %s", zone_id)
+                return flask.jsonify({"error": "fallo calculando la previsión"}), 500
+            return flask.jsonify(points)
 
         @app.post("/api/zones/<zone_id>/refresh")
         def _refresh_zone(zone_id):

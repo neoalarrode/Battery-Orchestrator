@@ -26,7 +26,7 @@ import hashlib
 import logging
 from datetime import datetime, timezone
 
-from . import ema as ema_module, grid_signal, outdoor, power_model, presets as presets_module, scheduler, thermal_model, window_algorithm
+from . import ema as ema_module, grid_signal, outdoor, power_model, presets as presets_module, scheduler, thermal_model, window_algorithm, zone_forecast
 from .const import (
     CONF_AUTO_WINDOW_DETECTION,
     CONF_CLIMATE_ENTITIES,
@@ -386,6 +386,72 @@ class ZoneRunner:
 
     def _effective_capability(self) -> str:
         return {"heat": "heat", "cool": "cool", "heat_cool": "heat_cool", **_PASSTHROUGH_MODES}.get(self.hvac_mode, "none")
+
+    # ---------------------------------------------- accesores para zone_forecast.py -
+    # Envoltorios PUBLICOS de estado ya existente -- zone_forecast.py (ver
+    # ese modulo) necesita leer targets/modelo termico actuales para
+    # construir el grafico de previsión, sin tener que reimplementar la
+    # resolucion de presets ni volver a aprender el modelo termico el solo.
+
+    def wants_heat_cool(self) -> tuple[bool, bool]:
+        capability = self._effective_capability()
+        return capability in ("heat", "heat_cool"), capability in ("cool", "heat_cool")
+
+    def current_targets(self) -> tuple[float | None, float | None]:
+        """(heat_target, cool_target) tal y como los usa `decide_and_act`
+        AHORA MISMO -- el preset activo de verdad, resuelto por presencia
+        real o modo manual. Sirve de base para el punto de partida de la
+        proyeccion futura del grafico."""
+        wants_heat, wants_cool = self.wants_heat_cool()
+        preset_name, _reason = presets_module.resolve_active_preset_name(
+            self._preset_mode, [p["name"] for p in self._presets],
+            self.zone.get(CONF_PRESENCE_PRESET, ""), self.zone.get(CONF_AWAY_PRESET, ""),
+            self._presence_now(),
+        )
+        return self._resolve_preset_targets(preset_name, wants_heat, wants_cool)
+
+    def preset_targets_for_occupancy(self, occupied_likely: bool | None) -> tuple[float | None, float | None, str]:
+        """(heat_target, cool_target, nombre_preset) que estaria activo si
+        la presencia fuese `occupied_likely` en vez de la real -- para
+        proyectar horas futuras segun el patron HISTORICO de ocupacion
+        (ver zone_forecast.py), nunca para decidir de verdad: modo
+        "manual" nunca se sustituye (una anulacion a mano vale para
+        cualquier hora, pasada o futura), y sin dato de patron
+        (`occupied_likely is None`) se cae al preset activo real de ahora
+        mismo -- nunca se inventa una ocupacion que no esta en el
+        historico."""
+        wants_heat, wants_cool = self.wants_heat_cool()
+        if self._preset_mode == presets_module.PRESET_MANUAL or occupied_likely is None:
+            preset_name, _reason = presets_module.resolve_active_preset_name(
+                self._preset_mode, [p["name"] for p in self._presets],
+                self.zone.get(CONF_PRESENCE_PRESET, ""), self.zone.get(CONF_AWAY_PRESET, ""),
+                self._presence_now(),
+            )
+        else:
+            preset_name, _reason = presets_module.resolve_active_preset_name(
+                presets_module.PRESET_AUTO, [p["name"] for p in self._presets],
+                self.zone.get(CONF_PRESENCE_PRESET, ""), self.zone.get(CONF_AWAY_PRESET, ""),
+                occupied_likely,
+            )
+        heat, cool = self._resolve_preset_targets(preset_name, wants_heat, wants_cool)
+        return heat, cool, preset_name
+
+    def _resolve_preset_targets(self, preset_name: str, wants_heat: bool, wants_cool: bool) -> tuple[float | None, float | None]:
+        if preset_name == presets_module.PRESET_MANUAL:
+            return (self._manual_heat if wants_heat else None), (self._manual_cool if wants_cool else None)
+        return (
+            self._preset_value(preset_name, "heat") if wants_heat else None,
+            self._preset_value(preset_name, "cool") if wants_cool else None,
+        )
+
+    def thermal_model_snapshot(self) -> dict:
+        return dict(self._thermal_model)
+
+    def zone_estimated_power_w(self) -> float | None:
+        return self._zone_estimated_power_w()
+
+    def climate_actuators(self) -> list[str]:
+        return self._climate_actuators()
 
     # --------------------------------------------------------- reactivo ---
 
@@ -1105,4 +1171,12 @@ class ZoneRunner:
     def set_fan_mode(self, fan_mode: str) -> None:
         self._manual_fan_mode = None if fan_mode == "auto" else fan_mode
         self._fan_mode = fan_mode
+
+    # ------------------------------------------------------- grafico 24h --
+
+    def build_forecast_chart(self, hours_back: int = 24, hours_fwd: int = 24) -> list[dict]:
+        """Ver zone_forecast.py — mitad pasada de historico real, mitad
+        futura proyectada EN VIVO con el mismo `scheduler.decide_action`
+        que ya decide de verdad (ver decide_and_act mas arriba)."""
+        return zone_forecast.build_forecast(self, hours_back=hours_back, hours_fwd=hours_fwd)
         self.decide_and_act()

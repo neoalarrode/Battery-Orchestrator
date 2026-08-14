@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.85
+**Gráfico de previsión de 24h por zona en Climate** (pedido explícitamente): cada tarjeta de zona tiene ahora un botón "Previsión 24h" que despliega un gráfico como el de SOC de Energy — mitad histórico real (temperatura interior/exterior, ocupación real, qué estaban haciendo los actuadores según su propio historial) y mitad proyección EN VIVO, hora a hora, llamando literalmente a `scheduler.decide_action` (la misma función que decide de verdad, nunca una lógica paralela) con el mismo modelo de Newton simple que ya usa `_anticipate` para avanzar la temperatura simulada. Las horas se sombrean en gris según lo probable que sea que la zona esté ocupada a esa hora (histórico real para el pasado, patrón por hora del día para el futuro) — puramente informativo, nunca alimenta la decisión real. Al pasar el ratón por cualquier hora se ve el desglose completo: temperatura interior/exterior, ocupación, qué quiere hacer el sistema y por qué, tanto para horas pasadas como futuras.
+
+A petición explícita del usuario, la mitad futura del gráfico SÍ elige qué preset proyectar en cada hora según el patrón histórico de ocupación de esa hora del día (`climate/occupancy.py`, nuevo — % de días de los últimos 14 en que la zona estuvo ocupada a esa hora en punto, estadística simple y verificable a mano, nunca aprendizaje automático) — el modo "manual" nunca se sustituye, y sin muestras suficientes se cae al preset activo real de ahora mismo. Importante: esto es SOLO para la proyección del gráfico — el motor de decisión EN VIVO (`decide_and_act`) sigue exactamente igual que antes, sin usar patrones de ocupación para decidir de verdad. Eso queda como cambio aparte, pendiente de diseño explícito (ver conversación).
+
+Nuevos endpoints/módulos: `GET /api/zones/<id>/forecast` en `climate_plugin.py`, `climate/zone_forecast.py` (construcción de los puntos), `climate/occupancy.py` (patrón de ocupación compartido), y varios métodos públicos nuevos en `ZoneRunner` (`current_targets`, `preset_targets_for_occupancy`, `thermal_model_snapshot`, `zone_estimated_power_w`) para que `zone_forecast.py` pueda leer su estado sin tocar atributos privados.
+
 ## 0.11.84
 Sha256 de Energy re-pineado al tag `v0.11.83` (fix del `PLUGIN_SWITCH_ICONS` referenciado antes de declararse) — verificado con una descarga real antes de fijarlo. El re-pin se me quedó sin commitear al publicar v0.11.83, así que esa imagen se reconstruyó todavía con el pin viejo (`v0.11.75`); esta versión lo corrige de verdad.
 

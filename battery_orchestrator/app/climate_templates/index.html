@@ -223,6 +223,27 @@
   .zone-actions { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
   .zone-actions button { padding: 6px 11px; font-size: .76rem; }
 
+  /* --- Grafico de previsión 24h por zona -- mismo lenguaje visual que la
+     grafica de SOC de Energy (ver templates/index.html), adaptado a
+     temperatura: banda gris = zona historicamente sin ocupar a esa hora
+     (o proyeccion futura poco probable de ocupacion), nunca al reves. --- */
+  .zone-chart-host { margin-top: 12px; display: none; position: relative; }
+  .zone-chart-host.open { display: block; }
+  .zone-chart-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; font-size: .7rem; color: var(--muted); }
+  .zone-chart-legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+  .zone-chart-legend .sq { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: middle; background: var(--muted); opacity: .35; }
+  .zone-chart-empty { font-size: .78rem; color: var(--muted); padding: 8px 0; }
+  .chart-tooltip {
+    position: absolute; pointer-events: none; background: var(--glass-bg-strong); border: 1px solid var(--glass-border);
+    backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+    border-radius: 8px; padding: 8px 10px; font-size: .72rem; box-shadow: var(--shadow);
+    transform: translate(-50%, -110%); white-space: nowrap; opacity: 0; transition: opacity .1s;
+    font-family: var(--font-mono); z-index: 5; max-width: 260px; white-space: normal;
+  }
+  .chart-tooltip.show { opacity: 1; }
+  .chart-tooltip .tt-title { font-family: var(--font-body); font-weight: 700; margin-bottom: 3px; }
+  .chart-tooltip .tt-reason { color: var(--muted); margin-top: 3px; }
+
   .toast {
     position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
     background: var(--text); color: var(--bg); padding: 10px 18px; border-radius: 9px;
@@ -448,11 +469,35 @@ function renderZones(zones) {
       <div class="zone-reason">${esc(live.reason || "")}</div>
       <div class="zone-actions">
         <button class="secondary" onclick="refreshZone('${z.id}')">Forzar decisión</button>
+        <button class="ghost" onclick="toggleZoneChart('${z.id}')" id="chart-toggle-${z.id}">Previsión 24h</button>
         <button class="ghost" onclick="editZone('${z.id}')">Editar</button>
         <button class="danger" onclick="deleteZone('${z.id}', '${esc(cfg.name || z.id).replace(/'/g, "\\'")}')">Eliminar</button>
       </div>
+      <div class="zone-chart-host" id="zone-chart-host-${z.id}">
+        <div id="zone-chart-${z.id}"></div>
+        <div class="chart-tooltip" id="zone-chart-tooltip-${z.id}"></div>
+        <div class="zone-chart-legend">
+          <span><span class="dot" style="background:var(--accent)"></span>Temp. interior</span>
+          <span><span class="dot" style="background:var(--accent-2)"></span>Temp. exterior</span>
+          <span><span class="sq"></span>Históricamente / probablemente sin ocupación</span>
+        </div>
+      </div>
     </div>`;
   }).join("");
+
+  // `renderZones` reconstruye toda la rejilla en cada poll (cada 8s) --
+  // sin esto, un grafico abierto se cerraria/perderia solo con cada
+  // refresco. Se restaura el estado abierto y se repinta desde CACHE
+  // (nunca un fetch nuevo aqui: eso solo pasa en toggleZoneChart/al abrir).
+  openZoneCharts.forEach(id => {
+    const host = document.getElementById(`zone-chart-host-${id}`);
+    const btn = document.getElementById(`chart-toggle-${id}`);
+    if (!host) { openZoneCharts.delete(id); return; }
+    host.classList.add("open");
+    if (btn) btn.textContent = "Ocultar previsión";
+    const cached = zoneChartCache.get(id);
+    if (cached) renderZoneChart(id, cached);
+  });
 }
 
 let lastZones = [];
@@ -477,6 +522,156 @@ async function loadStatus() {
 async function refreshZone(id) {
   const r = await fetch(`${API}/zones/${id}/refresh`, {method: "POST"});
   if (r.ok) { toast("Decisión forzada"); loadZones(); } else { toast("Fallo al forzar la decisión"); }
+}
+
+// ------------------------------------------- gráfico de previsión 24h --
+// Bajo demanda (nunca en el polling normal, ver climate_plugin.py): son
+// varias consultas de historico reales a HA por zona, no algo para pedir
+// cada pocos segundos sin que nadie este mirando.
+
+const openZoneCharts = new Set();
+const zoneChartCache = new Map();
+
+function toggleZoneChart(id) {
+  const host = document.getElementById(`zone-chart-host-${id}`);
+  const btn = document.getElementById(`chart-toggle-${id}`);
+  if (!host) return;
+  const opening = !host.classList.contains("open");
+  host.classList.toggle("open", opening);
+  if (btn) btn.textContent = opening ? "Ocultar previsión" : "Previsión 24h";
+  if (opening) {
+    openZoneCharts.add(id);
+    const cached = zoneChartCache.get(id);
+    if (cached) renderZoneChart(id, cached);
+    loadZoneChart(id, !cached);
+  } else {
+    openZoneCharts.delete(id);
+  }
+}
+
+async function loadZoneChart(id, showLoading) {
+  const host = document.getElementById(`zone-chart-${id}`);
+  if (!host) return;
+  if (showLoading) host.innerHTML = `<p class="zone-chart-empty">Calculando previsión…</p>`;
+  try {
+    const points = await (await fetch(`${API}/zones/${id}/forecast`)).json();
+    if (points.error) throw new Error(points.error);
+    zoneChartCache.set(id, points);
+    if (openZoneCharts.has(id)) renderZoneChart(id, points);
+  } catch (e) {
+    if (showLoading) host.innerHTML = `<p class="zone-chart-empty">No se pudo calcular la previsión: ${esc(e.message)}</p>`;
+  }
+}
+
+function occupancyShadeOpacity(hp) {
+  // Nunca inventa: sin dato de ocupacion (ni sensores declarados, ni
+  // historico suficiente todavia) no se pinta ninguna banda.
+  if (hp.historical) {
+    if (hp.occupied === true) return 0;
+    if (hp.occupied === false) return 0.16;
+    return 0;
+  }
+  if (hp.occupied_pct === null || hp.occupied_pct === undefined) return 0;
+  return 0.16 * (1 - hp.occupied_pct / 100);
+}
+
+function zoneChartActionColor(action) {
+  return action === "heat" ? "--red" : action === "cool" ? "--accent-2" : "--muted";
+}
+
+function renderZoneChart(id, points) {
+  const host = document.getElementById(`zone-chart-${id}`);
+  if (!host) return;
+  if (!points.length) { host.innerHTML = `<p class="zone-chart-empty">Sin datos todavía.</p>`; return; }
+
+  const indoorVals = points.map(p => p.indoor_temp).filter(v => v !== null && v !== undefined);
+  const outdoorVals = points.map(p => p.outdoor_temp).filter(v => v !== null && v !== undefined);
+  const allVals = indoorVals.concat(outdoorVals);
+  if (!allVals.length) { host.innerHTML = `<p class="zone-chart-empty">Sin lecturas de temperatura todavía.</p>`; return; }
+
+  const w = Math.max(host.clientWidth || 560, 280);
+  const h = 200;
+  const padL = 30, padR = 8, padT = 12, padB = 22;
+  const plotW = w - padL - padR, plotH = h - padT - padB;
+  const n = points.length;
+  const xAt = i => padL + (n === 1 ? 0 : (i / (n - 1)) * plotW);
+
+  const rawMin = Math.min(...allVals), rawMax = Math.max(...allVals);
+  const pad = Math.max(1, (rawMax - rawMin) * 0.15);
+  const vMin = Math.floor(rawMin - pad), vMax = Math.ceil(rawMax + pad);
+  const yAt = v => padT + plotH - ((v - vMin) / (vMax - vMin || 1)) * plotH;
+
+  const style = getComputedStyle(document.documentElement);
+  const colorOf = v => style.getPropertyValue(v).trim();
+
+  let bands = '';
+  const bandW = n === 1 ? plotW : plotW / (n - 1);
+  points.forEach((hp, i) => {
+    const opacity = occupancyShadeOpacity(hp);
+    if (opacity <= 0) return;
+    const x = xAt(i) - bandW / 2;
+    bands += `<rect x="${Math.max(padL, x)}" y="${padT}" width="${bandW}" height="${plotH}" fill="${colorOf('--muted')}" opacity="${opacity.toFixed(2)}"></rect>`;
+  });
+
+  const nowIdx = points.findIndex(hp => !hp.historical);
+  const nowLine = nowIdx > 0 ? `<line x1="${xAt(nowIdx)}" y1="${padT}" x2="${xAt(nowIdx)}" y2="${padT+plotH}" stroke="${colorOf('--muted')}" stroke-width="1" stroke-dasharray="3,3"></line>` : '';
+
+  const gridSteps = 4;
+  const gridLines = Array.from({length: gridSteps + 1}, (_, i) => vMin + (i * (vMax - vMin) / gridSteps)).map(v => `
+    <line x1="${padL}" y1="${yAt(v)}" x2="${w-padR}" y2="${yAt(v)}" stroke="${colorOf('--border')}" stroke-width="1"></line>
+    <text x="${padL-5}" y="${yAt(v)+3}" text-anchor="end" font-size="9" font-family="var(--font-mono)" fill="${colorOf('--muted')}">${Math.round(v)}°</text>
+  `).join('');
+
+  const pathFor = (key) => {
+    let d = '', started = false;
+    points.forEach((hp, i) => {
+      const v = hp[key];
+      if (v === null || v === undefined) { started = false; return; }
+      d += `${started ? 'L' : 'M'} ${xAt(i).toFixed(1)} ${yAt(v).toFixed(1)} `;
+      started = true;
+    });
+    return d;
+  };
+
+  const indoorPath = pathFor('indoor_temp');
+  const outdoorPath = pathFor('outdoor_temp');
+
+  const points_ = points.map((hp, i) => hp.indoor_temp === null || hp.indoor_temp === undefined ? '' :
+    `<circle class="zc-pt" data-i="${i}" cx="${xAt(i).toFixed(1)}" cy="${yAt(hp.indoor_temp).toFixed(1)}" r="9" fill="transparent"></circle>`).join('');
+
+  host.innerHTML = `
+    <svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" role="img" aria-label="Previsión de temperatura">
+      ${bands}
+      ${gridLines}
+      ${nowLine}
+      ${outdoorPath ? `<path d="${outdoorPath}" fill="none" stroke="${colorOf('--accent-2')}" stroke-width="1.5" stroke-dasharray="4,3" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"></path>` : ''}
+      <path d="${indoorPath}" fill="none" stroke="${colorOf('--accent')}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+      ${points_}
+    </svg>`;
+
+  const tooltip = document.getElementById(`zone-chart-tooltip-${id}`);
+  host.querySelectorAll('.zc-pt').forEach(pt => {
+    pt.addEventListener('mouseenter', () => {
+      const i = parseInt(pt.dataset.i, 10);
+      const hp = points[i];
+      const rect = host.getBoundingClientRect();
+      const cx = parseFloat(pt.getAttribute('cx')) / w * rect.width;
+      const cy = parseFloat(pt.getAttribute('cy')) / h * rect.height;
+      const occText = hp.occupied === true ? "sí" : hp.occupied === false ? "no" : "sin dato";
+      const occPctText = (hp.occupied_pct === null || hp.occupied_pct === undefined) ? "" : ` (~${hp.occupied_pct}% de los días a esta hora)`;
+      const actionText = {heat: "calentando", cool: "enfriando", idle: "en reposo"}[hp.action] || hp.action || "—";
+      const targetText = (hp.target_temp === null || hp.target_temp === undefined) ? "" : ` → objetivo ${hp.target_temp}°`;
+      tooltip.innerHTML = `<div class="tt-title">${new Date(hp.dt).toLocaleString('es-ES', {weekday:'short', hour:'2-digit', minute:'2-digit'})}${hp.historical ? ' (ya ocurrió)' : ' (proyección)'}</div>
+        Interior: ${fmtTemp(hp.indoor_temp)} · Exterior: ${fmtTemp(hp.outdoor_temp)}<br>
+        Ocupación: ${occText}${occPctText}<br>
+        <span style="color:var(${zoneChartActionColor(hp.action)})">${actionText}</span>${targetText}
+        <div class="tt-reason">${esc(hp.reason || "")}</div>`;
+      tooltip.style.left = cx + 'px';
+      tooltip.style.top = cy + 'px';
+      tooltip.classList.add('show');
+    });
+    pt.addEventListener('mouseleave', () => tooltip.classList.remove('show'));
+  });
 }
 
 async function deleteZone(id, name) {

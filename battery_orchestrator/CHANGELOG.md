@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.96
+**Cuarto bug real, confirmado en producción tras desplegar el fix anterior: la zona seguía mostrando solo "apagado"/"auto" pese a que la capacidad ya se calculaba bien.** Causa: `publish_discovery()` se llamaba UNA sola vez, en el instante exacto de construir la zona (`ClimatePlugin._start_zone`) — si en ese momento un actuador de otro plugin (Tuya) todavía no había terminado de conectar por la LAN (conexión en su propio hilo, con su propio tiempo de negociación), la capacidad se calculaba vacía y se publicaba vacía a HA (discovery RETENIDO en MQTT). El runner se autocorregía por dentro poco después (`_capability_pending` ya existía para esto), pero ese discovery nunca se volvía a publicar — la entidad de HA se quedaba pegada hasta el siguiente reinicio del addon, que podía volver a tener la misma carrera. Fix: `_reconcile_hvac_mode` ahora republica el discovery en el momento exacto en que la capacidad real se conoce por primera vez. Verificado con un test sintético: construcción con el actuador aún desconectado → discovery NO se publica todavía → reconexión simulada → discovery se republica UNA vez con los modos/ventilador reales → un segundo evento no vuelve a republicar.
+
 ## 0.11.95
 Sha256 de Climate y Tuya re-pineados al tag `v0.11.94` (fix capability/fan_modes de actuadores de otro plugin) — verificado con una descarga real antes de fijarlo.
 

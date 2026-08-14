@@ -376,6 +376,21 @@ class ZoneRunner:
         if self._capability_pending and capability:
             self._capability_pending = False
             self.hvac_mode = self._default_hvac_mode(capability)
+            # Bug real, confirmado en produccion: `publish_discovery` solo
+            # se llamaba UNA vez, al construir la zona (ver
+            # ClimatePlugin._start_zone) -- si en ese instante concreto un
+            # actuador de otro plugin (Tuya) todavia no habia terminado de
+            # conectar por la LAN (maneja su propia conexion en un hilo
+            # aparte, con su propio tiempo de negociacion), la capacidad
+            # se calculaba vacia, se publicaba vacia a HA (discovery
+            # RETENIDO en MQTT), y aunque el runner se autocorregia por
+            # dentro en cuanto el dispositivo conectaba, ese discovery
+            # jamas se volvia a publicar -- la entidad de HA se quedaba
+            # pegada mostrando solo "apagado" y "auto" de ventilador hasta
+            # el siguiente reinicio del addon (que podia volver a tener la
+            # misma carrera). Republicar aqui, en el momento exacto en que
+            # la capacidad real se conoce por primera vez, la corrige sola.
+            self.mqtt.publish_discovery(min_temp=self._min_temp, max_temp=self._max_temp)
 
     @staticmethod
     def _default_hvac_mode(capability: set[str]) -> str:

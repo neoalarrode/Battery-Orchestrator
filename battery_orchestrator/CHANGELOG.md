@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.80
+Sha256 de Climate re-pineado al tag `v0.11.79` (ya trae el registro genérico de proveedores) — verificado con una descarga real antes de fijarlo.
+
 ## 0.11.79
 **Registro genérico de proveedores de actuadores climate.*** — hasta ahora Climate conocía a Tuya por su nombre a mano. Ahora cualquier plugin que exponga `climate_handle()`/`list_climate_actuators()` se registra solo (`core_app.py` los conecta tras cargar los plugins, sin lista hardcodeada); `zone_runner.py` deja de mencionar "Tuya" en ningún sitio — solo sabe preguntarle al registro. Preparado para que una marca futura se sume sin tocar Climate ni el núcleo.
 

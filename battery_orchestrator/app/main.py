@@ -1238,16 +1238,21 @@ def api_install_plugin(slug):
     import plugin_loader
     if slug not in plugin_loader.PLUGIN_REGISTRY:
         return jsonify({"error": "plugin desconocido"}), 404
-    config_store.set_plugin_installed(slug, True)
+    try:
+        plugin_loader.install_plugin(slug)
+    except Exception as exc:
+        log.exception("Fallo instalando el plugin '%s'", slug)
+        return jsonify({"error": str(exc)}), 502
     return jsonify({"installed": True, "restart_required": True})
 
 
 @app.post("/api/core/plugins/<slug>/uninstall")
 def api_uninstall_plugin(slug):
     import plugin_loader
-    if slug in plugin_loader.REQUIRED_PLUGINS:
-        return jsonify({"error": "este plugin es el nucleo, no se puede quitar"}), 400
-    config_store.set_plugin_installed(slug, False)
+    try:
+        plugin_loader.uninstall_plugin(slug)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     return jsonify({"installed": False, "restart_required": True})
 
 

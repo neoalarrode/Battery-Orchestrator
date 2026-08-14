@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.11.64
+**Descarga real de plugins**, tal y como se planteó: `plugin_downloader.py` descarga el tarball de un tag concreto del propio repo (`https://github.com/neoalarrode/Home-Orchestrator/archive/refs/tags/<tag>.tar.gz`), calcula su sha256 y lo compara contra el valor pineado en `plugin_loader.PLUGIN_CATALOG` **antes** de extraer nada — si no coincide, se descarta entero y no se instala nada (falla cerrado). Solo entonces extrae los ficheros de ESE plugin (nunca el repo entero) a `/data/plugins/<slug>/<tag>/`, con un symlink `current` a la versión activa.
+
+Verificado de verdad contra el repo público (no un mock): descarga real del tag `v0.11.63`, sha256 correcto → instala y arranca `ClimatePlugin` desde la copia descargada (con prioridad sobre la que trae la imagen); sha256 manipulado → rechazado, no toca disco.
+
+Energy (antes Battery) se queda fuera de este mecanismo a propósito — es el núcleo, siempre viene con el addon, no tiene sentido descargarlo aparte. Climate ya es descargable de verdad desde la tienda: instalar cuando no viene precargado ahora dispara una descarga real, no solo activa un flag.
+
+Pendiente antes de poder decir que una instalación fresca viene "vacía de verdad": sacar Climate del Dockerfile (que hoy lo sigue precargando como red de seguridad) y montar la pantalla de catálogo cuando no hay ningún plugin cargado en `/` — deliberadamente no se toca todavía para no arriesgar tu instalación real mientras se prueba el mecanismo de descarga.
+
 ## 0.11.63
 **Renombrado a "Energy"**: el plugin ya no se llama "Battery" de cara al usuario (título, cabecera, selector de plugins, tienda) — pasa a "Energy Orchestrator", porque ya no solo gestiona baterías: también solar y cargas diferibles. Cambio solo de nombre visible; el slug interno (`battery`), el namespace de configuración (`plugins.battery`), el slug del add-on (`battery_orchestrator`) y todos los entity_id existentes (`sensor.battery_orchestrator_*`) se quedan exactamente igual — cero migración, cero riesgo para automatizaciones o integraciones ya montadas sobre esos nombres.
 

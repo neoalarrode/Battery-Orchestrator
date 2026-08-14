@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.70
+**Energy deja de venir precargado en la imagen** — la imagen ya solo trae el núcleo (`core_*.py`, `plugin_*.py`, `config_store.py`, `ha_websocket.py`, `ha_mqtt.py`). Verificado ANTES de desplegar con la prueba más exigente posible: un directorio con únicamente los ficheros del núcleo (sin Energy ni Climate) descargó los dos plugins de verdad desde GitHub, los verificó por sha256 y arrancó igual que producción — dashboard, tienda y todo.
+
+Con esto una instalación fresca de Home Orchestrator viene de verdad vacía: solo el catálogo de la tienda en la raíz hasta que se instale algo (o se restaure una copia de seguridad, que instala automáticamente lo que corresponda). Este addon en concreto siguió el mismo camino cuidadoso que con Climate: backup completo (0.11.65) → aislamiento de fallos entre plugins (0.11.66) → descarga forzada de Energy antes de tocar la imagen → este cambio.
+
 ## 0.11.69
 Sha256 real de Energy pineado en el catálogo (calculado y verificado contra una descarga real del tag `v0.11.68` antes de fijarlo) — mismo procedimiento de dos pasos que ya se siguió con Climate. Con esto la tienda ya puede descargar/verificar Energy de verdad, no solo Climate.
 

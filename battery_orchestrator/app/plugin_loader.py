@@ -73,7 +73,7 @@ PLUGIN_CATALOG = {
     "battery": {
         "name": "Energy Orchestrator",
         "description": "Baterías, solar y cargas diferibles — carga y descarga adaptativa por precio, sol y consumo real",
-        "version": "0.11.69",
+        "version": "0.11.70",
         "downloadable": True,
         "tag": "v0.11.68",
         "sha256": "1a84be7142918c2f0232510ccd587c079576f5edc3462a51b5193226c457618a",  # sha256 real del tarball de v0.11.68, verificado contra una descarga real antes de fijarlo aqui

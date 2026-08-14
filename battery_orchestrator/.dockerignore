@@ -1,9 +1,38 @@
 # Plugins DESCARGABLES (ver plugin_loader.PLUGIN_CATALOG / plugin_downloader.py)
 # no vienen precargados en la imagen -- se instalan de verdad desde la
-# tienda de plugins, verificados por sha256 contra un tag del repo. Solo
-# el nucleo (Energy/"battery") viene siempre en la imagen; el resto se
-# descarga bajo demanda a /data/plugins/<slug>/, que sobrevive a
-# actualizaciones/restauraciones de copia de seguridad de Supervisor.
+# tienda de plugins, verificados por sha256 contra un tag del repo. La
+# imagen solo trae el nucleo (core_*.py, plugin_*.py, config_store.py,
+# ha_websocket.py, ha_mqtt.py, run.sh, Dockerfile...) -- ni siquiera
+# Energy viene precargado. Todo lo demas se descarga bajo demanda a
+# /data/plugins/<slug>/, que sobrevive a actualizaciones/restauraciones
+# de copia de seguridad de Supervisor.
+
+# Climate
 app/climate_plugin.py
 app/climate/
 app/climate_templates/
+
+# Energy
+app/main.py
+app/battery_plugin.py
+app/battery_exec.py
+app/anomaly_store.py
+app/capacity_store.py
+app/climate_link.py
+app/deferrable_exec.py
+app/deferrable_scheduler.py
+app/deferrable_store.py
+app/ecoflow_ble.py
+app/ecoflow_cloud.py
+app/ecoflow_login.py
+app/forecast_store.py
+app/ha_client.py
+app/ha_statistics.py
+app/history_store.py
+app/lifetime_store.py
+app/pv_source.py
+app/savings_store.py
+app/scheduler.py
+app/solar_energy_store.py
+app/tariff_source.py
+app/templates/

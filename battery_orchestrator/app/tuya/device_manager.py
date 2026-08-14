@@ -289,6 +289,47 @@ class TuyaClimateHandle:
             return m.mode_map.get(raw, "heat")
         return "heat"
 
+    @property
+    def hvac_modes(self) -> list[str]:
+        """Modos REALES del perfil (mode_map), no un par generico fijo --
+        bug real, confirmado en produccion: antes de esto ZoneRunner._get_state
+        ofrecia siempre ["off","heat","cool"] a fuego, aunque el perfil
+        declarase dry/fan_only/heat_cool de verdad (como el mode_map de un
+        AC tipico: cold->cool, hot->heat, wet->dry, wind->fan_only,
+        auto->heat_cool) -- eso bloqueaba en silencio cualquier rama que
+        dependiese de saber que modos soporta el dispositivo (p.ej. el
+        fallback a fan_only en vez de apagar del todo, ver
+        ZoneRunner._smart_idle_action)."""
+        m = self._mapping
+        modes: list[str] = []
+        if m.switch_dp is not None:
+            modes.append("off")
+        if m.mode_dp is not None and m.mode_map:
+            for v in m.mode_map.values():
+                if v not in modes:
+                    modes.append(v)
+        elif "heat" not in modes:
+            # Sin mode_dp/mode_map: calentador simple, solo se apaga/enciende
+            # (ver profile.py:ClimateMapping.mode_dp) -- mismo comportamiento
+            # que hvac_mode ya asumia (siempre "heat" si esta encendido).
+            modes.append("heat")
+        return modes
+
+    @property
+    def fan_mode(self) -> str | None:
+        m = self._mapping
+        if m.fan_dp is None or not m.fan_map:
+            return None
+        raw = self._manager.get_decoded(self._device_id, m.fan_dp)
+        return m.fan_map.get(raw)
+
+    @property
+    def fan_modes(self) -> list[str]:
+        m = self._mapping
+        if m.fan_dp is None or not m.fan_map:
+            return []
+        return list(dict.fromkeys(m.fan_map.values()))  # dedup preservando orden
+
     def set_temperature(self, value: float) -> None:
         m = self._mapping
         if m.target_temp_dp is None:
@@ -307,3 +348,12 @@ class TuyaClimateHandle:
             raw = reverse.get(hvac_mode)
             if raw is not None:
                 self._manager.set_dp(self._device_id, m.mode_dp, raw)
+
+    def set_fan_mode(self, fan_mode: str) -> None:
+        m = self._mapping
+        if m.fan_dp is None or not m.fan_map:
+            return
+        reverse = {v: k for k, v in m.fan_map.items()}
+        raw = reverse.get(fan_mode)
+        if raw is not None:
+            self._manager.set_dp(self._device_id, m.fan_dp, raw)

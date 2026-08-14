@@ -314,10 +314,15 @@ class ZoneRunner:
         if self.zone.get(CONF_COOL_SWITCHES):
             capability.add("cool")
         for entity_id in self.zone.get(CONF_CLIMATE_ENTITIES) or []:
-            try:
-                state = self.ws.get_state(entity_id)
-            except Exception:
-                state = None
+            # `self._get_state`, NO `self.ws.get_state` directo -- bug
+            # real, confirmado en produccion: un actuador de otro plugin
+            # (ref "tuya:...") nunca es una entidad real de HA, asi que
+            # `ws.get_state` siempre devolvia None para el y la capacidad
+            # real del dispositivo (calor/frio/dry/fan_only) nunca se
+            # detectaba -- la zona se quedaba sin poder ofrecer ni
+            # ventilador ni el fallback de "apagar del todo" a "ventilar
+            # en vez de apagar" (ver _smart_idle_action).
+            state = self._get_state(entity_id)
             supported = ((state or {}).get("attributes") or {}).get("hvac_modes") or []
             for mode in ("heat", "cool", *_PASSTHROUGH_MODES.values()):
                 if mode in supported:
@@ -358,10 +363,7 @@ class ZoneRunner:
         ordered = ["auto"]
         seen = {"auto"}
         for entity_id in self.zone.get(CONF_CLIMATE_ENTITIES) or []:
-            try:
-                state = self.ws.get_state(entity_id)
-            except Exception:
-                state = None
+            state = self._get_state(entity_id)  # ver nota de _compute_capability -- mismo bug, mismo fix
             if state is None:
                 continue
             for m in (state.get("attributes") or {}).get("fan_modes") or []:
@@ -387,6 +389,12 @@ class ZoneRunner:
 
     def _effective_capability(self) -> str:
         return {"heat": "heat", "cool": "cool", "heat_cool": "heat_cool", **_PASSTHROUGH_MODES}.get(self.hvac_mode, "none")
+
+    @property
+    def fan_modes(self) -> list[str]:
+        """Publico para mqtt_climate.py:publish_discovery -- antes
+        publicaba `["auto"]` a fuego en vez de esto, ver nota ahi."""
+        return self._fan_modes or []
 
     # ---------------------------------------------- accesores para zone_forecast.py -
     # Envoltorios PUBLICOS de estado ya existente -- zone_forecast.py (ver
@@ -494,9 +502,10 @@ class ZoneRunner:
         """Punto UNICO de salida para las ordenes de un actuador climate.*
         -- si `entity_id` es de otro plugin (Tuya u otra marca), se
         resuelve EN EL MISMO PROCESO en vez de pasar por `ws.call_service`.
-        `set_fan_mode` no tiene equivalente generico todavia -- se ignora
-        en silencio en vez de fallar, igual que si el propio dispositivo
-        no soportase esa orden."""
+        `set_fan_mode` SI tiene equivalente generico (ver
+        TuyaClimateHandle.set_fan_mode) -- si el handle no lo implementa
+        (`getattr` sin default), se ignora en silencio en vez de fallar,
+        igual que si el propio dispositivo no soportase esa orden."""
         if self._is_bridge_ref(entity_id):
             handle = self._resolve_bridge_handle(entity_id)
             if handle is None:
@@ -506,6 +515,10 @@ class ZoneRunner:
                 handle.set_hvac_mode(data["hvac_mode"])
             elif service == "set_temperature" and "temperature" in data:
                 handle.set_temperature(data["temperature"])
+            elif service == "set_fan_mode" and "fan_mode" in data:
+                set_fan_mode = getattr(handle, "set_fan_mode", None)
+                if set_fan_mode is not None:
+                    set_fan_mode(data["fan_mode"])
             return
         self.ws.call_service("climate", service, service_data=service_data or {}, target={"entity_id": entity_id})
 
@@ -514,18 +527,24 @@ class ZoneRunner:
             handle = self._resolve_bridge_handle(entity_id)
             if handle is None or not handle.available:
                 return None
+            # `hvac_modes`/`fan_mode`/`fan_modes` REALES del handle si los
+            # expone (TuyaClimateHandle si, ver device_manager.py -- lee el
+            # mode_map/fan_map del perfil de verdad) -- getattr con
+            # fallback generico para no reventar si un futuro proveedor de
+            # otra marca todavia no los implementa (bug real, confirmado en
+            # produccion, hasta esta version: aqui se ofrecia siempre
+            # ["off","heat","cool"] y fan_modes=[] a fuego, ignorando lo
+            # que el dispositivo real soporta -- bloqueaba en silencio el
+            # fallback a fan_only y dejaba el selector de fan en "auto"
+            # unicamente).
             return {
                 "state": handle.hvac_mode,
                 "attributes": {
                     "current_temperature": handle.current_temperature,
                     "temperature": handle.target_temperature,
-                    # Lista generica -- TuyaClimateHandle no expone hoy los
-                    # modos reales del perfil (mode_map), asi que se ofrece
-                    # el par minimo que _drive_climate_actuator necesita
-                    # para decidir apagar/encender sin adivinar de mas.
-                    "hvac_modes": ["off", "heat", "cool"],
-                    "fan_mode": None,
-                    "fan_modes": [],
+                    "hvac_modes": getattr(handle, "hvac_modes", ["off", "heat", "cool"]),
+                    "fan_mode": getattr(handle, "fan_mode", None),
+                    "fan_modes": getattr(handle, "fan_modes", []),
                 },
             }
         try:

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.11.94
+**Tres bugs reales, confirmados en producción contra el AC real del usuario (Salón, AirClima 12000 vía Tuya): la zona nunca ofrecía los modos de ventilador reales ni pasaba a "ventilador" en vez de apagar del todo.**
+
+1. `TuyaClimateHandle` (device_manager.py) nunca exponía `hvac_modes`/`fan_mode`/`fan_modes` reales del perfil, aunque el perfil generado desde la nube SÍ los trae (`mode_map`: cold→cool, hot→heat, wet→dry, wind→fan_only, auto→heat_cool; `fan_map`: strong/high/mid_high/mid/mid_low/low/mute/auto en el caso real probado) — siempre devolvía `["off","heat","cool"]` y `fan_modes: []` a fuego. Ahora los deriva del `mode_map`/`fan_map` de verdad, y se añade `set_fan_mode()` (antes no existía ningún método para cambiar la velocidad).
+2. `ZoneRunner._compute_capability()`/`_available_fan_modes()` preguntaban por el camino equivocado (`self.ws.get_state()`, que solo conoce entidades reales de HA) en vez de `self._get_state()` (que sí resuelve un actuador de otro plugin como Tuya) — para CUALQUIER zona con un actuador de otro plugin, la capacidad real nunca se detectaba, bloqueando en silencio el fallback "ventilar en vez de apagar del todo" (`_smart_idle_action`).
+3. `mqtt_climate.py:publish_discovery()` anunciaba a Home Assistant una lista de modos/ventilador FIJA a fuego en el código (`["off","heat_cool","heat","cool","dry","fan_only"]` / `["auto"]`), ignorando por completo la capacidad real calculada por el runner — ahora publica `runner.hvac_modes`/`runner.fan_modes` de verdad.
+
+También se enruta `set_fan_mode` para actuadores de otro plugin en `_call_climate_service` (antes se ignoraba en silencio, comentario ya desfasado). Verificado con un test sintético usando el perfil YAML real del AirClima del usuario: `hvac_modes`/`fan_modes`/`fan_mode` decodifican correctamente, `set_fan_mode` escribe el DP correcto, y un calentador simple sin `mode_dp` sigue devolviendo `["off","heat"]` como antes.
+
 ## 0.11.93
 Sha256 de Tuya re-pineado al tag `v0.11.92` (fix cuenta borrada al añadir dispositivo) — verificado con una descarga real antes de fijarlo.
 

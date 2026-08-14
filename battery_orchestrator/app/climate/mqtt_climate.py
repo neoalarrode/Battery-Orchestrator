@@ -38,11 +38,24 @@ class MqttClimateZone:
 
     def publish_discovery(self, min_temp: float, max_temp: float) -> None:
         t = self._base
+        # `modes`/`fan_modes`: los REALES de la zona (ver ZoneRunner.hvac_modes/
+        # .fan_modes), no una lista fija -- bug real, confirmado en produccion:
+        # antes de esto se anunciaba SIEMPRE el mismo set completo a HA (incluido
+        # heat_cool/dry/fan_only) aunque el actuador real de la zona no los
+        # soportase, y "fan_modes" quedaba fijo en ["auto"] aunque el
+        # dispositivo real tuviese velocidades de verdad (p.ej. un AC Tuya con
+        # strong/high/mid/low/mute) -- el selector de HA nunca las mostraba
+        # porque nunca se anunciaban. Con fallback identico al de antes si el
+        # runner todavia no ha calculado su capacidad real (zona recien creada).
+        runner = self._runner
+        modes = (runner.hvac_modes if runner and runner.hvac_modes else
+                 ["off", "heat_cool", "heat", "cool", "dry", "fan_only"])
+        fan_modes = (runner.fan_modes if runner and runner.fan_modes else ["auto"])
         payload = {
             "name": None,  # con "name": None + has_entity_name via device, HA usa el nombre del dispositivo tal cual
             "unique_id": f"{NODE_ID}_{self.zone_id}",
             "object_id": self.zone_id,
-            "modes": ["off", "heat_cool", "heat", "cool", "dry", "fan_only"],
+            "modes": modes,
             "mode_state_topic": f"{t}/mode/state",
             "mode_command_topic": f"{t}/mode/set",
             "temperature_state_topic": f"{t}/temp/state",
@@ -56,7 +69,7 @@ class MqttClimateZone:
             "target_humidity_state_topic": f"{t}/target_humidity/state",
             "target_humidity_command_topic": f"{t}/target_humidity/set",
             "min_humidity": 20, "max_humidity": 80,
-            "fan_modes": ["auto"],
+            "fan_modes": fan_modes,
             "fan_mode_state_topic": f"{t}/fan_mode/state",
             "fan_mode_command_topic": f"{t}/fan_mode/set",
             "preset_modes": ["Automático", "Manual"],

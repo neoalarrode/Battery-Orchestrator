@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.86
+Sha256 de Climate re-pineado al tag `v0.11.85` (gráfico de previsión 24h) — verificado con una descarga real antes de fijarlo. Aprendida la lección de v0.11.83/84: el re-pin va en el MISMO commit/tag que se despliega, nunca en uno posterior.
+
 ## 0.11.85
 **Gráfico de previsión de 24h por zona en Climate** (pedido explícitamente): cada tarjeta de zona tiene ahora un botón "Previsión 24h" que despliega un gráfico como el de SOC de Energy — mitad histórico real (temperatura interior/exterior, ocupación real, qué estaban haciendo los actuadores según su propio historial) y mitad proyección EN VIVO, hora a hora, llamando literalmente a `scheduler.decide_action` (la misma función que decide de verdad, nunca una lógica paralela) con el mismo modelo de Newton simple que ya usa `_anticipate` para avanzar la temperatura simulada. Las horas se sombrean en gris según lo probable que sea que la zona esté ocupada a esa hora (histórico real para el pasado, patrón por hora del día para el futuro) — puramente informativo, nunca alimenta la decisión real. Al pasar el ratón por cualquier hora se ve el desglose completo: temperatura interior/exterior, ocupación, qué quiere hacer el sistema y por qué, tanto para horas pasadas como futuras.
 

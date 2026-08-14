@@ -79,10 +79,10 @@ PLUGIN_CATALOG = {
     "battery": {
         "name": "Energy Orchestrator",
         "description": "Baterías, solar y cargas diferibles — carga y descarga adaptativa por precio, sol y consumo real",
-        "version": "0.11.76",
+        "version": "0.11.77",
         "downloadable": True,
-        "tag": "v0.11.75",
-        "sha256": "9c00b08455f4ad6d004dc756aeb6058daa814215ba6ca7522d9242ab8c125a3f",  # sha256 real del tarball de v0.11.75, verificado contra una descarga real antes de fijarlo aqui (re-pineado: el selector de plugins dinamico tocaba templates/index.html)
+        "tag": "v0.11.83",
+        "sha256": "8b938679d770a876810634280e4a55774c552053ba8251ff81770f10e83eefd6",  # sha256 real del tarball de v0.11.83, verificado contra una descarga real antes de fijarlo aqui (re-pineado: bug real que dejaba el panel de Energy sin ningun dato en vivo, ver CHANGELOG 0.11.83)
         "files": [
             "main.py", "battery_plugin.py", "battery_exec.py", "anomaly_store.py",
             "capacity_store.py", "climate_link.py", "deferrable_exec.py",

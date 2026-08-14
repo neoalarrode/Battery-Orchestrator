@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home Orchestrator — Climate</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%3E%3Cdefs%3E%3ClinearGradient%20id%3D%27g%27%20x1%3D%270%27%20y1%3D%270%27%20x2%3D%2724%27%20y2%3D%2724%27%20gradientUnits%3D%27userSpaceOnUse%27%3E%3Cstop%20offset%3D%270%27%20stop-color%3D%27%238b5cf6%27%2F%3E%3Cstop%20offset%3D%271%27%20stop-color%3D%27%2322d3ee%27%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%2724%27%20height%3D%2724%27%20rx%3D%276%27%20fill%3D%27url%28%23g%29%27%2F%3E%3Cpath%20d%3D%27M12%203a3%203%200%200%200-3%203v7.1a4%204%200%201%200%206%200V6a3%203%200%200%200-3-3Zm0%202a1%201%200%200%201%201%201v7.6l.6.5a2%202%200%201%201-3.2%200l.6-.5V6a1%201%200%200%201%201-1Z%27%20fill%3D%27%230b0a16%27%2F%3E%3C%2Fsvg%3E">
+<style>
+  /* Mismo lenguaje visual que el resto de Home Orchestrator (ver
+     app/templates/index.html de Battery) — panel de control en vidrio
+     sobre reticula oscura, mismo acento violeta/cian. El icono de marca
+     de esta pagina es un termometro para diferenciar el plugin de un
+     vistazo sin romper la identidad compartida del sistema. */
+  :root {
+    color-scheme: dark light;
+    --bg: #0b0a16; --bg-alt: #131226; --card: #14132a; --text: #eae8f7; --muted: #8b87ab;
+    --border: #2a2850; --accent: #8b5cf6; --accent-2: #22d3ee; --accent-soft: #8b5cf626; --accent-ink: #0b0a16;
+    --glow: 0 0 0 1px #8b5cf64d, 0 0 24px -6px #8b5cf673;
+    --green: #34d399; --amber: #fbbf24; --red: #fb7185;
+    --green-soft: #34d39920; --amber-soft: #fbbf2420; --red-soft: #fb718520;
+    --radius: 12px; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 28px -8px rgba(139,92,246,.18);
+    --glass-bg: rgba(20, 19, 42, .48); --glass-bg-strong: rgba(20, 19, 42, .7);
+    --glass-border: rgba(255, 255, 255, .1); --glass-sheen: rgba(255, 255, 255, .08);
+    --glass-blur: blur(22px) saturate(170%); --glass-blur-soft: blur(14px) saturate(150%);
+    --font-display: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --font-body: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg:#f2f1fa; --bg-alt:#e7e5f6; --card:#ffffff; --text:#1c1a2e; --muted:#68648c;
+      --border:#dcd9f2; --accent:#7c3aed; --accent-2:#0891b2; --accent-soft:#7c3aed15; --accent-ink:#ffffff;
+      --glow: 0 0 0 1px #7c3aed33, 0 0 20px -8px #7c3aed4d;
+      --green:#159a67; --amber:#b3790a; --red:#e0475f;
+      --green-soft:#159a6715; --amber-soft:#b3790a15; --red-soft:#e0475f15;
+      --shadow: 0 1px 2px rgba(28,26,46,.05), 0 8px 24px -10px rgba(124,58,237,.15);
+      --glass-bg: rgba(255, 255, 255, .52); --glass-bg-strong: rgba(255, 255, 255, .8);
+      --glass-border: rgba(255, 255, 255, .75); --glass-sheen: rgba(255, 255, 255, .9);
+      --glass-blur: blur(20px) saturate(180%); --glass-blur-soft: blur(12px) saturate(160%);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg:#f2f1fa; --bg-alt:#e7e5f6; --card:#ffffff; --text:#1c1a2e; --muted:#68648c;
+    --border:#dcd9f2; --accent:#7c3aed; --accent-2:#0891b2; --accent-soft:#7c3aed15; --accent-ink:#ffffff;
+    --glow: 0 0 0 1px #7c3aed33, 0 0 20px -8px #7c3aed4d;
+    --green:#159a67; --amber:#b3790a; --red:#e0475f;
+    --green-soft:#159a6715; --amber-soft:#b3790a15; --red-soft:#e0475f15;
+    --shadow: 0 1px 2px rgba(28,26,46,.05), 0 8px 24px -10px rgba(124,58,237,.15);
+    --glass-bg: rgba(255, 255, 255, .52); --glass-bg-strong: rgba(255, 255, 255, .8);
+    --glass-border: rgba(255, 255, 255, .75); --glass-sheen: rgba(255, 255, 255, .9);
+    --glass-blur: blur(20px) saturate(180%); --glass-blur-soft: blur(12px) saturate(160%);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b0a16; --bg-alt: #131226; --card: #14132a; --text: #eae8f7; --muted: #8b87ab;
+    --border: #2a2850; --accent: #8b5cf6; --accent-2: #22d3ee; --accent-soft: #8b5cf626; --accent-ink: #0b0a16;
+    --glow: 0 0 0 1px #8b5cf64d, 0 0 24px -6px #8b5cf673;
+    --green: #34d399; --amber: #fbbf24; --red: #fb7185;
+    --green-soft: #34d39920; --amber-soft: #fbbf2420; --red-soft: #fb718520;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 28px -8px rgba(139,92,246,.18);
+    --glass-bg: rgba(20, 19, 42, .48); --glass-bg-strong: rgba(20, 19, 42, .7);
+    --glass-border: rgba(255, 255, 255, .1); --glass-sheen: rgba(255, 255, 255, .08);
+    --glass-blur: blur(22px) saturate(170%); --glass-blur-soft: blur(14px) saturate(150%);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { overflow-x: hidden; }
+  body {
+    font-family: var(--font-body);
+    background:
+      linear-gradient(var(--bg-alt) 1px, transparent 1px) 0 0 / 100% 34px,
+      linear-gradient(90deg, var(--bg-alt) 1px, transparent 1px) 0 0 / 34px 100%,
+      var(--bg);
+    background-attachment: fixed;
+    color: var(--text);
+    max-width: 1080px; margin: 0 auto; padding: 28px 20px 90px;
+    line-height: 1.5; -webkit-font-smoothing: antialiased;
+    position: relative;
+  }
+  body::before {
+    content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    opacity: .22;
+    background:
+      radial-gradient(560px 420px at 10% 6%, var(--accent) 0%, transparent 65%),
+      radial-gradient(620px 480px at 90% 16%, var(--accent-2) 0%, transparent 60%),
+      radial-gradient(520px 520px at 26% 96%, var(--red) 0%, transparent 65%),
+      radial-gradient(560px 460px at 84% 90%, var(--green) 0%, transparent 62%);
+    filter: blur(10px);
+  }
+  @media (prefers-color-scheme: light) { body::before { opacity: .28; } }
+  :root[data-theme="light"] body::before { opacity: .28; }
+  :root[data-theme="dark"] body::before { opacity: .22; }
+  a { color: var(--accent); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  ::selection { background: var(--accent); color: var(--accent-ink); }
+
+  .topbar {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 22px; padding-bottom: 20px; border-bottom: 1px solid var(--border); gap: 12px; flex-wrap: wrap;
+  }
+  .topbar h1 {
+    font-family: var(--font-display); font-size: 1.6rem; font-weight: 700; margin: 0;
+    letter-spacing: -0.01em; text-wrap: balance;
+  }
+  .brand-mark {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; border-radius: 9px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: var(--accent-ink);
+    box-shadow: var(--glow);
+    font-size: 1rem; margin-right: 10px; vertical-align: middle; position: relative; top: -2px;
+  }
+  .eyebrow {
+    font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .12em;
+    font-size: .68rem; font-weight: 600; color: var(--accent-2); margin: 0 0 6px;
+  }
+  .subtitle { color: var(--muted); font-size: 0.92rem; margin-top: 6px; max-width: 52ch; }
+  .topbar-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+  /* --- Selector de plugins: mismo patron en todas las paginas de Home
+     Orchestrator, para que cambiar de Battery a Climate (y a lo que
+     venga despues) se sienta como un unico sistema, no apps sueltas. --- */
+  .plugin-switch {
+    display: inline-flex; gap: 3px; padding: 3px; border-radius: 24px;
+    background: var(--glass-bg); border: 1px solid var(--glass-border);
+    backdrop-filter: var(--glass-blur-soft); -webkit-backdrop-filter: var(--glass-blur-soft);
+  }
+  .plugin-switch a {
+    display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px;
+    font-size: 0.78rem; font-weight: 700; font-family: var(--font-mono); text-decoration: none;
+    color: var(--muted); transition: background .15s, color .15s;
+  }
+  .plugin-switch a:hover { color: var(--text); }
+  .plugin-switch a.current { background: var(--accent); color: var(--accent-ink); box-shadow: var(--glow); }
+
+  .card {
+    background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius);
+    backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+    box-shadow: var(--shadow), inset 0 1px 0 var(--glass-sheen); padding: 22px 24px; margin-bottom: 16px;
+    position: relative; overflow: hidden;
+  }
+  .card::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent) 30%, var(--accent-2) 70%, transparent);
+    opacity: .55;
+  }
+  .card h2 {
+    font-family: var(--font-display); font-size: .95rem; font-weight: 700; margin: 0 0 16px;
+    display: flex; align-items: center; gap: 8px; letter-spacing: -.005em;
+  }
+  .card h2 .hint { font-weight: 400; color: var(--muted); font-size: 0.78rem; margin-left: auto; font-family: var(--font-body); }
+  .help { font-size: 0.78rem; color: var(--muted); margin-top: 5px; }
+
+  label { font-size: 0.76rem; font-weight: 600; color: var(--muted); display: block; margin: 10px 0 4px; letter-spacing: .01em; }
+  input, select, textarea {
+    width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--glass-border);
+    background: var(--glass-bg); color: var(--text); font-size: 0.9rem; font-family: var(--font-body);
+    backdrop-filter: var(--glass-blur-soft); -webkit-backdrop-filter: var(--glass-blur-soft);
+    transition: border-color .15s;
+  }
+  textarea { font-family: var(--font-mono); font-size: .82rem; min-height: 64px; resize: vertical; }
+  input:hover, select:hover, textarea:hover { border-color: var(--muted); }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+  input[type=checkbox] { width: auto; accent-color: var(--accent); }
+  .checkline { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 0.85rem; }
+  .checkline label { margin: 0; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 16px; }
+  @media (max-width: 700px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+
+  button {
+    padding: 9px 16px; border-radius: 8px; border: none; cursor: pointer;
+    background: var(--accent); color: var(--accent-ink); font-size: 0.85rem; font-weight: 600;
+    transition: filter .15s, transform .05s, box-shadow .15s; font-family: var(--font-body);
+  }
+  button:hover { filter: brightness(1.1); box-shadow: var(--glow); }
+  button:active { transform: translateY(1px); }
+  button.secondary { background: var(--accent-soft); color: var(--accent); }
+  button.danger { background: var(--red-soft); color: var(--red); }
+  button.ghost { background: var(--glass-bg); color: var(--muted); border: 1px solid var(--glass-border); }
+  .actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+
+  summary { list-style: none; cursor: pointer; }
+  summary::-webkit-details-marker { display: none; }
+  .add-toggle {
+    cursor: pointer; font-size: 0.82rem; color: var(--accent); font-weight: 600;
+    margin-top: 10px; display: inline-flex; align-items: center; gap: 5px;
+  }
+
+  .empty { color: var(--muted); font-size: 0.85rem; padding: 10px 0; }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px; border-radius: 20px;
+    font-size: 0.76rem; font-weight: 700; letter-spacing: .04em; white-space: nowrap; font-family: var(--font-mono);
+  }
+  .pill-heat { background: var(--red-soft); color: var(--red); box-shadow: 0 0 0 1px #fb718533; }
+  .pill-cool { background: #22d3ee20; color: var(--accent-2); box-shadow: 0 0 0 1px #22d3ee33; }
+  .pill-idle { background: var(--glass-bg); color: var(--muted); box-shadow: 0 0 0 1px var(--border); }
+  .pill-off { background: var(--glass-bg); color: var(--muted); box-shadow: 0 0 0 1px var(--border); }
+  .pill-fan { background: var(--amber-soft); color: var(--amber); box-shadow: 0 0 0 1px #fbbf2433; }
+  .pill-dry { background: var(--amber-soft); color: var(--amber); box-shadow: 0 0 0 1px #fbbf2433; }
+  .pill-unavailable { background: var(--red-soft); color: var(--red); box-shadow: 0 0 0 1px #fb718533; }
+  .pill-sim { background: var(--accent-soft); color: var(--accent); box-shadow: 0 0 0 1px #8b5cf633; }
+  .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  @media (prefers-reduced-motion: no-preference) { .pill-heat::before, .pill-cool::before { animation: pulse 1.8s ease-in-out infinite; } }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+
+  .conn-dot { display: inline-flex; align-items: center; gap: 6px; font-size: .72rem; font-family: var(--font-mono); color: var(--muted); }
+  .conn-dot .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--red); }
+  .conn-dot.ok .dot { background: var(--green); }
+
+  .zone-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+  .zone-card {
+    border: 1px solid var(--glass-border); border-radius: var(--radius); padding: 16px 18px;
+    background: var(--glass-bg); backdrop-filter: var(--glass-blur-soft); -webkit-backdrop-filter: var(--glass-blur-soft);
+    box-shadow: var(--shadow);
+  }
+  .zone-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .zone-name { font-family: var(--font-display); font-weight: 700; font-size: 1rem; }
+  .zone-temps { display: flex; align-items: baseline; gap: 10px; margin: 10px 0 6px; }
+  .zone-temp-now { font-family: var(--font-mono); font-size: 1.9rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .zone-temp-target { font-family: var(--font-mono); font-size: 0.9rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .zone-reason { font-size: 0.78rem; color: var(--muted); margin-top: 6px; min-height: 2.6em; }
+  .zone-actions { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+  .zone-actions button { padding: 6px 11px; font-size: .76rem; }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--text); color: var(--bg); padding: 10px 18px; border-radius: 9px;
+    font-size: 0.85rem; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 20;
+  }
+  .toast.show { opacity: 0.95; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <p class="eyebrow">Home Orchestrator</p>
+    <h1><span class="brand-mark" aria-hidden="true">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 3a3 3 0 0 0-3 3v7.1a4 4 0 1 0 6 0V6a3 3 0 0 0-3-3Zm0 2a1 1 0 0 1 1 1v7.6l.6.5a2 2 0 1 1-3.2 0l.6-.5V6a1 1 0 0 1 1-1Z" fill="currentColor"/>
+      </svg>
+    </span>Climate</h1>
+    <div class="subtitle">Termostatos adaptativos por zona, expuestos como entidades <code>climate.*</code> nativas de HA (HomeKit/Matter incluido) — sin cajas negras.</div>
+  </div>
+  <div class="topbar-right">
+    <nav class="plugin-switch" aria-label="Cambiar de plugin">
+      <a href="/">⚡ Battery</a>
+      <a href="/plugins/climate/" class="current">🌡 Climate</a>
+    </nav>
+  </div>
+</div>
+
+<div class="card">
+  <h2>
+    <span>Zonas</span>
+    <span class="hint">
+      <span id="conn-ws" class="conn-dot"><span class="dot"></span>WebSocket</span>
+      &nbsp;&nbsp;
+      <span id="conn-mqtt" class="conn-dot"><span class="dot"></span>MQTT</span>
+    </span>
+  </h2>
+  <div id="zone-grid" class="zone-grid"></div>
+  <div id="zone-empty" class="empty" style="display:none">Todavía no hay ninguna zona configurada — añade la primera abajo.</div>
+</div>
+
+<div class="card">
+  <details id="add-zone-details">
+    <summary><span class="add-toggle">＋ Nueva zona</span></summary>
+    <form id="zone-form" style="margin-top:16px" onsubmit="return submitZoneForm(event)">
+      <input type="hidden" id="zf-id" value="">
+
+      <label for="zf-name">Nombre</label>
+      <input id="zf-name" required placeholder="Salón">
+
+      <div class="grid2">
+        <div>
+          <label for="zf-current-temp">Sensor de temperatura actual</label>
+          <input id="zf-current-temp" placeholder="sensor.salon_temperatura">
+        </div>
+        <div>
+          <label for="zf-humidity">Sensor de humedad (opcional)</label>
+          <input id="zf-humidity" placeholder="sensor.salon_humedad">
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div>
+          <label for="zf-outdoor-temp">Sensor de temperatura exterior (opcional)</label>
+          <input id="zf-outdoor-temp" placeholder="sensor.temperatura_exterior">
+        </div>
+        <div>
+          <label for="zf-weather">Entidad de previsión (weather.*)</label>
+          <input id="zf-weather" placeholder="weather.forecast_casa">
+        </div>
+      </div>
+
+      <p class="help" style="margin-top:14px">Actuadores — entity_id separados por comas.</p>
+      <div class="grid2">
+        <div>
+          <label for="zf-heat">Switches de calor</label>
+          <input id="zf-heat" placeholder="switch.calefactor_salon">
+        </div>
+        <div>
+          <label for="zf-cool">Switches de frío</label>
+          <input id="zf-cool" placeholder="switch.ac_salon">
+        </div>
+      </div>
+      <label for="zf-climate">Delegados climate.* (aire acondicionado con su propio termostato)</label>
+      <input id="zf-climate" placeholder="climate.airclima_frio_salon, climate.airclima_calor_salon">
+      <label for="zf-humidifiers">Humidificadores/deshumidificadores (opcional)</label>
+      <input id="zf-humidifiers" placeholder="humidifier.salon">
+
+      <p class="help" style="margin-top:14px">Presencia y ventanas (opcional).</p>
+      <div class="grid2">
+        <div>
+          <label for="zf-presence">Sensores de presencia</label>
+          <input id="zf-presence" placeholder="binary_sensor.salon_presencia">
+        </div>
+        <div>
+          <label for="zf-doors">Sensores de puerta/ventana</label>
+          <input id="zf-doors" placeholder="binary_sensor.salon_ventana">
+        </div>
+      </div>
+      <div class="checkline">
+        <input type="checkbox" id="zf-auto-window">
+        <label for="zf-auto-window">Detectar ventana abierta por caída brusca de temperatura (sin sensor dedicado)</label>
+      </div>
+
+      <p class="help" style="margin-top:14px">Presets — uno por línea: <code>nombre; calor=21; frio=25</code>.</p>
+      <textarea id="zf-presets" placeholder="Noche; calor=19; frio=26&#10;Teletrabajo; calor=21.5; frio=24.5"></textarea>
+      <div class="grid2">
+        <div>
+          <label for="zf-presence-preset">Preset cuando hay presencia (opcional)</label>
+          <input id="zf-presence-preset" placeholder="Teletrabajo">
+        </div>
+        <div>
+          <label for="zf-away-preset">Preset cuando no hay presencia (opcional)</label>
+          <input id="zf-away-preset" placeholder="Noche">
+        </div>
+      </div>
+
+      <p class="help" style="margin-top:14px">Límites y comportamiento.</p>
+      <div class="grid3">
+        <div>
+          <label for="zf-min-temp">Mínima (°C)</label>
+          <input id="zf-min-temp" type="number" step="0.5" value="15">
+        </div>
+        <div>
+          <label for="zf-max-temp">Máxima (°C)</label>
+          <input id="zf-max-temp" type="number" step="0.5" value="30">
+        </div>
+        <div>
+          <label for="zf-deadband">Histéresis (°C)</label>
+          <input id="zf-deadband" type="number" step="0.1" value="0.3">
+        </div>
+      </div>
+      <div class="grid2">
+        <div>
+          <label for="zf-priority">Prioridad</label>
+          <select id="zf-priority">
+            <option value="confort">Confort</option>
+            <option value="ahorro">Ahorro</option>
+            <option value="manual">Manual</option>
+          </select>
+        </div>
+        <div>
+          <label for="zf-target-humidity">Humedad objetivo (%)</label>
+          <input id="zf-target-humidity" type="number" step="1" value="45">
+        </div>
+      </div>
+      <div class="grid2">
+        <div>
+          <label for="zf-home-power">Sensor de potencia de toda la vivienda (opcional, para reparto)</label>
+          <input id="zf-home-power" placeholder="sensor.consumo_instantaneo">
+        </div>
+        <div>
+          <label for="zf-max-power">Límite de potencia de la zona en W (0 = sin límite)</label>
+          <input id="zf-max-power" type="number" step="1" value="0">
+        </div>
+      </div>
+
+      <div class="checkline">
+        <input type="checkbox" id="zf-simulate" checked>
+        <label for="zf-simulate">Modo simulación — calcula y publica el estado, pero nunca acciona los dispositivos de verdad</label>
+      </div>
+      <p class="help warn" id="zf-simulate-warn" style="display:none;color:var(--red)">⚠ Con la simulación desactivada esta zona accionará switches/climates reales en cuanto se guarde.</p>
+
+      <div class="actions">
+        <button type="submit" id="zf-submit-btn">Crear zona</button>
+        <button type="button" class="ghost" onclick="cancelZoneForm()">Cancelar</button>
+      </div>
+    </form>
+  </details>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = "/plugins/climate/api";
+
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+function actionPillClass(hvacAction, available) {
+  if (available === false) return "pill-unavailable";
+  return {heating: "pill-heat", cooling: "pill-cool", idle: "pill-idle", off: "pill-off",
+          fan: "pill-fan", drying: "pill-dry"}[hvacAction] || "pill-idle";
+}
+
+function fmtTemp(v) { return (v === null || v === undefined) ? "—" : `${Number(v).toFixed(1)}°`; }
+
+function renderZones(zones) {
+  const grid = document.getElementById("zone-grid");
+  const empty = document.getElementById("zone-empty");
+  if (!zones.length) { grid.innerHTML = ""; empty.style.display = "block"; return; }
+  empty.style.display = "none";
+
+  grid.innerHTML = zones.map(z => {
+    const live = z.live || {};
+    const available = live.available !== false;
+    const cfg = z.config || {};
+    let targetLabel = fmtTemp(live.target_temperature);
+    if (live.target_temperature_low !== null && live.target_temperature_low !== undefined) {
+      targetLabel = `${fmtTemp(live.target_temperature_low)} – ${fmtTemp(live.target_temperature_high)}`;
+    }
+    return `
+    <div class="zone-card">
+      <div class="zone-card-head">
+        <span class="zone-name">${esc(cfg.name || z.id)}</span>
+        <span class="pill ${actionPillClass(live.hvac_action, available)}">${available ? esc(live.hvac_action || "—") : "no disponible"}</span>
+      </div>
+      <div class="zone-temps">
+        <span class="zone-temp-now">${fmtTemp(live.current_temperature)}</span>
+        <span class="zone-temp-target">objetivo ${targetLabel}</span>
+      </div>
+      <div>
+        <span class="pill pill-idle" style="text-transform:capitalize">${esc(live.hvac_mode || "—")}</span>
+        ${cfg.simulate ? '<span class="pill pill-sim">simulación</span>' : ""}
+      </div>
+      <div class="zone-reason">${esc(live.reason || "")}</div>
+      <div class="zone-actions">
+        <button class="secondary" onclick="refreshZone('${z.id}')">Forzar decisión</button>
+        <button class="ghost" onclick="editZone('${z.id}')">Editar</button>
+        <button class="danger" onclick="deleteZone('${z.id}', '${esc(cfg.name || z.id).replace(/'/g, "\\'")}')">Eliminar</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+let lastZones = [];
+
+async function loadZones() {
+  try {
+    const r = await fetch(`${API}/zones`);
+    lastZones = await r.json();
+    renderZones(lastZones);
+  } catch (e) { /* red temporalmente caida -- se reintenta solo en el proximo ciclo */ }
+}
+
+async function loadStatus() {
+  try {
+    const r = await fetch(`${API}/status`);
+    const s = await r.json();
+    document.getElementById("conn-ws").classList.toggle("ok", !!s.ws_connected);
+    document.getElementById("conn-mqtt").classList.toggle("ok", !!s.mqtt_connected);
+  } catch (e) { /* idem */ }
+}
+
+async function refreshZone(id) {
+  const r = await fetch(`${API}/zones/${id}/refresh`, {method: "POST"});
+  if (r.ok) { toast("Decisión forzada"); loadZones(); } else { toast("Fallo al forzar la decisión"); }
+}
+
+async function deleteZone(id, name) {
+  if (!confirm(`¿Eliminar la zona "${name}"? Se retira también la entidad climate.* de Home Assistant.`)) return;
+  const r = await fetch(`${API}/zones/${id}`, {method: "DELETE"});
+  if (r.ok) { toast("Zona eliminada"); loadZones(); } else { toast("Fallo al eliminar"); }
+}
+
+function csvToList(id) {
+  const v = document.getElementById(id).value.trim();
+  return v ? v.split(",").map(s => s.trim()).filter(Boolean) : [];
+}
+function listToCsv(list) { return (list || []).join(", "); }
+
+function readZoneForm() {
+  return {
+    name: document.getElementById("zf-name").value.trim(),
+    current_temp_sensor: document.getElementById("zf-current-temp").value.trim(),
+    humidity_sensor: document.getElementById("zf-humidity").value.trim(),
+    outdoor_temp_sensor: document.getElementById("zf-outdoor-temp").value.trim(),
+    weather_entity: document.getElementById("zf-weather").value.trim(),
+    heat_switches: csvToList("zf-heat"),
+    cool_switches: csvToList("zf-cool"),
+    climate_entities: csvToList("zf-climate"),
+    humidifier_entities: csvToList("zf-humidifiers"),
+    presence_entities: csvToList("zf-presence"),
+    door_window_entities: csvToList("zf-doors"),
+    auto_window_detection: document.getElementById("zf-auto-window").checked,
+    presets_text: document.getElementById("zf-presets").value,
+    presence_preset: document.getElementById("zf-presence-preset").value.trim(),
+    away_preset: document.getElementById("zf-away-preset").value.trim(),
+    min_temp: parseFloat(document.getElementById("zf-min-temp").value) || 15,
+    max_temp: parseFloat(document.getElementById("zf-max-temp").value) || 30,
+    deadband: parseFloat(document.getElementById("zf-deadband").value) || 0.3,
+    priority: document.getElementById("zf-priority").value,
+    target_humidity: parseFloat(document.getElementById("zf-target-humidity").value) || 45,
+    home_power_sensor: document.getElementById("zf-home-power").value.trim(),
+    max_power_w: parseFloat(document.getElementById("zf-max-power").value) || 0,
+    simulate: document.getElementById("zf-simulate").checked,
+  };
+}
+
+function fillZoneForm(cfg) {
+  document.getElementById("zf-name").value = cfg.name || "";
+  document.getElementById("zf-current-temp").value = cfg.current_temp_sensor || "";
+  document.getElementById("zf-humidity").value = cfg.humidity_sensor || "";
+  document.getElementById("zf-outdoor-temp").value = cfg.outdoor_temp_sensor || "";
+  document.getElementById("zf-weather").value = cfg.weather_entity || "";
+  document.getElementById("zf-heat").value = listToCsv(cfg.heat_switches);
+  document.getElementById("zf-cool").value = listToCsv(cfg.cool_switches);
+  document.getElementById("zf-climate").value = listToCsv(cfg.climate_entities);
+  document.getElementById("zf-humidifiers").value = listToCsv(cfg.humidifier_entities);
+  document.getElementById("zf-presence").value = listToCsv(cfg.presence_entities);
+  document.getElementById("zf-doors").value = listToCsv(cfg.door_window_entities);
+  document.getElementById("zf-auto-window").checked = !!cfg.auto_window_detection;
+  document.getElementById("zf-presets").value = cfg.presets_text || "";
+  document.getElementById("zf-presence-preset").value = cfg.presence_preset || "";
+  document.getElementById("zf-away-preset").value = cfg.away_preset || "";
+  document.getElementById("zf-min-temp").value = cfg.min_temp ?? 15;
+  document.getElementById("zf-max-temp").value = cfg.max_temp ?? 30;
+  document.getElementById("zf-deadband").value = cfg.deadband ?? 0.3;
+  document.getElementById("zf-priority").value = cfg.priority || "confort";
+  document.getElementById("zf-target-humidity").value = cfg.target_humidity ?? 45;
+  document.getElementById("zf-home-power").value = cfg.home_power_sensor || "";
+  document.getElementById("zf-max-power").value = cfg.max_power_w ?? 0;
+  document.getElementById("zf-simulate").checked = cfg.simulate !== false;
+}
+
+function editZone(id) {
+  const z = lastZones.find(x => x.id === id);
+  if (!z) return;
+  document.getElementById("zf-id").value = id;
+  fillZoneForm(z.config || {});
+  document.getElementById("zf-submit-btn").textContent = "Guardar cambios";
+  document.getElementById("add-zone-details").open = true;
+  document.getElementById("add-zone-details").scrollIntoView({behavior: "smooth", block: "start"});
+}
+
+function cancelZoneForm() {
+  document.getElementById("zone-form").reset();
+  document.getElementById("zf-id").value = "";
+  document.getElementById("zf-submit-btn").textContent = "Crear zona";
+  document.getElementById("add-zone-details").open = false;
+}
+
+document.getElementById("zf-simulate").addEventListener("change", (e) => {
+  document.getElementById("zf-simulate-warn").style.display = e.target.checked ? "none" : "block";
+});
+
+async function submitZoneForm(ev) {
+  ev.preventDefault();
+  const id = document.getElementById("zf-id").value;
+  const payload = readZoneForm();
+  if (!payload.name || !payload.current_temp_sensor) {
+    toast("Nombre y sensor de temperatura son obligatorios");
+    return false;
+  }
+  const url = id ? `${API}/zones/${id}` : `${API}/zones`;
+  const method = id ? "PUT" : "POST";
+  const r = await fetch(url, {method, headers: {"Content-Type": "application/json"}, body: JSON.stringify(payload)});
+  if (r.ok) {
+    toast(id ? "Zona actualizada" : "Zona creada");
+    cancelZoneForm();
+    loadZones();
+  } else {
+    const body = await r.json().catch(() => ({}));
+    toast(body.error || "Fallo al guardar la zona");
+  }
+  return false;
+}
+
+loadZones();
+loadStatus();
+setInterval(loadZones, 8000);
+setInterval(loadStatus, 8000);
+</script>
+</body>
+</html>

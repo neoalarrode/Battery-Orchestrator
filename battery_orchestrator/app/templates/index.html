@@ -126,6 +126,23 @@
   .subtitle { color: var(--muted); font-size: 0.92rem; margin-top: 6px; max-width: 52ch; }
 
   .topbar-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+  /* --- Selector de plugins: mismo patron en todas las paginas de Home
+     Orchestrator, para que cambiar de Battery a Climate (y a lo que
+     venga despues) se sienta como un unico sistema, no apps sueltas. --- */
+  .plugin-switch {
+    display: inline-flex; gap: 3px; padding: 3px; border-radius: 24px;
+    background: var(--glass-bg); border: 1px solid var(--glass-border);
+    backdrop-filter: var(--glass-blur-soft); -webkit-backdrop-filter: var(--glass-blur-soft);
+  }
+  .plugin-switch a {
+    display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px;
+    font-size: 0.78rem; font-weight: 700; font-family: var(--font-mono); text-decoration: none;
+    color: var(--muted); transition: background .15s, color .15s;
+  }
+  .plugin-switch a:hover { color: var(--text); }
+  .plugin-switch a.current { background: var(--accent); color: var(--accent-ink); box-shadow: var(--glow); }
+
   .lang-select {
     width: auto; padding: 6px 10px; font-size: 0.78rem; font-family: var(--font-mono);
     border-radius: 20px; background: var(--glass-bg); border: 1px solid var(--glass-border); color: var(--text);
@@ -428,6 +445,10 @@
     <div class="subtitle" data-i18n="topbar_subtitle">Carga y descarga adaptativa por precio, sol y consumo real — sin cajas negras.</div>
   </div>
   <div class="topbar-right">
+    <nav class="plugin-switch" aria-label="Cambiar de plugin">
+      <a href="/" class="current">⚡ Battery</a>
+      <a href="/plugins/climate/">🌡 Climate</a>
+    </nav>
     <select class="lang-select" id="lang-select" onchange="onLangChange()" aria-label="Idioma / Language"></select>
     <span id="wallpanel-pill" class="pill pill-readonly" style="display:none" data-i18n="wallpanel_pill">SOLO LECTURA</span>
     <span id="mode-pill" class="pill"></span>

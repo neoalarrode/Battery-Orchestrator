@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.61
+**Interfaz adaptada a la vía de plugins**: nuevo selector "Battery ⇄ Climate" en la cabecera de ambas páginas (mismo componente visual en las dos, mismos tokens de color) — cambiar de plugin ya se siente como un único sistema, no dos apps sueltas.
+
+**Primera interfaz real para el plugin de Climate** (`climate_plugin v0.2.0`, servida en `/plugins/climate/`): tarjetas de zona con temperatura actual/objetivo, modo, acción (calentando/enfriando/inactivo...) y el motivo textual de la última decisión; botones por zona para forzar una decisión ahora, editar o eliminar; formulario de alta/edición con sensores, actuadores, presets, límites y modo simulación (con aviso explícito si se desactiva, porque en ese momento empieza a accionar dispositivos reales). Sin frameworks — mismo estilo autocontenido en un único HTML que ya usa Battery.
+
 ## 0.11.60
 `POST /api/zones/<id>/refresh` en el plugin de Climate — fuerza una decisión ahora mismo, sin esperar al próximo evento reactivo o al refresco periódico. Surgido al verificar en producción una zona de prueba recién creada (útil también como diagnóstico manual en el futuro, no solo para pruebas).
 

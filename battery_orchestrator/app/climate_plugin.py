@@ -35,7 +35,7 @@ REACTIVE_MIN_INTERVAL_SECONDS = 5
 class ClimatePlugin(Plugin):
     slug = "climate"
     name = "Climate Orchestrator"
-    version = "0.1.0"
+    version = "0.2.0"
 
     def __init__(self) -> None:
         self._runners: dict[str, ZoneRunner] = {}
@@ -43,7 +43,7 @@ class ClimatePlugin(Plugin):
         self._ws = ha_websocket.HAWebSocketClient(self._on_entity_change)
         self._mqtt = ha_mqtt.HAMqttClient(client_id="home_orchestrator_climate")
         self._reactive = ha_websocket.ReactiveTrigger(self._run_reactive_cycle)
-        self._app = flask.Flask("climate_plugin")
+        self._app = flask.Flask("climate_plugin", template_folder="climate_templates")
         self._register_routes()
 
     # --------------------------------------------------------------- Flask -
@@ -53,6 +53,10 @@ class ClimatePlugin(Plugin):
 
     def _register_routes(self) -> None:
         app = self._app
+
+        @app.get("/")
+        def _index():
+            return flask.render_template("index.html")
 
         @app.get("/api/zones")
         def _list_zones():

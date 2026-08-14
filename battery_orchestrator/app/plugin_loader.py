@@ -73,10 +73,10 @@ PLUGIN_CATALOG = {
     "battery": {
         "name": "Energy Orchestrator",
         "description": "Baterías, solar y cargas diferibles — carga y descarga adaptativa por precio, sol y consumo real",
-        "version": "0.11.71",
+        "version": "0.11.72",
         "downloadable": True,
-        "tag": "v0.11.68",
-        "sha256": "1a84be7142918c2f0232510ccd587c079576f5edc3462a51b5193226c457618a",  # sha256 real del tarball de v0.11.68, verificado contra una descarga real antes de fijarlo aqui
+        "tag": "v0.11.71",
+        "sha256": "263f3180c72680567b40bd71338acf9e1875bb0e3f990624337118fde1e94853",  # sha256 real del tarball de v0.11.71, verificado contra una descarga real antes de fijarlo aqui
         "files": [
             "main.py", "battery_plugin.py", "battery_exec.py", "anomaly_store.py",
             "capacity_store.py", "climate_link.py", "deferrable_exec.py",
@@ -92,8 +92,8 @@ PLUGIN_CATALOG = {
         "description": "Termostatos adaptativos por zona, expuestos como climate.* nativos de HA (HomeKit/Matter) vía MQTT Discovery",
         "version": "0.2.0",  # version PROPIA del plugin (ClimatePlugin.version) -- distinta de "tag", que es la version del REPO de la que se descarga
         "downloadable": True,
-        "tag": "v0.11.63",
-        "sha256": "a1c57e3d7fc08156a084f6d9b5fe0cfc758f399572d7c74d4463c0ba2b021e60",
+        "tag": "v0.11.71",
+        "sha256": "263f3180c72680567b40bd71338acf9e1875bb0e3f990624337118fde1e94853",  # sha256 real del tarball de v0.11.71, verificado contra una descarga real antes de fijarlo aqui (re-pineado: el fix de rutas relativas tocaba climate_templates/index.html)
         "files": ["climate_plugin.py", "climate", "climate_templates"],
     },
 }

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.72
+Sha256 de Energy y Climate re-pineados en el catálogo, ambos al tag `v0.11.71` (el que trae el fix de rutas relativas) — verificado con una descarga real de los dos antes de fijarlo. Sin esto, instalar cualquiera de los dos desde cero seguiría trayendo la versión con el 404.
+
 ## 0.11.71
 **Bug real: 404 al entrar en Climate desde el panel** — el selector de plugins y las llamadas a la API usaban rutas ABSOLUTAS (`/plugins/climate/`, `/api/...`). Bajo el proxy de ingress de HA (que antepone un token a toda la URL) una ruta absoluta se resuelve contra la raíz del dominio, no contra el prefijo de ingress — el enlace/petición se sale del túnel y HA responde 404. Corregido a rutas relativas en todos los sitios nuevos de esta fase (selector de plugins de Energy y Climate, formulario de zonas de Climate, catálogo del núcleo) — mismo criterio que ya seguía el resto de la app desde siempre (`fetch('api/status')`, nunca `fetch('/api/status')`).
 

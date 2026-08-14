@@ -1,0 +1,9 @@
+# Plugins DESCARGABLES (ver plugin_loader.PLUGIN_CATALOG / plugin_downloader.py)
+# no vienen precargados en la imagen -- se instalan de verdad desde la
+# tienda de plugins, verificados por sha256 contra un tag del repo. Solo
+# el nucleo (Energy/"battery") viene siempre en la imagen; el resto se
+# descarga bajo demanda a /data/plugins/<slug>/, que sobrevive a
+# actualizaciones/restauraciones de copia de seguridad de Supervisor.
+app/climate_plugin.py
+app/climate/
+app/climate_templates/

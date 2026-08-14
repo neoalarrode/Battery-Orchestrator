@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.67
+**Climate deja de venir precargado en la imagen** (`.dockerignore` nuevo, excluye `climate_plugin.py`/`climate/`/`climate_templates/` del build) — a partir de ahora se instala de verdad desde la tienda, descargado y verificado por sha256, no incluido de fábrica. Desplegado con red de seguridad completa: copia de seguridad de todo `/data` tomada antes del cambio (0.11.65), aislamiento de fallos entre plugins (0.11.66) y, en esta instalación en concreto, Climate ya descargado y verificado a `/data/plugins/climate/` ANTES de quitarlo de la imagen, para que el arranque nunca se quede sin su código.
+
+Energy (el núcleo) sigue viniendo siempre en la imagen — no tiene sentido descargarlo aparte de lo que lo carga.
+
 ## 0.11.66
 **Aislamiento de fallos entre plugins**: si un plugin OPCIONAL (Climate, o cualquier otro futuro) falla al cargar — código no encontrado, error al importar — el núcleo ya no se cae entero; se registra el error y se sigue arrancando sin él. Solo un fallo del núcleo (Energy) revienta el arranque, porque sin eso no hay nada que servir en la raíz. Paso previo, deliberado, antes de sacar Climate del Dockerfile (siguiente versión): así un problema con su descarga nunca deja la instalación entera sin responder.
 

@@ -61,8 +61,22 @@ def load_devices() -> list[dict]:
 
 
 def save_devices(devices: list[dict]) -> None:
+    """Bug real, confirmado en produccion: esto escribia `{"devices":
+    devices}` como seccion COMPLETA, borrando la cuenta Tuya guardada en
+    la misma seccion cada vez que se añadia/editaba/borraba un
+    dispositivo (`add_device`/`update_device`/`delete_device`, todos
+    pasan por aqui) -- un usuario vinculaba la cuenta, resolvia UN
+    dispositivo, lo añadia, y la cuenta desaparecia sin que nada lo
+    avisase: el siguiente /resolve fallaba con "vincula primero una
+    cuenta Tuya" aunque la interfaz siguiera mostrandola como vinculada
+    (hasta el proximo refresco de /api/account). Fix: leer la seccion
+    actual primero (igual que ya hacia save_account) y solo reemplazar
+    la clave "devices", preservando cualquier otra cosa que viva en la
+    misma seccion."""
     with _lock:
-        _write_section({"devices": devices})
+        section = _read_section()
+        section["devices"] = devices
+        _write_section(section)
 
 
 def add_device(config: dict) -> dict:

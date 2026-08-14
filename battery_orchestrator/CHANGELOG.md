@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.93
+Sha256 de Tuya re-pineado al tag `v0.11.92` (fix cuenta borrada al añadir dispositivo) — verificado con una descarga real antes de fijarlo.
+
 ## 0.11.92
 **Bug real, confirmado en producción: la cuenta Tuya vinculada desaparecía sola al añadir el primer dispositivo.** `tuya_store.save_devices()` escribía `{"devices": devices}` como sección COMPLETA del plugin en el config compartido, borrando la clave `"account"` guardada en esa misma sección — cualquier alta/edición/borrado de dispositivo (todos pasan por `save_devices`) volatilizaba la cuenta sin ningún aviso. Reproducido exacto en los logs: vincular cuenta → resolver el primer dispositivo (200, la cuenta seguía ahí) → añadirlo (`POST /api/devices`, 201) → a partir de ahí todo `/resolve` posterior devolvía 400 "vincula primero una cuenta Tuya", aunque la interfaz siguiera mostrando la cuenta como vinculada hasta el siguiente refresco. Fix: `save_devices` ahora lee la sección actual primero y solo reemplaza `"devices"`, igual que ya hacía `save_account` con `"account"`. Verificado con un test sintético: la cuenta sobrevive a añadir/editar/borrar dispositivos.
 

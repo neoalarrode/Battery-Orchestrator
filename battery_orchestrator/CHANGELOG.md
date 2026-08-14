@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.11.87
+**Dos mejoras reales al motor de decisión en vivo de Climate** (a petición explícita, tras el gráfico de previsión de la versión anterior). Ambas simétricas para frío y calor, ambas con fallback exacto al comportamiento de antes cuando no hay datos, ambas nunca cruzan los límites de seguridad de la zona (`min_temp`/`max_temp` siguen mandando por encima de todo):
+
+1. **Modulación de consigna por inercia + previsión exterior** (`scheduler._modulate_target`, nuevo): si la previsión exterior va a acercar la zona a la consigna por sí sola en las próximas 3h (calentando en invierno, enfriando en verano), el motor pide algo menos de golpe activo — hasta 3°C menos — dejando que la inercia real de la zona y el exterior hagan parte del trabajo, con más antelación. Ejemplo real: consigna 24°C, pero la previsión exterior sube fuerte y la zona retiene bien el calor — en vez de forzar el equipo a 24°C ya, se pide ~22°C con más antelación, confiando en que el exterior complete el resto. El motivo en texto plano siempre explica el porqué y el número exacto.
+
+2. **Anticipar la llegada según el patrón histórico de ocupación** (`scheduler._occupancy_anticipate`, nuevo, usa `climate/occupancy.py` ya construido para el gráfico): si la zona no está ocupada ahora pero el patrón histórico dice que suele ocuparse dentro de poco, empieza a acercarse a la consigna de confort con antelación — para que ya esté lista cuando de verdad llegue alguien, en vez de reaccionar solo cuando el sensor de presencia se activa. Nunca sustituye una anulación manual, nunca inventa un patrón sin muestras suficientes.
+
+Ninguna de las dos toca `min_temp`/`max_temp`, y ambas se desactivan solas (comportamiento idéntico al de antes) cuando falta previsión exterior, modelo térmico aprendido, o patrón de ocupación con muestras suficientes — nunca inventan un dato que no está.
+
 ## 0.11.86
 Sha256 de Climate re-pineado al tag `v0.11.85` (gráfico de previsión 24h) — verificado con una descarga real antes de fijarlo. Aprendida la lección de v0.11.83/84: el re-pin va en el MISMO commit/tag que se despliega, nunca en uno posterior.
 

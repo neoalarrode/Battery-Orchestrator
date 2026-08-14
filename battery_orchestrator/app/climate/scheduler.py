@@ -69,6 +69,11 @@ ANTICIPATE_LOOKAHEAD_HOURS = 3    # cuantas horas de previsión exterior se mira
 REFERENCE_RATE_DEG_H = 1.0        # tasa de referencia (°C/h) a partir de la cual una zona se considera "rapida" y se le da margen completo
 PRICE_ANTICIPATE_LOOKAHEAD_HOURS = 4  # cuantas horas del pronostico de red (Battery Orchestrator) se miran para anticipar una hora punta
 
+TARGET_MODULATION_LOOKAHEAD_HOURS = 3  # cuantas horas de previsión exterior se miran para calcular cuanto va a ayudar/estorbar por si sola
+TARGET_MODULATION_MAX_DEG = 3.0        # tope duro: nunca se relaja la consigna activa mas de esto, pase lo que diga la previsión
+
+OCCUPANCY_ANTICIPATE_LOOKAHEAD_HOURS = 3  # cuantas horas del patron de ocupacion (climate/occupancy.py) se miran para anticipar una llegada
+
 # `idle_loss_coeff` (thermal_model.py, aprendido del historico real) es
 # la CAPACIDAD DE RETENCION de la zona: cuantos grados por hora se acerca
 # a la temperatura exterior con todo apagado, por cada grado de
@@ -140,6 +145,8 @@ def decide_action(
     solar_surplus_now_w: float | None = None,
     zone_estimated_power_w: float | None = None,
     grid_forecast: list[dict] | None = None,
+    occupancy_now_likely: bool | None = None,
+    occupancy_forecast_likely: list[bool | None] | None = None,
 ) -> tuple[str, str]:
     """Devuelve (accion, motivo). `accion` es "heat" | "cool" | "idle".
 
@@ -149,6 +156,11 @@ def decide_action(
     Mode estandar de Matter) tiene las dos a la vez, calienta si baja de
     `heat_target` y enfria si sube de `cool_target`; una zona de un solo
     sentido solo trae rellena la que le corresponde (la otra es None).
+    Se MODULAN antes que nada (ver `_modulate_target`): si la previsión
+    exterior va a acercar la zona a la consigna por si sola, se pide algo
+    menos de golpe activo y con mas antelacion — el numero que de verdad
+    se persigue en el resto de esta funcion (y el que manda a los
+    actuadores) puede ser distinto de la consigna original del preset.
 
     `outdoor_forecast`: previsión horaria empezando por la hora actual
     (indice 0), o lista vacia si no hay ninguna fuente declarada — ver
@@ -161,6 +173,14 @@ def decide_action(
     reportado nunca. Solo se usan en prioridad "ahorro"; sin ellos,
     "ahorro" se comporta exactamente igual que antes de que existiera
     esta integracion (solo meteo exterior).
+
+    `occupancy_now_likely`/`occupancy_forecast_likely`: patron HISTORICO
+    de ocupacion de la zona (ver climate/occupancy.py) — estadistica
+    simple por hora del dia, NUNCA aprendizaje automatico. Solo se usa
+    para anticipar la LLEGADA (ver `_occupancy_anticipate`), aplica en
+    "confort" Y "ahorro" por igual (como `_anticipate`, no es cuestion de
+    ahorro). Sin datos (None/[]/todo None), el motor sigue exactamente
+    igual que antes de que existiera esto.
     """
     heating = heat_target is not None
     cooling = cool_target is not None
@@ -188,19 +208,25 @@ def decide_action(
             "revisa las entidades number.* del preset activo"
         )
 
+    heat_mod_note = cool_mod_note = ""
+    if heating:
+        heat_target, heat_mod_note = _modulate_target(True, heat_target, outdoor_now, outdoor_forecast, idle_loss_coeff)
+    if cooling:
+        cool_target, cool_mod_note = _modulate_target(False, cool_target, outdoor_now, outdoor_forecast, idle_loss_coeff)
+
     heat_deadband = cool_deadband = deadband
-    heat_note = cool_note = ""
+    heat_note, cool_note = heat_mod_note, cool_mod_note
     if priority == "ahorro":
         if heating:
             extra, why = _ahorro_extra_margin(True, outdoor_now, outdoor_forecast, heating_rate_deg_h,
                                                grid_tier, solar_surplus_now_w, zone_estimated_power_w)
             heat_deadband = deadband + extra
-            heat_note = f" ({why})"
+            heat_note += f" ({why})"
         if cooling:
             extra, why = _ahorro_extra_margin(False, outdoor_now, outdoor_forecast, cooling_rate_deg_h,
                                                grid_tier, solar_surplus_now_w, zone_estimated_power_w)
             cool_deadband = deadband + extra
-            cool_note = f" ({why})"
+            cool_note += f" ({why})"
 
     if heating and current_temp < heat_target - heat_deadband:
         return "heat", f"calentando hacia {heat_target:.1f}°C{heat_note}"
@@ -237,6 +263,17 @@ def decide_action(
             return action, reason
     if cooling:
         action, reason = _anticipate(False, current_temp, cool_target, deadband, outdoor_forecast, idle_loss_coeff, cooling_rate_deg_h)
+        if action != "idle":
+            return action, reason
+
+    if heating:
+        action, reason = _occupancy_anticipate(True, current_temp, heat_target, deadband,
+                                                occupancy_now_likely, occupancy_forecast_likely, heating_rate_deg_h)
+        if action != "idle":
+            return action, reason
+    if cooling:
+        action, reason = _occupancy_anticipate(False, current_temp, cool_target, deadband,
+                                                occupancy_now_likely, occupancy_forecast_likely, cooling_rate_deg_h)
         if action != "idle":
             return action, reason
 
@@ -431,6 +468,83 @@ def _anticipate(heating: bool, current_temp: float, target_temp: float, deadband
         break  # se sale de rango en el horizonte, pero todavia hay tiempo de sobra antes de tener que actuar
 
     return "idle", ""
+
+
+def _modulate_target(heating: bool, target_temp: float, outdoor_now: float | None,
+                      outdoor_forecast: list[float], idle_loss_coeff: float) -> tuple[float, str]:
+    """Si la previsión exterior va a acercar la zona a `target_temp` POR SI
+    SOLA en las proximas `TARGET_MODULATION_LOOKAHEAD_HOURS` (calentando en
+    invierno, enfriando en verano), no hace falta perseguir la consigna
+    entera de golpe con el equipo -- se pide algo menos (nunca mas de
+    `TARGET_MODULATION_MAX_DEG`), dejando que la inercia + el exterior
+    hagan parte del trabajo. Ejemplo real: consigna 24°C, pero la
+    previsión exterior sube fuerte las proximas horas y la zona retiene
+    bien el calor -- en vez de forzar el equipo a 24°C ya, se pide 22°C
+    con mas antelacion, confiando en que el exterior complete el resto.
+
+    Mismo modelo de Newton simple que el resto de este fichero: cuanto se
+    acercaria la zona a `target_temp` en el horizonte SI YA ESTUVIESE en
+    la consigna (o sea, cuanto empuja el exterior por si solo alrededor de
+    ese punto), escalado por la inercia real de la zona.
+
+    Sin previsión exterior o sin inercia aprendida todavia, no modula
+    nada -- se devuelve la consigna tal cual, comportamiento identico al
+    de antes de que existiera esto."""
+    if outdoor_now is None or not outdoor_forecast or not idle_loss_coeff:
+        return target_temp, ""
+
+    horizon = outdoor_forecast[:TARGET_MODULATION_LOOKAHEAD_HOURS] or [outdoor_now]
+    avg_outdoor = sum(horizon) / len(horizon)
+    passive_push = idle_loss_coeff * (avg_outdoor - target_temp) * len(horizon)
+
+    relief = passive_push if heating else -passive_push
+    relief = max(0.0, min(TARGET_MODULATION_MAX_DEG, relief))
+    if relief < 0.3:
+        return target_temp, ""
+
+    adjusted = target_temp - relief if heating else target_temp + relief
+    trend = "sube" if heating else "baja"
+    return adjusted, (
+        f" (previsión exterior {trend}: el exterior aportaría ~{relief:.1f}°C por sí solo en las próximas "
+        f"{len(horizon)}h, pidiendo {adjusted:.1f}°C en vez de {target_temp:.1f}°C con más antelación)"
+    )
+
+
+def _occupancy_anticipate(heating: bool, current_temp: float, target_temp: float, deadband: float,
+                           occupancy_now_likely: bool | None, occupancy_forecast_likely: list[bool | None] | None,
+                           rate_deg_h: float) -> tuple[str, str]:
+    """Anticipa la LLEGADA: si la zona no esta ocupada (segun el patron
+    HISTORICO, ver climate/occupancy.py) ahora mismo, pero el patron dice
+    que si lo estara dentro de poco, empieza a acercarse a la consigna con
+    antelacion -- para que ya este lista cuando de verdad haya alguien, en
+    vez de que la primera media hora de presencia real se pase esperando a
+    que la zona reaccione. Mismo criterio de "hace falta empezar ya" que
+    `_anticipate`: solo arranca si, a la velocidad real conocida de la
+    zona, no daria tiempo a llegar empezando mas tarde.
+
+    Sin patron todavia (sensores recien añadidos, o sin `presence_entities`
+    declaradas), `occupancy_now_likely`/`occupancy_forecast_likely` llegan
+    en None/[] y esto no hace nada -- nunca se inventa una ocupacion que
+    no esta en el historico."""
+    if occupancy_now_likely or not occupancy_forecast_likely or not rate_deg_h or rate_deg_h <= 0:
+        return "idle", ""
+
+    horizon = occupancy_forecast_likely[:OCCUPANCY_ANTICIPATE_LOOKAHEAD_HOURS]
+    try:
+        hours_ahead = next(i for i, likely in enumerate(horizon, start=1) if likely)
+    except StopIteration:
+        return "idle", ""
+
+    gap = abs(target_temp - current_temp)
+    needed_hours = gap / rate_deg_h
+    if needed_hours < hours_ahead:
+        return "idle", ""  # todavia hay tiempo de sobra, el tramo reactivo llegara a tiempo cuando haga falta
+
+    action = "heat" if heating else "cool"
+    return action, (
+        f"anticipando ocupación: el patrón histórico dice que esta zona suele ocuparse en ~{hours_ahead}h; "
+        f"preparando la consigna de confort con antelación"
+    )
 
 
 def tpi_on_percent(current_temp: float, target_temp: float, outdoor_now: float | None, heating: bool) -> float:

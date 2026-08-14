@@ -26,7 +26,7 @@ import hashlib
 import logging
 from datetime import datetime, timezone
 
-from . import ema as ema_module, grid_signal, outdoor, power_model, presets as presets_module, scheduler, thermal_model, window_algorithm, zone_forecast
+from . import ema as ema_module, grid_signal, occupancy, outdoor, power_model, presets as presets_module, scheduler, thermal_model, window_algorithm, zone_forecast
 from .const import (
     CONF_AUTO_WINDOW_DETECTION,
     CONF_CLIMATE_ENTITIES,
@@ -182,6 +182,7 @@ class ZoneRunner:
         self._outdoor_forecast: list[float] = []
         self._outdoor_now: float | None = None
         self._thermal_model: dict = {}
+        self._occupancy_by_hour: dict[int, float | None] = {h: None for h in range(24)}
         self.reason = "sin calcular todavia"
         self._active_preset_name: str | None = None
 
@@ -731,6 +732,13 @@ class ZoneRunner:
                 int(self.zone.get(CONF_HISTORY_DAYS_FOR_INERTIA, DEFAULT_HISTORY_DAYS_FOR_INERTIA)),
                 fallback=self._power_model,
             ) if home_power_sensor and entities_to_learn else {}
+            # Mismo cadencia que el modelo termico (no en cada decision
+            # reactiva, ver decide_and_act) -- barato para leer despues
+            # (occupancy.forecast_likely es solo lectura de diccionario,
+            # sin tocar HA), caro de recalcular (historico real).
+            self._occupancy_by_hour = occupancy.hourly_occupancy_pct(
+                self.ws, self.zone.get(CONF_PRESENCE_ENTITIES) or [], self.bridges,
+            )
             self._model_last_computed_ts = now_ts
 
         self.decide_and_act()
@@ -814,6 +822,11 @@ class ZoneRunner:
         else:
             heat_target, cool_target = preset_heat, preset_cool
             grid = grid_signal.read(self.ws)
+            now_local_hour = _utcnow().astimezone().hour
+            occupancy_now_likely = occupancy.likely(self._occupancy_by_hour.get(now_local_hour))
+            occupancy_forecast_likely = occupancy.forecast_likely(
+                self._occupancy_by_hour, now_local_hour, scheduler.OCCUPANCY_ANTICIPATE_LOOKAHEAD_HOURS,
+            )
             action, decide_reason = scheduler.decide_action(
                 current_temp=current_temp, heat_target=heat_target, cool_target=cool_target,
                 priority=self.zone.get(CONF_PRIORITY, "confort"), deadband=deadband,
@@ -825,6 +838,7 @@ class ZoneRunner:
                 grid_tier=grid["tier"], solar_surplus_now_w=grid["solar_surplus_now_w"],
                 zone_estimated_power_w=self._zone_estimated_power_w(),
                 grid_forecast=grid["forecast"],
+                occupancy_now_likely=occupancy_now_likely, occupancy_forecast_likely=occupancy_forecast_likely,
             )
             self.reason = f"{preset_reason} — {decide_reason}"
             urgent = "de seguridad de la zona" in decide_reason

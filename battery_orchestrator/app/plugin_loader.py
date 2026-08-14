@@ -71,7 +71,7 @@ PLUGIN_CATALOG = {
     "battery": {
         "name": "Energy Orchestrator",
         "description": "Baterías, solar y cargas diferibles — carga y descarga adaptativa por precio, sol y consumo real",
-        "version": "0.11.65",
+        "version": "0.11.66",
         "downloadable": False,
     },
     "climate": {
@@ -133,6 +133,12 @@ def uninstall_plugin(slug: str, purge_files: bool = False) -> None:
 
 
 def load_all_plugins() -> list:
+    """Un plugin OPCIONAL que falle al cargar (codigo no encontrado, error
+    de importacion...) nunca debe tirar abajo el nucleo entero -- se
+    registra el error y se sigue sin el, en vez de propagar la excepcion.
+    Un REQUIRED_PLUGINS que falle si que revienta el arranque: sin el
+    nucleo (Energy/"battery") no hay nada que servir en la raiz, no tiene
+    sentido seguir a medias."""
     import config_store
 
     installed = set(config_store.get_installed_plugins()) | REQUIRED_PLUGINS
@@ -141,7 +147,17 @@ def load_all_plugins() -> list:
         if slug not in installed:
             log.info("Plugin '%s' no instalado -- no se carga", slug)
             continue
-        plugins.append(factory())
+        try:
+            plugins.append(factory())
+        except Exception:
+            if slug in REQUIRED_PLUGINS:
+                raise
+            log.exception(
+                "Plugin '%s' estaba marcado como instalado pero fallo al cargar -- "
+                "se omite, el resto del nucleo sigue arrancando. Puede que su codigo "
+                "descargado no este disponible; reinstalalo desde la tienda.",
+                slug,
+            )
 
     for p in plugins:
         log.info("Plugin cargado: %s v%s (%s)", p.name, p.version, p.slug)

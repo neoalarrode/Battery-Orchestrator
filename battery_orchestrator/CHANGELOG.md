@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.66
+**Aislamiento de fallos entre plugins**: si un plugin OPCIONAL (Climate, o cualquier otro futuro) falla al cargar — código no encontrado, error al importar — el núcleo ya no se cae entero; se registra el error y se sigue arrancando sin él. Solo un fallo del núcleo (Energy) revienta el arranque, porque sin eso no hay nada que servir en la raíz. Paso previo, deliberado, antes de sacar Climate del Dockerfile (siguiente versión): así un problema con su descarga nunca deja la instalación entera sin responder.
+
 ## 0.11.65
 **Copia de seguridad completa del núcleo** (`core_backup.py`, nuevo): a diferencia de la copia de seguridad que ya existía (solo la configuración de Battery/Energy), esta recoge TODOS los ficheros de estado bajo `/data` — configuración de todos los plugins, históricos, capacidad, savings... — sin necesitar conocer de antemano la lista exacta de cada plugin (recoge cualquier `*.json` de `/data`, excepto `options.json`, que es de Supervisor). `GET /api/core/backup` la descarga, `POST /api/core/backup/restore` la restaura fichero a fichero de forma atómica, sin borrar nada que no venga en el backup. Construida como red de seguridad antes de sacar Climate del Dockerfile (siguiente paso).
 

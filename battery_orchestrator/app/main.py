@@ -1256,6 +1256,32 @@ def api_uninstall_plugin(slug):
     return jsonify({"installed": False, "restart_required": True})
 
 
+@app.get("/api/core/backup")
+def api_core_backup():
+    """Copia de seguridad COMPLETA de /data (todos los plugins, no solo
+    Battery/Energy) -- ver core_backup.py. Pensada tanto para descargarla
+    desde la interfaz como para uso interno (p.ej. antes de un cambio de
+    riesgo en el propio addon)."""
+    import core_backup
+    bundle = core_backup.create_backup()
+    resp = jsonify(bundle)
+    resp.headers["Content-Disposition"] = "attachment; filename=home_orchestrator_backup.json"
+    return resp
+
+
+@app.post("/api/core/backup/restore")
+def api_core_backup_restore():
+    import core_backup
+    bundle = request.get_json(force=True, silent=True)
+    if bundle is None:
+        return jsonify({"error": "JSON invalido"}), 400
+    try:
+        restored = core_backup.restore_backup(bundle)
+    except core_backup.BackupError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify({"restored_files": restored, "restart_required": True})
+
+
 @app.get("/api/config/export")
 def api_export_config():
     cfg = config_store.load_config()

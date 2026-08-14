@@ -71,7 +71,7 @@ PLUGIN_CATALOG = {
     "battery": {
         "name": "Energy Orchestrator",
         "description": "Baterías, solar y cargas diferibles — carga y descarga adaptativa por precio, sol y consumo real",
-        "version": "0.11.64",
+        "version": "0.11.65",
         "downloadable": False,
     },
     "climate": {

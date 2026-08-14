@@ -98,6 +98,22 @@ class ClimatePlugin(Plugin):
             ok = zone_store.delete_zone(zone_id)
             return flask.jsonify({"deleted": ok})
 
+        @app.post("/api/zones/<zone_id>/refresh")
+        def _refresh_zone(zone_id):
+            """Fuerza una decisión ahora mismo, sin esperar al próximo evento
+            reactivo o al refresco periódico -- util para diagnostico y para
+            verificar una zona recien creada."""
+            runner = self._runners.get(zone_id)
+            if not runner:
+                return flask.jsonify({"error": "zona no encontrada o no arrancada"}), 404
+            try:
+                runner.decide_and_act()
+                zone_store.update_zone_state(zone_id, runner.to_persisted_state())
+            except Exception as exc:
+                log.exception("Fallo forzando decision de zona %s", zone_id)
+                return flask.jsonify({"error": str(exc)}), 500
+            return flask.jsonify({"ok": True})
+
         @app.get("/api/status")
         def _status():
             return flask.jsonify(

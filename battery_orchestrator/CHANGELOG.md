@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.60
+`POST /api/zones/<id>/refresh` en el plugin de Climate — fuerza una decisión ahora mismo, sin esperar al próximo evento reactivo o al refresco periódico. Surgido al verificar en producción una zona de prueba recién creada (útil también como diagnóstico manual en el futuro, no solo para pruebas).
+
 ## 0.11.59
 **Segundo plugin real: Climate**, montado en `/plugins/climate` junto a Battery (que sigue en la raíz, sin cambios de comportamiento). Puerto de todo Climate Orchestrator (el custom_component HACS separado) a este plugin, con dos cambios de fondo respecto al original:
 

@@ -1,19 +1,19 @@
 """
 Cargador de plugins del nucleo Home Orchestrator.
 
-"battery" (Energy Orchestrator) es el nucleo -- sirve la app en la raiz
-(ver core_app.py, `ingress_port` de config.yaml ya apunta ahi) y viene
-siempre precargado en la imagen del addon; no tiene sentido "descargarlo"
-por separado del propio nucleo que lo carga. El resto de plugins
-(Climate, y los que vengan despues) SI son descargables de verdad: ver
-`plugin_downloader.py` para el mecanismo (tag de git + sha256 pineados
-aqui mismo, verificado antes de tocar disco) y `install_plugin()` mas
-abajo, que es lo que llama la tienda de plugins de la interfaz.
+Ningun plugin viene obligado -- ni siquiera Energy. Una instalacion
+recien nacida (o con todo desinstalado) simplemente sirve el catalogo del
+propio nucleo en la raiz (ver core_shell.py) hasta que se instale algo.
+Los dos plugins de primera parte de hoy (Energy, Climate) son
+descargables de verdad: ver `plugin_downloader.py` para el mecanismo (tag
+de git + sha256 pineados aqui mismo, verificado antes de tocar disco) y
+`install_plugin()` mas abajo, que es lo que llama la tienda de plugins de
+la interfaz.
 
 Cuales de los plugins REGISTRADOS (existen en el codigo, descargados o
 precargados) se instancian de verdad al arrancar lo decide
-`config_store.get_installed_plugins()` (seccion "core") -- no el
-registro en si, que es solo el catalogo de lo que EXISTE.
+`config_store.get_installed_plugins()` (seccion "core") -- no el registro
+en si, que es solo el catalogo de lo que EXISTE.
 """
 
 from __future__ import annotations
@@ -23,17 +23,13 @@ import sys
 
 log = logging.getLogger("plugin_loader")
 
-# "battery" sirve la app raiz -- quitarlo dejaria el nucleo sin nada que
-# servir en "/". Se fuerza siempre instalado; la tienda no ofrece
-# desinstalarlo ni descargarlo (ya viene con el nucleo).
-REQUIRED_PLUGINS = {"battery"}
-
 
 def _prefer_downloaded(slug: str) -> None:
     """Si hay una version descargada de verdad de este plugin (ver
     plugin_downloader.py), se antepone a sys.path para que gane sobre
-    cualquier copia que venga precargada en la imagen -- 'instalar desde
-    la tienda' tiene que notarse de verdad, no ser un boton decorativo."""
+    cualquier copia que venga precargada en la imagen (si la hay) --
+    'instalar desde la tienda' tiene que notarse de verdad, no ser un
+    boton decorativo."""
     import plugin_downloader
 
     path = plugin_downloader.current_path(slug)
@@ -43,6 +39,7 @@ def _prefer_downloaded(slug: str) -> None:
 
 
 def _battery():
+    _prefer_downloaded("battery")
     from battery_plugin import BatteryPlugin
     return BatteryPlugin()
 
@@ -66,13 +63,29 @@ PLUGIN_REGISTRY = {"battery": _battery, "climate": _climate}
 # todo esto en sincronia a mano con plugins.json (raiz del repo) y con el
 # `version` de cada Plugin -- mismo criterio que el resto de números de
 # version duplicados en este repo (config.yaml, battery_plugin.py...).
-# "battery" no lleva tag/sha256/files: viene con el nucleo, no se descarga.
+#
+# "tag" puede quedarse apuntando a una version del REPO mas antigua que
+# la que se esta publicando ahora mismo, a proposito -- solo se actualiza
+# (junto con "sha256", recalculado de verdad contra el tarball real) el
+# dia que el CODIGO PROPIO de ese plugin cambie; publicar una version del
+# addon que no toca un plugin no obliga a re-pinear su descarga.
 PLUGIN_CATALOG = {
     "battery": {
         "name": "Energy Orchestrator",
         "description": "Baterías, solar y cargas diferibles — carga y descarga adaptativa por precio, sol y consumo real",
-        "version": "0.11.67",
-        "downloadable": False,
+        "version": "0.11.68",
+        "downloadable": True,
+        "tag": "v0.11.68",
+        "sha256": None,  # se rellena en el commit siguiente, tras calcular el sha256 real del tarball de ese tag ya publicado
+        "files": [
+            "main.py", "battery_plugin.py", "battery_exec.py", "anomaly_store.py",
+            "capacity_store.py", "climate_link.py", "deferrable_exec.py",
+            "deferrable_scheduler.py", "deferrable_store.py", "ecoflow_ble.py",
+            "ecoflow_cloud.py", "ecoflow_login.py", "forecast_store.py", "ha_client.py",
+            "ha_statistics.py", "history_store.py", "lifetime_store.py", "pv_source.py",
+            "savings_store.py", "scheduler.py", "solar_energy_store.py", "tariff_source.py",
+            "templates",
+        ],
     },
     "climate": {
         "name": "Climate Orchestrator",
@@ -89,7 +102,7 @@ PLUGIN_CATALOG = {
 def list_catalog() -> list[dict]:
     import config_store
 
-    installed = set(config_store.get_installed_plugins()) | REQUIRED_PLUGINS
+    installed = set(config_store.get_installed_plugins())
     return [
         {
             "slug": slug,
@@ -97,7 +110,6 @@ def list_catalog() -> list[dict]:
             "description": meta["description"],
             "version": meta["version"],
             "installed": slug in installed,
-            "required": slug in REQUIRED_PLUGINS,
             "downloadable": meta.get("downloadable", False),
         }
         for slug, meta in PLUGIN_CATALOG.items()
@@ -105,9 +117,10 @@ def list_catalog() -> list[dict]:
 
 
 def install_plugin(slug: str) -> None:
-    """Descarga (si el plugin es descargable) y marca instalado. Lanza
-    `plugin_downloader.PluginDownloadError` si la descarga o la
-    verificacion fallan -- en ese caso no se marca nada como instalado."""
+    """Descarga (si el plugin es descargable y su codigo no esta ya
+    presente) y marca instalado. Lanza `plugin_downloader.
+    PluginDownloadError` si la descarga o la verificacion fallan -- en
+    ese caso no se marca nada como instalado."""
     import config_store
 
     meta = PLUGIN_CATALOG.get(slug)
@@ -124,8 +137,6 @@ def install_plugin(slug: str) -> None:
 def uninstall_plugin(slug: str, purge_files: bool = False) -> None:
     import config_store
 
-    if slug in REQUIRED_PLUGINS:
-        raise ValueError("este plugin es el nucleo, no se puede quitar")
     config_store.set_plugin_installed(slug, False)
     if purge_files and PLUGIN_CATALOG.get(slug, {}).get("downloadable"):
         import plugin_downloader
@@ -133,15 +144,14 @@ def uninstall_plugin(slug: str, purge_files: bool = False) -> None:
 
 
 def load_all_plugins() -> list:
-    """Un plugin OPCIONAL que falle al cargar (codigo no encontrado, error
-    de importacion...) nunca debe tirar abajo el nucleo entero -- se
-    registra el error y se sigue sin el, en vez de propagar la excepcion.
-    Un REQUIRED_PLUGINS que falle si que revienta el arranque: sin el
-    nucleo (Energy/"battery") no hay nada que servir en la raiz, no tiene
-    sentido seguir a medias."""
+    """Ningun plugin es obligatorio -- si uno falla al cargar (codigo no
+    encontrado, error de importacion...) se registra el error y se sigue
+    sin el. Una instalacion con CERO plugins cargados es un estado valido
+    (ver core_app.py: sirve el catalogo del nucleo en ese caso), no un
+    fallo de arranque."""
     import config_store
 
-    installed = set(config_store.get_installed_plugins()) | REQUIRED_PLUGINS
+    installed = set(config_store.get_installed_plugins())
     plugins = []
     for slug, factory in PLUGIN_REGISTRY.items():
         if slug not in installed:
@@ -150,8 +160,6 @@ def load_all_plugins() -> list:
         try:
             plugins.append(factory())
         except Exception:
-            if slug in REQUIRED_PLUGINS:
-                raise
             log.exception(
                 "Plugin '%s' estaba marcado como instalado pero fallo al cargar -- "
                 "se omite, el resto del nucleo sigue arrancando. Puede que su codigo "

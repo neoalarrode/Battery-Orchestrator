@@ -1022,6 +1022,7 @@ es: {
   store_loading: "Cargando catálogo…", store_error: "No se pudo cargar la tienda de plugins",
   store_installed: "Instalado", store_not_installed: "No instalado", store_required: "Núcleo — no se puede quitar",
   store_install: "Instalar", store_uninstall: "Quitar", store_restart_needed: "Hecho — reinicia el add-on para aplicarlo",
+  store_battery_warn: "Es quien sirve este panel — si lo quitas, al reiniciar verás solo el catálogo hasta que lo reinstales.",
 
   card_estado_title: "Estado actual", btn_run_now: "Ejecutar ciclo ahora",
   card_flow_title: "Flujo de energía ahora mismo",
@@ -1335,6 +1336,7 @@ en: {
   store_loading: "Loading catalog…", store_error: "Couldn't load the plugin store",
   store_installed: "Installed", store_not_installed: "Not installed", store_required: "Core — can't be removed",
   store_install: "Install", store_uninstall: "Remove", store_restart_needed: "Done — restart the add-on to apply it",
+  store_battery_warn: "This serves the panel you're looking at — remove it and after restart you'll only see the catalog until you reinstall it.",
 
   card_estado_title: "Current status", btn_run_now: "Run cycle now",
   card_flow_title: "Energy flow right now",
@@ -1841,9 +1843,8 @@ async function loadStore() {
       <span class="plugin-tile-name">${escapeHtml(p.name)}</span>
       <span class="plugin-tile-desc">${escapeHtml(p.description)}</span>
       <span class="pill ${p.installed ? 'pill-ok' : 'pill-readonly'}" style="margin-top:8px">${p.installed ? t('store_installed') : t('store_not_installed')}</span>
-      ${p.required
-        ? `<span class="help" style="margin-top:8px">${t('store_required')}</span>`
-        : `<button type="button" class="${p.installed ? 'danger' : 'secondary'}" style="margin-top:10px" onclick="togglePluginInstall('${p.slug}', ${p.installed ? 'false' : 'true'})">${p.installed ? t('store_uninstall') : t('store_install')}</button>`}
+      <button type="button" class="${p.installed ? 'danger' : 'secondary'}" style="margin-top:10px" onclick="togglePluginInstall('${p.slug}', ${p.installed ? 'false' : 'true'})">${p.installed ? t('store_uninstall') : t('store_install')}</button>
+      ${p.slug === 'battery' && p.installed ? `<span class="help warn" style="margin-top:6px;color:var(--red)">${t('store_battery_warn')}</span>` : ''}
     </div>
   `).join('');
 }

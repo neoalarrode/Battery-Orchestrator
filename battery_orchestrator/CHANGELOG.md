@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.68
+**Núcleo de verdad vacío**: Energy deja de ser obligatorio. Nuevo `core_shell.py` — la tienda de plugins y la copia de seguridad (`/api/core/*`) ya no viven dentro de Energy, viven en el núcleo mismo, como un Blueprint que se registra sobre quien sirva la raíz (`Plugin.serves_root`, hoy solo Energy) — o, si NINGÚN plugin instalado la sirve, el propio núcleo sirve una página de catálogo + restaurar copia de seguridad en su lugar. Con esto una instalación con cero plugins instalados ya no es un caso raro que había que evitar: es el estado inicial normal.
+
+**Restaurar copia de seguridad ya instala los plugins que le correspondan**: al restaurar, además de traer de vuelta toda la configuración, se descargan (verificados) los plugins que esa copia tenía instalados — no solo los datos, también el código.
+
+Energy pasa a ser descargable como Climate (`plugin_loader.PLUGIN_CATALOG`), aunque de momento sigue viniendo en la imagen mientras se termina de verificar esta pieza — el siguiente paso es sacarlo también del Dockerfile.
+
 ## 0.11.67
 **Climate deja de venir precargado en la imagen** (`.dockerignore` nuevo, excluye `climate_plugin.py`/`climate/`/`climate_templates/` del build) — a partir de ahora se instala de verdad desde la tienda, descargado y verificado por sha256, no incluido de fábrica. Desplegado con red de seguridad completa: copia de seguridad de todo `/data` tomada antes del cambio (0.11.65), aislamiento de fallos entre plugins (0.11.66) y, en esta instalación en concreto, Climate ya descargado y verificado a `/data/plugins/climate/` ANTES de quitarlo de la imagen, para que el arranque nunca se quede sin su código.
 

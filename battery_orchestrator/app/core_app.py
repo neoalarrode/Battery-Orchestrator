@@ -2,11 +2,20 @@
 Punto de entrada del nucleo Home Orchestrator (`run.sh` llama a este
 fichero en vez de a `main.py` directamente, desde esta version).
 
-Con dos plugins instalados (Battery + Climate, desde esta version), el
-nucleo fusiona sus apps Flask con `DispatcherMiddleware` de werkzeug:
-Battery se sirve en la raiz (compatibilidad con `ingress_port` en
-config.yaml, que ya apuntaba ahi antes de que existiera ningun otro
-plugin) y cada plugin siguiente se monta bajo `/plugins/<slug>`.
+Quien sirve la raiz "/" depende de que este instalado, no de una
+suposicion fija:
+  - Si algun plugin instalado declara `serves_root = True` (hoy solo
+    Energy) -- se sirve el SUYO en la raiz, con la tienda de plugins y la
+    copia de seguridad (`core_shell.core_api_bp`) registradas DIRECTAMENTE
+    sobre su misma app (mismo origen de siempre, cero cambio para quien ya
+    tuviera Energy instalado).
+  - Si NO hay ninguno (instalacion recien nacida, o Energy desinstalado)
+    -- se sirve el catalogo/tienda del propio nucleo (`core_shell.
+    build_shell_app()`) en la raiz, para que SIEMPRE haya algo que
+    mostrar, nunca una pagina en blanco o un error.
+
+El resto de plugins instalados (los que no sirven la raiz) se montan bajo
+`/plugins/<slug>` con `DispatcherMiddleware`, igual que hasta ahora.
 """
 
 from __future__ import annotations
@@ -16,6 +25,7 @@ import logging
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from werkzeug.serving import run_simple
 
+import core_shell
 import plugin_loader
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -24,29 +34,30 @@ log = logging.getLogger("core")
 
 def main() -> None:
     plugins = plugin_loader.load_all_plugins()
-    if not plugins:
-        raise RuntimeError("No hay ningun plugin cargado -- nada que arrancar.")
 
     for p in plugins:
         p.start_background_threads()
 
-    # "battery" siempre va en la raiz (ver plugin_loader.REQUIRED_PLUGINS) --
-    # se busca por slug, no por posicion, para no depender del orden en que
-    # plugin_loader haya devuelto la lista.
-    primary = next(p for p in plugins if p.slug == "battery")
+    primary = next((p for p in plugins if getattr(p, "serves_root", False)), None)
     rest = [p for p in plugins if p is not primary]
-    log.info("Home Orchestrator arrancando con el plugin '%s' v%s en la raiz", primary.name, primary.version)
+
+    if primary is not None:
+        log.info("Home Orchestrator arrancando con el plugin '%s' v%s en la raiz", primary.name, primary.version)
+        root_app = primary.flask_app()
+        root_app.register_blueprint(core_shell.core_api_bp)
+    else:
+        log.info("Home Orchestrator arrancando SIN ningun plugin que sirva la raiz -- catalogo/tienda del nucleo")
+        root_app = core_shell.build_shell_app()
 
     mounts = {}
     for p in rest:
         log.info("Plugin '%s' v%s montado en /plugins/%s", p.name, p.version, p.slug)
         mounts[f"/plugins/{p.slug}"] = p.flask_app().wsgi_app
 
-    app = primary.flask_app()
     if mounts:
-        app.wsgi_app = DispatcherMiddleware(app.wsgi_app, mounts)
+        root_app.wsgi_app = DispatcherMiddleware(root_app.wsgi_app, mounts)
 
-    run_simple("0.0.0.0", 8099, app, threaded=True)
+    run_simple("0.0.0.0", 8099, root_app, threaded=True)
 
 
 if __name__ == "__main__":

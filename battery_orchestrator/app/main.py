@@ -1223,63 +1223,12 @@ def api_save_config():
     return jsonify(cfg)
 
 
-@app.get("/api/core/plugins")
-def api_list_plugins():
-    """Catalogo de plugins de Home Orchestrator (instalados o no) -- la
-    tienda de plugins de la interfaz vive en esta misma app (raiz del
-    nucleo) porque es la unica que se sirve siempre, sea cual sea el
-    resto de plugins instalados."""
-    import plugin_loader
-    return jsonify(plugin_loader.list_catalog())
-
-
-@app.post("/api/core/plugins/<slug>/install")
-def api_install_plugin(slug):
-    import plugin_loader
-    if slug not in plugin_loader.PLUGIN_REGISTRY:
-        return jsonify({"error": "plugin desconocido"}), 404
-    try:
-        plugin_loader.install_plugin(slug)
-    except Exception as exc:
-        log.exception("Fallo instalando el plugin '%s'", slug)
-        return jsonify({"error": str(exc)}), 502
-    return jsonify({"installed": True, "restart_required": True})
-
-
-@app.post("/api/core/plugins/<slug>/uninstall")
-def api_uninstall_plugin(slug):
-    import plugin_loader
-    try:
-        plugin_loader.uninstall_plugin(slug)
-    except ValueError as exc:
-        return jsonify({"error": str(exc)}), 400
-    return jsonify({"installed": False, "restart_required": True})
-
-
-@app.get("/api/core/backup")
-def api_core_backup():
-    """Copia de seguridad COMPLETA de /data (todos los plugins, no solo
-    Battery/Energy) -- ver core_backup.py. Pensada tanto para descargarla
-    desde la interfaz como para uso interno (p.ej. antes de un cambio de
-    riesgo en el propio addon)."""
-    import core_backup
-    bundle = core_backup.create_backup()
-    resp = jsonify(bundle)
-    resp.headers["Content-Disposition"] = "attachment; filename=home_orchestrator_backup.json"
-    return resp
-
-
-@app.post("/api/core/backup/restore")
-def api_core_backup_restore():
-    import core_backup
-    bundle = request.get_json(force=True, silent=True)
-    if bundle is None:
-        return jsonify({"error": "JSON invalido"}), 400
-    try:
-        restored = core_backup.restore_backup(bundle)
-    except core_backup.BackupError as exc:
-        return jsonify({"error": str(exc)}), 400
-    return jsonify({"restored_files": restored, "restart_required": True})
+# Nota: /api/core/plugins* y /api/core/backup* YA NO viven aqui -- se
+# movieron a core_shell.py (nucleo de verdad, ver ese modulo) para que
+# funcionen ANTES de que Energy este instalado. Cuando Energy es quien
+# sirve la raiz, core_app.py registra ese mismo blueprint sobre esta app
+# (`app.register_blueprint(...)`), asi que `fetch('api/core/plugins')`
+# desde este mismo frontend sigue funcionando exactamente igual.
 
 
 @app.get("/api/config/export")

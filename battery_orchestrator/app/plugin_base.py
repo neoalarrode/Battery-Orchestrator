@@ -17,6 +17,14 @@ class Plugin(ABC):
     name: str
     version: str
 
+    # Si True, este plugin puede servir la raiz "/" del nucleo (ver
+    # core_app.py) -- Energy es hoy el unico que lo declara (tiene un
+    # dashboard pensado para ser la app principal). Sin NINGUN plugin
+    # instalado que lo declare, el nucleo sirve su propio catalogo/tienda
+    # en la raiz en vez de nada (ver core_shell.py) -- asi una instalacion
+    # fresca, de verdad vacia, siempre tiene algo que mostrar.
+    serves_root: bool = False
+
     @abstractmethod
     def flask_app(self):
         """

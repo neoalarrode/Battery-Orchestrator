@@ -153,8 +153,9 @@ class ZoneRunner:
         self._fan_mode: str | None = None
         self._fan_modes: list[str] | None = None
 
+        self._climate_entities_unresolved = False
         capability = self._refresh_hvac_modes()
-        self._capability_pending = not capability
+        self._capability_pending = self._capability_still_pending(capability)
 
         try:
             self._presets = presets_module.parse_presets(self.zone.get(CONF_PRESETS_TEXT, ""))
@@ -313,6 +314,19 @@ class ZoneRunner:
             capability.add("heat")
         if self.zone.get(CONF_COOL_SWITCHES):
             capability.add("cool")
+        # Bug real, confirmado en produccion: "_capability_pending" (ver
+        # __init__/_reconcile_hvac_mode) decidia si hacia falta reintentar
+        # SOLO mirando si la capacidad total quedaba vacia -- una zona con
+        # CUALQUIER otra fuente de capacidad (aqui, un humidificador
+        # declarado) nunca se consideraba pendiente, aunque su actuador de
+        # otro plugin (Tuya) siguiera sin resolverse (dispositivo aun sin
+        # conectar por LAN en el instante de arrancar, el caso NORMAL: ver
+        # decide_and_act) -- se quedaba pillada con capacidad de calor/
+        # frio/ventilador vacia para siempre, sin que nada la reintentase.
+        # `_climate_entities_unresolved` es la señal REAL de si hace falta
+        # reintentar, independiente de cuantas otras fuentes de capacidad
+        # tenga la zona.
+        self._climate_entities_unresolved = False
         for entity_id in self.zone.get(CONF_CLIMATE_ENTITIES) or []:
             # `self._get_state`, NO `self.ws.get_state` directo -- bug
             # real, confirmado en produccion: un actuador de otro plugin
@@ -323,6 +337,9 @@ class ZoneRunner:
             # ventilador ni el fallback de "apagar del todo" a "ventilar
             # en vez de apagar" (ver _smart_idle_action).
             state = self._get_state(entity_id)
+            if state is None and self._is_bridge_ref(entity_id):
+                self._climate_entities_unresolved = True
+                continue
             supported = ((state or {}).get("attributes") or {}).get("hvac_modes") or []
             for mode in ("heat", "cool", *_PASSTHROUGH_MODES.values()):
                 if mode in supported:
@@ -372,8 +389,17 @@ class ZoneRunner:
                     seen.add(m)
         return ordered if len(ordered) > 1 else []
 
+    def _capability_still_pending(self, capability: set[str]) -> bool:
+        """True si hace falta reintentar mas tarde -- o la capacidad total
+        esta vacia, o algun actuador de otro plugin declarado en
+        `climate_entities` todavia no se ha podido resolver (ver
+        `_compute_capability`). NUNCA solo "capacidad vacia": una zona con
+        cualquier otra fuente de capacidad (heat_switches, humidificador...)
+        enmascararia para siempre un actuador de Tuya que aun no conecto."""
+        return not capability or self._climate_entities_unresolved
+
     def _reconcile_hvac_mode(self, capability: set[str]) -> None:
-        if self._capability_pending and capability:
+        if self._capability_pending and not self._capability_still_pending(capability):
             self._capability_pending = False
             self.hvac_mode = self._default_hvac_mode(capability)
             # Bug real, confirmado en produccion: `publish_discovery` solo

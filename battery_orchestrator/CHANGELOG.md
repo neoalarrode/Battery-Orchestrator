@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.12.0
+**Sexto y último bug real de esta cadena, confirmado en producción contra la zona real del usuario: un humidificador declarado en la zona enmascaraba el "pendiente de resolver" para siempre.** `_capability_pending` decidía si hacía falta reintentar la capacidad SOLO mirando si el total quedaba vacío — una zona con CUALQUIER otra fuente de capacidad (aquí, `humidifier_entities`) nunca se consideraba pendiente, aunque su actuador de otro plugin (Tuya) siguiera sin resolverse (el caso normal al arrancar: Climate siempre arranca antes que Tuya). Los dos fixes anteriores (v0.11.96/v0.11.98) eran correctos pero nunca llegaban a activarse en esta zona en concreto por esto mismo. Fix real: separar "hay capacidad total" de "el actuador climate de otro plugin se resolvió" (`_climate_entities_unresolved`, nueva señal independiente) — ahora una zona con humidificador (o cualquier otra fuente) sigue reintentando correctamente hasta que Tuya conecta de verdad. Verificado con un test sintético que reproduce exactamente la configuración real (Tuya + humidificador): capacidad pendiente de verdad al construir, "Forzar decisión" no hace nada mientras Tuya sigue desconectado, y en cuanto conecta resuelve los modos/ventilador reales y republica el discovery.
+
 ## 0.11.99
 Sha256 de Climate re-pineado al tag `v0.11.98` (decide_and_act reintenta capacidad pendiente) — verificado con una descarga real antes de fijarlo.
 

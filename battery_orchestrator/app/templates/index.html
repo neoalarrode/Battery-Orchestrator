@@ -1868,6 +1868,20 @@ async function backToPluginPicker() {
   await renderConfigPluginGrid();
 }
 
+// Iconos/etiqueta por slug de plugin -- compartido entre el selector de la
+// cabecera (mas abajo en este fichero) y la rejilla de Configuracion. Se
+// declaran AQUI, antes de todo lo que los usa (incluida la IIFE final de
+// arranque): un `const` de nivel superior referenciado antes de su propia
+// declaracion revienta con ReferenceError y aborta el resto del script
+// entero -- bug real que ya pasó en producción (selector vacío y ninguna
+// tarjeta con datos, ver CHANGELOG).
+const PLUGIN_SWITCH_ICONS = {
+  battery: '<path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="currentColor"/>',
+  climate: '<path d="M12 3a3 3 0 0 0-3 3v7.1a4 4 0 1 0 6 0V6a3 3 0 0 0-3-3Zm0 2a1 1 0 0 1 1 1v7.6l.6.5a2 2 0 1 1-3.2 0l.6-.5V6a1 1 0 0 1 1-1Z" fill="currentColor"/>',
+  tuya: '<path d="M6 4h9a2 2 0 0 1 2 2v9l-7 7-9-9V6a2 2 0 0 1 2-2Zm2.5 2.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z" fill="currentColor"/>',
+};
+const PLUGIN_SWITCH_LABEL = { battery: 'Energy', climate: 'Climate', tuya: 'Tuya' };
+
 // Iconos/descripcion cortos por slug -- solo se listan los plugins que
 // ESTAN instalados (via /api/core/plugins), nunca uno inexistente.
 const CONFIG_PLUGIN_ICONS = { ...PLUGIN_SWITCH_ICONS };
@@ -3682,13 +3696,8 @@ function applyWallpanelMode() {
 // /api/core/plugins (solo lo instalado, nunca un enlace muerto a un
 // plugin que no esta). Esta pagina es la raiz, asi que sus rutas son
 // relativas desde ahi: ella misma es "./", cualquier otro plugin cuelga
-// de "plugins/<slug>/".
-const PLUGIN_SWITCH_ICONS = {
-  battery: '<path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="currentColor"/>',
-  climate: '<path d="M12 3a3 3 0 0 0-3 3v7.1a4 4 0 1 0 6 0V6a3 3 0 0 0-3-3Zm0 2a1 1 0 0 1 1 1v7.6l.6.5a2 2 0 1 1-3.2 0l.6-.5V6a1 1 0 0 1 1-1Z" fill="currentColor"/>',
-  tuya: '<path d="M6 4h9a2 2 0 0 1 2 2v9l-7 7-9-9V6a2 2 0 0 1 2-2Zm2.5 2.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z" fill="currentColor"/>',
-};
-const PLUGIN_SWITCH_LABEL = { battery: 'Energy', climate: 'Climate', tuya: 'Tuya' };
+// de "plugins/<slug>/". Iconos/etiquetas (PLUGIN_SWITCH_ICONS/_LABEL)
+// declarados arriba del todo del script -- ver comentario ahi.
 async function renderPluginSwitch() {
   try {
     const plugins = await (await fetch('api/core/plugins')).json();

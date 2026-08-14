@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.83
+**Bug real, confirmado en producción: el panel de Energy se quedaba sin ningún dato en vivo** (selector de plugins vacío, todas las tarjetas mostrando el placeholder "todavía no hay datos" en lugar del ciclo real) reportado por captura desde el móvil. Causa: `templates/index.html` usaba la constante `PLUGIN_SWITCH_ICONS` (declarada con `const`, más abajo en el mismo fichero, dentro de la rejilla de Configuración) antes de que se declarase — al ser `const` de nivel superior eso lanza `ReferenceError: Cannot access 'PLUGIN_SWITCH_ICONS' before initialization` nada más ejecutarse el script, y al no estar capturado en ningún `try/catch` aborta TODO lo que viene después en el mismo bloque `<script>`, incluida la IIFE de arranque (`loadConfig()`, `refreshStatus()`, `refreshLive()`, `renderPluginSwitch()`...). El HTML/CSS se veía bien porque no depende de JS, pero ni un solo dato dinámico llegaba a cargar. Fix: `PLUGIN_SWITCH_ICONS`/`PLUGIN_SWITCH_LABEL` ahora se declaran al principio del script, antes de cualquier uso. Comprobado NO desde `docker exec curl` (eso solo prueba el backend, que ya estaba sano) sino leyendo el propio HTML servido — el fallo era puramente de orden de ejecución del JS del cliente, invisible desde el servidor.
+
 ## 0.11.82
 Sha256 de Climate re-pineado al tag `v0.11.81` (histórico local de Tuya para el modelo térmico) — verificado con una descarga real antes de fijarlo.
 

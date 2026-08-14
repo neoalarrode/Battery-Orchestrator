@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.78
+Sha256 de Climate re-pineado al tag `v0.11.77` (ya trae el enganche de Tuya en `zone_runner.py`) — verificado con una descarga real antes de fijarlo.
+
 ## 0.11.77
 **Descubrimiento de dispositivos Tuya, con el usuario decidiendo siempre si añadir o no** — portados `discovery.py` (escucha persistente de broadcasts LAN, cero dependencia de HA), `tuya_cloud.py` (adaptado de aiohttp a `requests` síncrono — solo se usa para vincular una cuenta y traer `local_key`+esquema real, nunca en operación normal) y `auto_profile.py` (genera un perfil YAML de partida a partir del esquema real del dispositivo). Flujo: "Detectados" enseña lo visto en la LAN (puramente informativo) → el usuario pulsa "Añadir" → se resuelve contra la cuenta vinculada y se PRECARGA el formulario de siempre con el perfil generado → el usuario lo revisa/edita → guarda. Nada se conecta ni se persiste hasta ese último paso — igual que el `config_flow` del proyecto original.
 

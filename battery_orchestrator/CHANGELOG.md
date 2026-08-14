@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.88
+Sha256 de Climate re-pineado al tag `v0.11.87` (modulación de consigna + anticipar ocupación) — verificado con una descarga real antes de fijarlo.
+
 ## 0.11.87
 **Dos mejoras reales al motor de decisión en vivo de Climate** (a petición explícita, tras el gráfico de previsión de la versión anterior). Ambas simétricas para frío y calor, ambas con fallback exacto al comportamiento de antes cuando no hay datos, ambas nunca cruzan los límites de seguridad de la zona (`min_temp`/`max_temp` siguen mandando por encima de todo):
 

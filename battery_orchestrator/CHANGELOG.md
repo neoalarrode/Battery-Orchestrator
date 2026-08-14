@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.62
+**La pestaña "Configuración" pasa a ser un selector de plugins**, no el formulario en bruto directamente: al entrar aparecen los plugins instalados como tarjetas (icono + nombre + qué configura cada uno) — Battery se queda en la misma página (su formulario de siempre, ahora detrás de un clic, con un "◂ Plugins" para volver) y Climate lleva a su propia página. Prepara el terreno para que futuros plugins encajen en el mismo sitio sin mezclar su configuración con la de los demás.
+
+Los iconos del selector de plugins de la cabecera (introducido en 0.11.61) pasan de emoji a SVG en línea con el resto del sistema (mismo rayo y termómetro que ya se usaban como favicon/marca de cada página) — los emoji rompían con la estética del panel.
+
 ## 0.11.61
 **Interfaz adaptada a la vía de plugins**: nuevo selector "Battery ⇄ Climate" en la cabecera de ambas páginas (mismo componente visual en las dos, mismos tokens de color) — cambiar de plugin ya se siente como un único sistema, no dos apps sueltas.
 

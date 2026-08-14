@@ -299,6 +299,27 @@
 
   fieldset { border: none; padding: 0; margin: 0 0 16px; }
 
+  /* --- Selector de configuración por plugin (dentro de la pestaña
+     "Configuración"): iconos primero, la configuración en bruto de cada
+     uno solo aparece al entrar en el suyo. --- */
+  .plugin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+  .plugin-tile {
+    display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px;
+    padding: 22px 16px; border-radius: var(--radius); border: 1px solid var(--glass-border);
+    background: var(--glass-bg); backdrop-filter: var(--glass-blur-soft); -webkit-backdrop-filter: var(--glass-blur-soft);
+    text-decoration: none; color: var(--text); cursor: pointer; transition: border-color .15s, transform .05s;
+  }
+  .plugin-tile:hover { border-color: var(--accent); box-shadow: var(--glow); }
+  .plugin-tile:active { transform: translateY(1px); }
+  .plugin-tile-icon {
+    width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+    border-radius: 12px; background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    font-size: 1.3rem; margin-bottom: 4px;
+  }
+  .plugin-tile-name { font-family: var(--font-display); font-weight: 700; font-size: 0.95rem; }
+  .plugin-tile-desc { font-size: 0.76rem; color: var(--muted); }
+  .back-to-plugins { margin-bottom: 14px; }
+
   /* --- Pestañas --- */
   .tabs {
     display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--border);
@@ -446,8 +467,8 @@
   </div>
   <div class="topbar-right">
     <nav class="plugin-switch" aria-label="Cambiar de plugin">
-      <a href="/" class="current">⚡ Battery</a>
-      <a href="/plugins/climate/">🌡 Climate</a>
+      <a href="/" class="current"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="currentColor"/></svg>Battery</a>
+      <a href="/plugins/climate/"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v7.1a4 4 0 1 0 6 0V6a3 3 0 0 0-3-3Zm0 2a1 1 0 0 1 1 1v7.6l.6.5a2 2 0 1 1-3.2 0l.6-.5V6a1 1 0 0 1 1-1Z" fill="currentColor"/></svg>Climate</a>
     </nav>
     <select class="lang-select" id="lang-select" onchange="onLangChange()" aria-label="Idioma / Language"></select>
     <span id="wallpanel-pill" class="pill pill-readonly" style="display:none" data-i18n="wallpanel_pill">SOLO LECTURA</span>
@@ -560,6 +581,31 @@
 </div>
 
 <div class="tab-panel" data-tab="config">
+
+<div id="config-picker">
+  <div class="card">
+    <h2><span data-i18n="card_plugins_title">Plugins instalados</span></h2>
+    <p class="help" data-i18n="card_plugins_hint">Cada plugin tiene su propia configuración — entra en el suyo para verla, en vez de todo mezclado.</p>
+    <div class="plugin-grid">
+      <button type="button" class="plugin-tile" onclick="openPluginConfig('battery')">
+        <span class="plugin-tile-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="currentColor"/></svg></span>
+        <span class="plugin-tile-name">Battery</span>
+        <span class="plugin-tile-desc" data-i18n="plugin_battery_desc">Baterías, tarifa, solar, cargas diferibles</span>
+      </button>
+      <a class="plugin-tile" href="/plugins/climate/">
+        <span class="plugin-tile-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v7.1a4 4 0 1 0 6 0V6a3 3 0 0 0-3-3Zm0 2a1 1 0 0 1 1 1v7.6l.6.5a2 2 0 1 1-3.2 0l.6-.5V6a1 1 0 0 1 1-1Z" fill="currentColor"/></svg></span>
+        <span class="plugin-tile-name">Climate</span>
+        <span class="plugin-tile-desc" data-i18n="plugin_climate_desc">Zonas, sensores, actuadores, presets</span>
+      </a>
+    </div>
+  </div>
+</div>
+
+<div id="config-battery-panel" style="display:none">
+
+<button type="button" class="ghost back-to-plugins" onclick="backToPluginPicker()">
+  <span data-i18n="back_to_plugins">◂ Plugins</span>
+</button>
 
 <div class="card">
   <h2><span data-i18n="card_baterias_title">Baterías</span> <span class="hint" id="battery-count"></span></h2>
@@ -939,6 +985,9 @@
 </div>
 
 </div>
+<!-- /config-battery-panel -->
+
+</div>
 
 <div class="toast" id="toast"></div>
 
@@ -955,6 +1004,10 @@ es: {
   topbar_subtitle: "Carga y descarga adaptativa por precio, sol y consumo real — sin cajas negras.",
   tab_estado: "Estado actual", tab_prevision: "Previsión", tab_salud: "Salud de batería", tab_config: "Configuración",
   lang_auto: "🌐 Auto", lang_es: "🇪🇸 Español", lang_en: "🇬🇧 English",
+
+  card_plugins_title: "Plugins instalados", card_plugins_hint: "Cada plugin tiene su propia configuración — entra en el suyo para verla, en vez de todo mezclado.",
+  plugin_battery_desc: "Baterías, tarifa, solar, cargas diferibles", plugin_climate_desc: "Zonas, sensores, actuadores, presets",
+  back_to_plugins: "◂ Plugins",
 
   card_estado_title: "Estado actual", btn_run_now: "Ejecutar ciclo ahora",
   card_flow_title: "Flujo de energía ahora mismo",
@@ -1259,6 +1312,10 @@ en: {
   topbar_subtitle: "Adaptive battery charge/discharge by price, sun and real consumption — no black boxes.",
   tab_estado: "Current status", tab_prevision: "Forecast", tab_salud: "Battery health", tab_config: "Settings",
   lang_auto: "🌐 Auto", lang_es: "🇪🇸 Español", lang_en: "🇬🇧 English",
+
+  card_plugins_title: "Installed plugins", card_plugins_hint: "Each plugin has its own settings — go into the one you need instead of everything mixed together.",
+  plugin_battery_desc: "Batteries, tariff, solar, deferrable loads", plugin_climate_desc: "Zones, sensors, actuators, presets",
+  back_to_plugins: "◂ Plugins",
 
   card_estado_title: "Current status", btn_run_now: "Run cycle now",
   card_flow_title: "Energy flow right now",
@@ -1734,6 +1791,23 @@ function switchTab(name) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.dataset.tab === name));
   if (name === 'prevision' && lastStatus) renderSocChart(lastStatus.plan || []);
   if (name === 'salud') loadBatteryHealth();
+  if (name === 'config') backToPluginPicker();
+}
+
+// Dentro de "Configuración": primero los iconos de los plugins instalados,
+// la configuracion en bruto de cada uno solo aparece al entrar en el suyo
+// -- Battery se queda en esta misma pagina (su formulario ya existente,
+// solo se oculta/muestra); otros plugins (Climate...) tienen su propia
+// pagina, así que "entrar" en ellos es una navegacion normal.
+function openPluginConfig(slug) {
+  if (slug === 'battery') {
+    document.getElementById('config-picker').style.display = 'none';
+    document.getElementById('config-battery-panel').style.display = '';
+  }
+}
+function backToPluginPicker() {
+  document.getElementById('config-picker').style.display = '';
+  document.getElementById('config-battery-panel').style.display = 'none';
 }
 
 function toast(msg) {

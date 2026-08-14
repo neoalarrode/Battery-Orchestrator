@@ -8,7 +8,7 @@
       "description": "Carga y descarga adaptativa de baterias por precio, sol y consumo real",
       "path": "battery_orchestrator",
       "repo": "neoalarrode/Home-Orchestrator",
-      "version": "0.11.61"
+      "version": "0.11.62"
     },
     {
       "slug": "climate",

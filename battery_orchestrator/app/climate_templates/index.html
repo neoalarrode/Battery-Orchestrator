@@ -304,8 +304,9 @@
         </div>
       </div>
       <label for="zf-climate">Delegados climate.* (aire acondicionado con su propio termostato)</label>
-      <input id="zf-climate" placeholder="climate.airclima_frio_salon, tuya:bf1234567890abcdef">
-      <p class="help">Acepta un <code>climate.*</code> de Home Assistant, o <code>tuya:&lt;device_id&gt;</code> para controlar un dispositivo del plugin Tuya directamente, sin pasar por HA (si tiene más de un termostato en su perfil: <code>tuya:&lt;device_id&gt;:&lt;índice&gt;</code>).</p>
+      <input id="zf-climate" placeholder="climate.airclima_frio_salon">
+      <p class="help">Un <code>climate.*</code> de Home Assistant por línea/coma, o elige abajo un dispositivo de otro plugin (Tuya...) — se controla directamente, sin pasar por HA.</p>
+      <div id="zf-actuator-picker" style="margin-top:8px"></div>
       <label for="zf-humidifiers">Humidificadores/deshumidificadores (opcional)</label>
       <input id="zf-humidifiers" placeholder="humidifier.salon">
 
@@ -552,6 +553,7 @@ function editZone(id) {
   document.getElementById("zf-submit-btn").textContent = "Guardar cambios";
   document.getElementById("add-zone-details").open = true;
   document.getElementById("add-zone-details").scrollIntoView({behavior: "smooth", block: "start"});
+  loadActuators();
 }
 
 function cancelZoneForm() {
@@ -559,6 +561,40 @@ function cancelZoneForm() {
   document.getElementById("zf-id").value = "";
   document.getElementById("zf-submit-btn").textContent = "Crear zona";
   document.getElementById("add-zone-details").open = false;
+}
+
+// ---------------------------------------- actuadores de otros plugins --
+// Agregado de /api/actuators (Tuya hoy, otra marca mañana) -- se
+// muestran como checkboxes que se suman/quitan del mismo campo de
+// texto de siempre (zf-climate), sin tocar lo que ya hubiera escrito a
+// mano ahi para entidades climate.* normales de HA.
+
+let lastActuators = [];
+
+async function loadActuators() {
+  try {
+    lastActuators = await (await fetch("api/actuators")).json();
+    renderActuatorPicker();
+  } catch (e) { /* red temporalmente caida */ }
+}
+
+function renderActuatorPicker() {
+  const box = document.getElementById("zf-actuator-picker");
+  const current = csvToList("zf-climate");
+  const selectable = lastActuators.filter(a => !a.already_used || current.includes(a.ref));
+  if (!selectable.length) { box.innerHTML = ""; return; }
+  box.innerHTML = selectable.map(a => `
+    <div class="checkline">
+      <input type="checkbox" id="act-${esc(a.ref)}" ${current.includes(a.ref) ? "checked" : ""} onchange="toggleActuator('${a.ref}', this.checked)">
+      <label for="act-${esc(a.ref)}">${esc(a.name)} <span style="color:var(--muted)">(${esc(a.brand)})</span></label>
+    </div>`).join("");
+}
+
+function toggleActuator(ref, checked) {
+  const known = new Set(lastActuators.map(a => a.ref));
+  let list = csvToList("zf-climate").filter(v => !known.has(v));
+  if (checked) list.push(ref);
+  document.getElementById("zf-climate").value = list.join(", ");
 }
 
 document.getElementById("zf-simulate").addEventListener("change", (e) => {
@@ -616,6 +652,7 @@ async function renderPluginSwitch() {
 
 loadZones();
 loadStatus();
+loadActuators();
 renderPluginSwitch();
 setInterval(loadZones, 8000);
 setInterval(loadStatus, 8000);

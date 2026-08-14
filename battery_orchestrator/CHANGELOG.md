@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.79
+**Registro genérico de proveedores de actuadores climate.*** — hasta ahora Climate conocía a Tuya por su nombre a mano. Ahora cualquier plugin que exponga `climate_handle()`/`list_climate_actuators()` se registra solo (`core_app.py` los conecta tras cargar los plugins, sin lista hardcodeada); `zone_runner.py` deja de mencionar "Tuya" en ningún sitio — solo sabe preguntarle al registro. Preparado para que una marca futura se sume sin tocar Climate ni el núcleo.
+
+**Selector de actuadores en el formulario de zona**: `GET /api/actuators` agrega lo que ofrece cada proveedor registrado, marcando `already_used` contra todas las zonas existentes — un dispositivo ya asignado no vuelve a aparecer como opción. El campo de texto libre para `climate.*` de HA se mantiene tal cual.
+
+Verificado de punta a punta con un proveedor de prueba: registro, resolución, filtrado de "ya en uso", y cero regresión sin ningún proveedor instalado.
+
 ## 0.11.78
 Sha256 de Climate re-pineado al tag `v0.11.77` (ya trae el enganche de Tuya en `zone_runner.py`) — verificado con una descarga real antes de fijarlo.
 

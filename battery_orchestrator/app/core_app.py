@@ -36,15 +36,17 @@ def main() -> None:
     plugins = plugin_loader.load_all_plugins()
     by_slug = {p.slug: p for p in plugins}
 
-    # Cableado explicito entre plugins que se conocen -- deliberadamente
-    # NO un bus generico de eventos entre plugins (no hace falta hoy con
-    # solo dos casos conocidos). Si Tuya no esta instalado, climate_plugin
-    # se queda con self._tuya = None y las zonas que referencien un
-    # `tuya:<device_id>` simplemente no lo controlan (ver
-    # ZoneRunner._resolve_tuya_handle), no revienta nada.
-    if "climate" in by_slug and "tuya" in by_slug:
-        by_slug["climate"].set_tuya(by_slug["tuya"])
-        log.info("Climate conectado a Tuya para consumo interno de termostatos")
+    # Cualquier plugin cargado que ofrezca `climate_handle` (Tuya hoy,
+    # otra marca mañana) se registra solo en Climate como proveedor de
+    # actuadores -- no hace falta tocar este fichero ni climate_plugin.py
+    # cuando llegue un tercero; basta con que el plugin nuevo exponga el
+    # mismo contrato (ver TuyaPlugin.climate_handle/list_climate_actuators).
+    climate_plugin = by_slug.get("climate")
+    if climate_plugin is not None:
+        for p in plugins:
+            if p is climate_plugin or not hasattr(p, "climate_handle"):
+                continue
+            climate_plugin.register_actuator_provider(p.slug, p)
 
     for p in plugins:
         p.start_background_threads()

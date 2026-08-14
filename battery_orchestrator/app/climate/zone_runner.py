@@ -129,21 +129,23 @@ class ZoneRunner:
     y `mqtt` (mqtt_climate.MqttClimateEntity, ver ese modulo) se inyectan
     desde fuera -- este runner no abre ninguna conexion el mismo.
 
-    `tuya` (opcional): referencia al `TuyaPlugin` cargado, si lo hay (ver
-    core_app.py, que la conecta tras cargar los plugins) -- permite que
-    esta zona controle un dispositivo Tuya EN EL MISMO PROCESO, sin pasar
-    por Home Assistant, escribiendo `tuya:<device_id>` (o
-    `tuya:<device_id>:<indice_climate>` si el perfil del dispositivo tiene
-    mas de un bloque `climates:`) en vez de un `climate.*` de HA en
-    `climate_entities` -- misma lista, mismo campo de siempre, sin
-    configuracion nueva que aprender."""
+    `bridges` (opcional): el propio `ClimatePlugin`, que hace de registro
+    generico de "proveedores de actuadores" -- cualquier plugin que
+    ofrezca dispositivos climate.* (Tuya hoy, otras marcas mañana) se
+    registra solo en el (ver ClimatePlugin.register_actuator_provider(),
+    llamado desde core_app.py tras cargar los plugins). Este runner nunca
+    conoce marcas concretas: solo sabe que `<prefijo>:<id>` en
+    `climate_entities` (junto a `climate.*` de HA, misma lista de
+    siempre) se resuelve preguntandole a `bridges`, sea cual sea el
+    prefijo -- añadir una marca nueva no toca ni una linea de este
+    fichero."""
 
-    def __init__(self, zone_id: str, zone: dict, ws, mqtt, all_zones: list[dict], state: dict | None = None, tuya=None) -> None:
+    def __init__(self, zone_id: str, zone: dict, ws, mqtt, all_zones: list[dict], state: dict | None = None, bridges=None) -> None:
         self.zone_id = zone_id
         self.zone = zone
         self.ws = ws
         self.mqtt = mqtt
-        self.tuya = tuya
+        self.bridges = bridges
         self.all_zones = all_zones  # config de TODAS las zonas -- para power_model._other_zone_entities
 
         self._last_full_capability: set[str] = set()
@@ -398,41 +400,40 @@ class ZoneRunner:
 
     # ------------------------------------------------------ lecturas HA ---
 
-    @staticmethod
-    def _is_tuya_ref(entity_id: str) -> bool:
-        return entity_id.startswith("tuya:")
+    def _is_bridge_ref(self, entity_id: str) -> bool:
+        """True si `entity_id` es un actuador de OTRO plugin (Tuya u
+        otra marca futura), no un `climate.*` de HA -- delega en
+        `bridges.is_bridge_ref()` (ver ClimatePlugin), que es quien de
+        verdad conoce que prefijos hay registrados. Sin `bridges` (nunca
+        deberia pasar en produccion, pero por si acaso en una prueba
+        aislada) nunca es una referencia de otro plugin."""
+        return self.bridges is not None and self.bridges.is_bridge_ref(entity_id)
 
-    def _resolve_tuya_handle(self, entity_id: str):
-        """`entity_id` con forma `tuya:<device_id>` o
-        `tuya:<device_id>:<indice_climate>` -> TuyaClimateHandle, o None si
-        no hay plugin Tuya cargado, o ese dispositivo/indice no existe
-        todavia (p.ej. Tuya aun arrancando, o se desinstalo) -- llamar
-        SOLO cuando `_is_tuya_ref(entity_id)` ya es True; un None aqui
-        significa "no disponible ahora mismo", nunca "no era una
-        referencia Tuya" (ver _call_climate_service/_get_state, que no
-        deben caer a ws.call_service con un entity_id que no es de HA)."""
-        if self.tuya is None:
-            return None
-        parts = entity_id.split(":", 2)
-        device_id = parts[1] if len(parts) > 1 else ""
-        index = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0
+    def _resolve_bridge_handle(self, entity_id: str):
+        """`entity_id` -> el handle climate del plugin que corresponda
+        (Tuya u otro), o None si no esta disponible ahora mismo (plugin
+        aun arrancando, desinstalado, dispositivo desconectado...).
+        Llamar SOLO cuando `_is_bridge_ref(entity_id)` ya es True -- un
+        None aqui significa "no disponible", nunca "no era una
+        referencia de otro plugin" (ver _call_climate_service/_get_state,
+        que no deben caer a ws.call_service con un entity_id que no es de
+        HA)."""
         try:
-            return self.tuya.climate_handle(device_id, index)
+            return self.bridges.resolve_bridge_handle(entity_id)
         except Exception:
             return None
 
     def _call_climate_service(self, entity_id: str, service: str, service_data: dict | None = None) -> None:
         """Punto UNICO de salida para las ordenes de un actuador climate.*
-        -- si `entity_id` es una referencia Tuya, se resuelve EN EL MISMO
-        PROCESO contra `TuyaClimateHandle` en vez de pasar por
-        `ws.call_service`. `set_fan_mode` no tiene equivalente en
-        TuyaClimateHandle todavia (perfiles Tuya con fan_dp propio) -- se
-        ignora en silencio en vez de fallar, igual que si el propio
-        dispositivo no soportase esa orden."""
-        if self._is_tuya_ref(entity_id):
-            handle = self._resolve_tuya_handle(entity_id)
+        -- si `entity_id` es de otro plugin (Tuya u otra marca), se
+        resuelve EN EL MISMO PROCESO en vez de pasar por `ws.call_service`.
+        `set_fan_mode` no tiene equivalente generico todavia -- se ignora
+        en silencio en vez de fallar, igual que si el propio dispositivo
+        no soportase esa orden."""
+        if self._is_bridge_ref(entity_id):
+            handle = self._resolve_bridge_handle(entity_id)
             if handle is None:
-                return  # Tuya no disponible ahora mismo -- nunca se manda esto a ws.call_service
+                return  # no disponible ahora mismo -- nunca se manda esto a ws.call_service
             data = service_data or {}
             if service == "set_hvac_mode" and "hvac_mode" in data:
                 handle.set_hvac_mode(data["hvac_mode"])
@@ -442,8 +443,8 @@ class ZoneRunner:
         self.ws.call_service("climate", service, service_data=service_data or {}, target={"entity_id": entity_id})
 
     def _get_state(self, entity_id: str) -> dict | None:
-        if self._is_tuya_ref(entity_id):
-            handle = self._resolve_tuya_handle(entity_id)
+        if self._is_bridge_ref(entity_id):
+            handle = self._resolve_bridge_handle(entity_id)
             if handle is None or not handle.available:
                 return None
             return {

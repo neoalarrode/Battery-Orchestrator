@@ -255,3 +255,28 @@ class TuyaPlugin(Plugin):
         """Punto de entrada para consumo INTERNO desde otro plugin (hoy
         Climate) -- ver tuya/device_manager.py:TuyaClimateHandle."""
         return self._manager.climate_handle(device_id, climate_index)
+
+    def list_climate_actuators(self) -> list[dict]:
+        """Un `{"ref", "name", "brand"}` por cada bloque `climates:` de
+        cada dispositivo dado de alta -- lo que ClimatePlugin agrega en
+        `/api/actuators` para que el selector de la interfaz de Climate
+        los ofrezca sin que el usuario tenga que escribir `tuya:<id>` a
+        mano. `ref` es exactamente lo que `climate_entities` de una zona
+        espera (ver ZoneRunner.bridges)."""
+        out = []
+        for device in tuya_store.load_devices():
+            cfg = device["config"]
+            device_id = cfg.get("device_id")
+            if not device_id:
+                continue
+            profile = self._manager.profile(device_id)
+            if profile is None:
+                continue
+            for i, cm in enumerate(profile.climates):
+                ref = f"tuya:{device_id}" if len(profile.climates) == 1 else f"tuya:{device_id}:{i}"
+                out.append({
+                    "ref": ref,
+                    "name": f"{cfg.get('name') or device_id} — {cm.name}",
+                    "brand": "Tuya",
+                })
+        return out

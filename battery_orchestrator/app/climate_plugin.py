@@ -35,7 +35,7 @@ REACTIVE_MIN_INTERVAL_SECONDS = 5
 class ClimatePlugin(Plugin):
     slug = "climate"
     name = "Climate Orchestrator"
-    version = "0.2.1"
+    version = "0.2.2"
 
     def __init__(self) -> None:
         self._runners: dict[str, ZoneRunner] = {}
@@ -44,16 +44,39 @@ class ClimatePlugin(Plugin):
         self._mqtt = ha_mqtt.HAMqttClient(client_id="home_orchestrator_climate")
         self._reactive = ha_websocket.ReactiveTrigger(self._run_reactive_cycle)
         self._app = flask.Flask("climate_plugin", template_folder="climate_templates")
-        # Referencia al plugin Tuya, si esta cargado -- la conecta
-        # core_app.py DESPUES de cargar todos los plugins (ver ese
-        # modulo). None mientras Tuya no este instalado: las zonas que
-        # referencien un `tuya:<device_id>` simplemente no lo controlan
-        # (ver ZoneRunner._resolve_tuya_handle), no revientan.
-        self._tuya = None
+        # Registro GENERICO de "proveedores de actuadores" -- prefijo ->
+        # plugin. Cualquier plugin que ofrezca dispositivos climate.*
+        # (Tuya hoy, otra marca mañana) se registra solo aqui (ver
+        # register_actuator_provider(), llamado desde core_app.py tras
+        # cargar los plugins) sin que este fichero necesite conocer nada
+        # especifico de esa marca. Vacio si no hay ninguno cargado: las
+        # zonas que referencien un actuador de otro plugin simplemente no
+        # lo controlan (ver ZoneRunner._resolve_bridge_handle), no revientan.
+        self._actuator_providers: dict[str, object] = {}
         self._register_routes()
 
-    def set_tuya(self, tuya_plugin) -> None:
-        self._tuya = tuya_plugin
+    def register_actuator_provider(self, prefix: str, provider) -> None:
+        """`provider` debe exponer `.climate_handle(device_id, index) ->
+        handle | None` (control) y, si quiere aparecer en el selector de
+        la interfaz, `.list_climate_actuators() -> list[dict]` (ver
+        api_list_actuators mas abajo)."""
+        self._actuator_providers[prefix] = provider
+        log.info("Registrado proveedor de actuadores '%s'", prefix)
+
+    def is_bridge_ref(self, ref: str) -> bool:
+        return ":" in ref and ref.split(":", 1)[0] in self._actuator_providers
+
+    def resolve_bridge_handle(self, ref: str):
+        """`ref` = '<prefijo>:<device_id>[:<indice>]' -> handle, o None
+        si el prefijo no tiene proveedor registrado ahora mismo."""
+        prefix, rest = ref.split(":", 1)
+        provider = self._actuator_providers.get(prefix)
+        if provider is None:
+            return None
+        parts = rest.split(":", 1)
+        device_id = parts[0]
+        index = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
+        return provider.climate_handle(device_id, index)
 
     # --------------------------------------------------------------- Flask -
 
@@ -66,6 +89,33 @@ class ClimatePlugin(Plugin):
         @app.get("/")
         def _index():
             return flask.render_template("index.html")
+
+        @app.get("/api/actuators")
+        def _list_actuators():
+            """Actuadores climate.* que OTROS plugins ofrecen (Tuya hoy,
+            otra marca mañana) -- agregado de todos los proveedores
+            registrados, filtrando los que ya esten en uso en CUALQUIER
+            zona (no interesa mostrar dos veces algo que ya esta añadido,
+            ni permitir asignarlo por error a una segunda zona a la vez)."""
+            used_refs = {
+                ref
+                for z in zone_store.load_zones()
+                for ref in (z["config"].get("climate_entities") or [])
+                if ":" in ref
+            }
+            out = []
+            for prefix, provider in self._actuator_providers.items():
+                lister = getattr(provider, "list_climate_actuators", None)
+                if lister is None:
+                    continue
+                try:
+                    for actuator in lister():
+                        actuator = dict(actuator)
+                        actuator["already_used"] = actuator.get("ref") in used_refs
+                        out.append(actuator)
+                except Exception:
+                    log.exception("Fallo listando actuadores del proveedor '%s'", prefix)
+            return flask.jsonify(out)
 
         @app.get("/api/zones")
         def _list_zones():
@@ -159,7 +209,7 @@ class ClimatePlugin(Plugin):
         all_zone_configs = [z["config"] for z in zone_store.load_zones()]
 
         mqtt_zone = MqttClimateZone(self._mqtt, zone_id, cfg)
-        runner = ZoneRunner(zone_id, cfg, self._ws, mqtt_zone, all_zone_configs, state=state, tuya=self._tuya)
+        runner = ZoneRunner(zone_id, cfg, self._ws, mqtt_zone, all_zone_configs, state=state, bridges=self)
         mqtt_zone.bind(runner)
         mqtt_zone.publish_discovery(
             min_temp=float(cfg.get("min_temp", 15.0)),

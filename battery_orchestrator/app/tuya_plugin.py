@@ -23,9 +23,11 @@ import flask
 
 import ha_mqtt
 from plugin_base import Plugin
-from tuya import tuya_store
+from tuya import auto_profile, tuya_store
 from tuya.device_manager import TuyaDeviceManager
 from tuya.mqtt_tuya import MqttTuyaDevice
+from tuya.profile import profile_to_yaml
+from tuya.tuya_cloud import TuyaCloudApi, TuyaCloudAuthError, TuyaCloudApiError
 
 log = logging.getLogger("tuya_plugin")
 
@@ -101,6 +103,95 @@ class TuyaPlugin(Plugin):
                 "version": self.version,
                 "devices": len(self._manager._devices),  # noqa: SLF001
                 "mqtt_connected": self._mqtt.connected,
+            })
+
+        # ------------------------------------------------ descubrimiento -
+        # El usuario SIEMPRE decide: descubrir solo enseña lo que se ha
+        # visto en la LAN (y, si hay cuenta vinculada, lo que la nube dice
+        # que es tuyo) -- nada se añade ni se conecta hasta que se pulsa
+        # "Añadir" explicitamente para ESE dispositivo en concreto.
+
+        @app.get("/api/discovered")
+        def _list_discovered():
+            added_ids = {d["config"]["device_id"] for d in tuya_store.load_devices()}
+            seen = self._manager.get_discovered_devices()
+            out = [
+                {
+                    "device_id": d.device_id,
+                    "ip": d.ip,
+                    "product_key": d.product_key,
+                    "version": d.version,
+                    "already_added": d.device_id in added_ids,
+                }
+                for d in seen
+            ]
+            return flask.jsonify(out)
+
+        @app.get("/api/account")
+        def _get_account():
+            account = tuya_store.load_account()
+            return flask.jsonify({
+                "region": account["region"], "access_id": account["access_id"],
+                "uid": account["uid"], "linked": bool(account["access_id"] and account["access_secret"]),
+            })  # access_secret NUNCA se devuelve
+
+        @app.post("/api/account")
+        def _save_account():
+            payload = flask.request.get_json(force=True) or {}
+            try:
+                api = TuyaCloudApi(
+                    payload.get("region", "eu"), payload.get("access_id", ""), payload.get("access_secret", ""),
+                )
+                api.validate()
+            except (TuyaCloudAuthError, TuyaCloudApiError) as exc:
+                return flask.jsonify({"error": f"credenciales rechazadas por Tuya: {exc}"}), 400
+            except Exception as exc:
+                return flask.jsonify({"error": str(exc)}), 502
+            tuya_store.save_account({
+                "region": payload.get("region", "eu"), "access_id": payload.get("access_id", ""),
+                "access_secret": payload.get("access_secret", ""), "uid": payload.get("uid", ""),
+            })
+            return flask.jsonify({"linked": True})
+
+        @app.post("/api/discovered/<device_id>/resolve")
+        def _resolve_discovered(device_id):
+            """NO da de alta nada -- resuelve el local_key + esquema DP
+            real contra la cuenta Tuya vinculada y genera un perfil de
+            PARTIDA (ver auto_profile.py), para que la interfaz lo
+            precargue en el formulario de siempre y el usuario lo revise/
+            edite antes de guardar. Guardar de verdad sigue pasando
+            siempre por POST /api/devices, como cualquier alta manual --
+            aqui no se conecta ni se persiste nada todavia."""
+            seen = {d.device_id: d for d in self._manager.get_discovered_devices()}
+            discovered = seen.get(device_id)
+            if discovered is None:
+                return flask.jsonify({"error": "dispositivo no visto en la LAN (¿sigue encendido?)"}), 404
+
+            account = tuya_store.load_account()
+            if not account["access_id"] or not account["access_secret"] or not account["uid"]:
+                return flask.jsonify({"error": "vincula primero una cuenta Tuya para poder traer el local_key"}), 400
+
+            try:
+                api = TuyaCloudApi(account["region"], account["access_id"], account["access_secret"])
+                cloud_devices = {d["device_id"]: d for d in api.get_user_devices(account["uid"])}
+                cloud_device = cloud_devices.get(device_id)
+                if cloud_device is None or not cloud_device.get("local_key"):
+                    return flask.jsonify({"error": "la cuenta vinculada no conoce este dispositivo (¿esta vinculado en Tuya IoT Platform?)"}), 404
+                schema = api.get_device_schema(device_id)
+            except (TuyaCloudAuthError, TuyaCloudApiError) as exc:
+                return flask.jsonify({"error": f"fallo consultando la nube de Tuya: {exc}"}), 502
+
+            profile, warnings = auto_profile.build_profile_from_schema(
+                cloud_device["name"], cloud_device.get("category"), cloud_device.get("product_id"), schema,
+            )
+            return flask.jsonify({
+                "name": cloud_device["name"],
+                "device_id": device_id,
+                "address": discovered.ip,
+                "local_key": cloud_device["local_key"],
+                "protocol_version": discovered.version or "3.3",
+                "profile_yaml": profile_to_yaml(profile),
+                "warnings": warnings,
             })
 
     # ------------------------------------------------------------- arranque

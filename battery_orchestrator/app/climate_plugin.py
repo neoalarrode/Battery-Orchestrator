@@ -35,7 +35,7 @@ REACTIVE_MIN_INTERVAL_SECONDS = 5
 class ClimatePlugin(Plugin):
     slug = "climate"
     name = "Climate Orchestrator"
-    version = "0.2.0"
+    version = "0.2.1"
 
     def __init__(self) -> None:
         self._runners: dict[str, ZoneRunner] = {}
@@ -44,7 +44,16 @@ class ClimatePlugin(Plugin):
         self._mqtt = ha_mqtt.HAMqttClient(client_id="home_orchestrator_climate")
         self._reactive = ha_websocket.ReactiveTrigger(self._run_reactive_cycle)
         self._app = flask.Flask("climate_plugin", template_folder="climate_templates")
+        # Referencia al plugin Tuya, si esta cargado -- la conecta
+        # core_app.py DESPUES de cargar todos los plugins (ver ese
+        # modulo). None mientras Tuya no este instalado: las zonas que
+        # referencien un `tuya:<device_id>` simplemente no lo controlan
+        # (ver ZoneRunner._resolve_tuya_handle), no revientan.
+        self._tuya = None
         self._register_routes()
+
+    def set_tuya(self, tuya_plugin) -> None:
+        self._tuya = tuya_plugin
 
     # --------------------------------------------------------------- Flask -
 
@@ -150,7 +159,7 @@ class ClimatePlugin(Plugin):
         all_zone_configs = [z["config"] for z in zone_store.load_zones()]
 
         mqtt_zone = MqttClimateZone(self._mqtt, zone_id, cfg)
-        runner = ZoneRunner(zone_id, cfg, self._ws, mqtt_zone, all_zone_configs, state=state)
+        runner = ZoneRunner(zone_id, cfg, self._ws, mqtt_zone, all_zone_configs, state=state, tuya=self._tuya)
         mqtt_zone.bind(runner)
         mqtt_zone.publish_discovery(
             min_temp=float(cfg.get("min_temp", 15.0)),

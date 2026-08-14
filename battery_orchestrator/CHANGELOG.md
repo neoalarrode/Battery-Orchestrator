@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.77
+**Descubrimiento de dispositivos Tuya, con el usuario decidiendo siempre si añadir o no** — portados `discovery.py` (escucha persistente de broadcasts LAN, cero dependencia de HA), `tuya_cloud.py` (adaptado de aiohttp a `requests` síncrono — solo se usa para vincular una cuenta y traer `local_key`+esquema real, nunca en operación normal) y `auto_profile.py` (genera un perfil YAML de partida a partir del esquema real del dispositivo). Flujo: "Detectados" enseña lo visto en la LAN (puramente informativo) → el usuario pulsa "Añadir" → se resuelve contra la cuenta vinculada y se PRECARGA el formulario de siempre con el perfil generado → el usuario lo revisa/edita → guarda. Nada se conecta ni se persiste hasta ese último paso — igual que el `config_flow` del proyecto original.
+
+**Climate ya puede controlar un termostato Tuya de verdad, sin pasar por Home Assistant**: `climate_entities` de una zona acepta `tuya:<device_id>` además de un `climate.*` de HA — `ZoneRunner` lo resuelve contra `TuyaClimateHandle` en el mismo proceso. `core_app.py` conecta ambos plugins tras cargarlos (si Tuya no está instalado, las zonas que lo referencien simplemente no lo controlan, no revienta nada). Verificado de punta a punta con el método real de decisión (`_drive_climate_actuator`) y un bloqueo explícito que confirma que nunca se llama a `ws.call_service`/`ws.get_state` para un actuador Tuya.
+
+Tuya se queda todavía fuera de la tienda (`downloadable: false`) — sigue pendiente de verificar contra un dispositivo físico real.
+
 ## 0.11.76
 Sha256 de Energy y Climate re-pineados al tag `v0.11.75` (ya incluye el selector de plugins dinámico de 0.11.74) — verificado con una descarga real de ambos antes de fijarlo. Corrige que el selector dinámico llevaba dos versiones desplegado sin efecto real: el código descargado en producción seguía siendo el de antes del cambio, porque nada disparó una re-descarga tras el commit anterior.
 

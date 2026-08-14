@@ -94,3 +94,30 @@ def delete_device(device_id: str) -> bool:
         devices = [d for d in devices if d["id"] != device_id]
         save_devices(devices)
         return len(devices) < before
+
+
+# ------------------------------------------------------ cuenta Tuya Cloud -
+# Solo se usa para VINCULAR (traer local_key + esquema de cada dispositivo
+# al darlo de alta desde "Detectados", ver tuya_plugin.py) -- nunca en
+# operacion normal, que sigue siendo 100% LAN. access_secret se guarda en
+# el mismo config.json que ya guarda las credenciales EcoFlow de Energy --
+# mismo nivel de sensibilidad, mismo sitio.
+DEFAULT_ACCOUNT = {"region": "eu", "access_id": "", "access_secret": "", "uid": ""}
+
+
+def load_account() -> dict:
+    with _lock:
+        section = _read_section()
+        merged = dict(DEFAULT_ACCOUNT)
+        merged.update(section.get("account") or {})
+        return merged
+
+
+def save_account(account: dict) -> None:
+    with _lock:
+        section = _read_section()
+        merged = dict(DEFAULT_ACCOUNT)
+        merged.update(section.get("account") or {})
+        merged.update(account)
+        section["account"] = merged
+        _write_section(section)

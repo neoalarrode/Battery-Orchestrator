@@ -304,7 +304,8 @@
         </div>
       </div>
       <label for="zf-climate">Delegados climate.* (aire acondicionado con su propio termostato)</label>
-      <input id="zf-climate" placeholder="climate.airclima_frio_salon, climate.airclima_calor_salon">
+      <input id="zf-climate" placeholder="climate.airclima_frio_salon, tuya:bf1234567890abcdef">
+      <p class="help">Acepta un <code>climate.*</code> de Home Assistant, o <code>tuya:&lt;device_id&gt;</code> para controlar un dispositivo del plugin Tuya directamente, sin pasar por HA (si tiene más de un termostato en su perfil: <code>tuya:&lt;device_id&gt;:&lt;índice&gt;</code>).</p>
       <label for="zf-humidifiers">Humidificadores/deshumidificadores (opcional)</label>
       <input id="zf-humidifiers" placeholder="humidifier.salon">
 

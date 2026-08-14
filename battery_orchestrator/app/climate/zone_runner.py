@@ -127,13 +127,23 @@ def zone_stagger_seconds(zone_id: str, refresh_minutes: int) -> float:
 class ZoneRunner:
     """Una instancia por zona configurada. `ws` (ha_websocket.HAWebSocketClient)
     y `mqtt` (mqtt_climate.MqttClimateEntity, ver ese modulo) se inyectan
-    desde fuera -- este runner no abre ninguna conexion el mismo."""
+    desde fuera -- este runner no abre ninguna conexion el mismo.
 
-    def __init__(self, zone_id: str, zone: dict, ws, mqtt, all_zones: list[dict], state: dict | None = None) -> None:
+    `tuya` (opcional): referencia al `TuyaPlugin` cargado, si lo hay (ver
+    core_app.py, que la conecta tras cargar los plugins) -- permite que
+    esta zona controle un dispositivo Tuya EN EL MISMO PROCESO, sin pasar
+    por Home Assistant, escribiendo `tuya:<device_id>` (o
+    `tuya:<device_id>:<indice_climate>` si el perfil del dispositivo tiene
+    mas de un bloque `climates:`) en vez de un `climate.*` de HA en
+    `climate_entities` -- misma lista, mismo campo de siempre, sin
+    configuracion nueva que aprender."""
+
+    def __init__(self, zone_id: str, zone: dict, ws, mqtt, all_zones: list[dict], state: dict | None = None, tuya=None) -> None:
         self.zone_id = zone_id
         self.zone = zone
         self.ws = ws
         self.mqtt = mqtt
+        self.tuya = tuya
         self.all_zones = all_zones  # config de TODAS las zonas -- para power_model._other_zone_entities
 
         self._last_full_capability: set[str] = set()
@@ -388,7 +398,68 @@ class ZoneRunner:
 
     # ------------------------------------------------------ lecturas HA ---
 
+    @staticmethod
+    def _is_tuya_ref(entity_id: str) -> bool:
+        return entity_id.startswith("tuya:")
+
+    def _resolve_tuya_handle(self, entity_id: str):
+        """`entity_id` con forma `tuya:<device_id>` o
+        `tuya:<device_id>:<indice_climate>` -> TuyaClimateHandle, o None si
+        no hay plugin Tuya cargado, o ese dispositivo/indice no existe
+        todavia (p.ej. Tuya aun arrancando, o se desinstalo) -- llamar
+        SOLO cuando `_is_tuya_ref(entity_id)` ya es True; un None aqui
+        significa "no disponible ahora mismo", nunca "no era una
+        referencia Tuya" (ver _call_climate_service/_get_state, que no
+        deben caer a ws.call_service con un entity_id que no es de HA)."""
+        if self.tuya is None:
+            return None
+        parts = entity_id.split(":", 2)
+        device_id = parts[1] if len(parts) > 1 else ""
+        index = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0
+        try:
+            return self.tuya.climate_handle(device_id, index)
+        except Exception:
+            return None
+
+    def _call_climate_service(self, entity_id: str, service: str, service_data: dict | None = None) -> None:
+        """Punto UNICO de salida para las ordenes de un actuador climate.*
+        -- si `entity_id` es una referencia Tuya, se resuelve EN EL MISMO
+        PROCESO contra `TuyaClimateHandle` en vez de pasar por
+        `ws.call_service`. `set_fan_mode` no tiene equivalente en
+        TuyaClimateHandle todavia (perfiles Tuya con fan_dp propio) -- se
+        ignora en silencio en vez de fallar, igual que si el propio
+        dispositivo no soportase esa orden."""
+        if self._is_tuya_ref(entity_id):
+            handle = self._resolve_tuya_handle(entity_id)
+            if handle is None:
+                return  # Tuya no disponible ahora mismo -- nunca se manda esto a ws.call_service
+            data = service_data or {}
+            if service == "set_hvac_mode" and "hvac_mode" in data:
+                handle.set_hvac_mode(data["hvac_mode"])
+            elif service == "set_temperature" and "temperature" in data:
+                handle.set_temperature(data["temperature"])
+            return
+        self.ws.call_service("climate", service, service_data=service_data or {}, target={"entity_id": entity_id})
+
     def _get_state(self, entity_id: str) -> dict | None:
+        if self._is_tuya_ref(entity_id):
+            handle = self._resolve_tuya_handle(entity_id)
+            if handle is None or not handle.available:
+                return None
+            return {
+                "state": handle.hvac_mode,
+                "attributes": {
+                    "current_temperature": handle.current_temperature,
+                    "temperature": handle.target_temperature,
+                    # Lista generica -- TuyaClimateHandle no expone hoy los
+                    # modos reales del perfil (mode_map), asi que se ofrece
+                    # el par minimo que _drive_climate_actuator necesita
+                    # para decidir apagar/encender sin adivinar de mas.
+                    "hvac_modes": ["off", "heat", "cool"],
+                    "fan_mode": None,
+                    "fan_modes": [],
+                },
+            }
         try:
             return self.ws.get_state(entity_id)
         except Exception:
@@ -827,19 +898,19 @@ class ZoneRunner:
                 self._delegate_overshoot_strikes[entity_id] = 0
             if not simulate:
                 if state is None or state.get("state") != action:
-                    self.ws.call_service("climate", "set_hvac_mode", service_data={"hvac_mode": action}, target={"entity_id": entity_id})
+                    self._call_climate_service(entity_id, "set_hvac_mode", {"hvac_mode": action})
                 if action in ("heat", "cool"):
                     compensated = self._compensate_delegate_target(entity_id, state, target_temp, current_temp)
                     current_target = _safe_float(attrs.get("temperature"))
                     if current_target is None or abs(current_target - compensated) > TEMP_SEND_TOLERANCE_DEG:
-                        self.ws.call_service("climate", "set_temperature", service_data={"temperature": compensated}, target={"entity_id": entity_id})
+                        self._call_climate_service(entity_id, "set_temperature", {"temperature": compensated})
                     self._drive_delegate_fan_mode(entity_id, state, urgent)
             elif action in ("heat", "cool"):
                 self._compensate_delegate_target(entity_id, state, target_temp, current_temp)
             return action
 
         if not simulate and "off" in supported and state is not None and state.get("state") != "off":
-            self.ws.call_service("climate", "set_hvac_mode", service_data={"hvac_mode": "off"}, target={"entity_id": entity_id})
+            self._call_climate_service(entity_id, "set_hvac_mode", {"hvac_mode": "off"})
         return "idle"
 
     def _drive_delegate_fan_mode(self, entity_id: str, state: dict | None, urgent: bool) -> None:
@@ -849,7 +920,7 @@ class ZoneRunner:
         fan_modes = list(attrs.get("fan_modes") or [])
         desired_fan = _pick_fan_mode(fan_modes, urgent, self._manual_fan_mode)
         if desired_fan and desired_fan != attrs.get("fan_mode"):
-            self.ws.call_service("climate", "set_fan_mode", service_data={"fan_mode": desired_fan}, target={"entity_id": entity_id})
+            self._call_climate_service(entity_id, "set_fan_mode", {"fan_mode": desired_fan})
 
     def _drive_climate_idle(self, entity_id: str, current_temp: float | None, deadband: float, simulate: bool) -> str:
         state = self._get_state(entity_id)
@@ -864,17 +935,17 @@ class ZoneRunner:
 
         if entity_id in self._delegate_needs_explicit_off or last is None or last[0] not in supported:
             if not simulate and "off" in supported and state is not None and state.get("state") != "off":
-                self.ws.call_service("climate", "set_hvac_mode", service_data={"hvac_mode": "off"}, target={"entity_id": entity_id})
+                self._call_climate_service(entity_id, "set_hvac_mode", {"hvac_mode": "off"})
             return "idle"
 
         last_mode, last_target = last
         if not simulate:
             compensated = self._compensate_delegate_target(entity_id, state, last_target, current_temp)
             if state is None or state.get("state") != last_mode:
-                self.ws.call_service("climate", "set_hvac_mode", service_data={"hvac_mode": last_mode}, target={"entity_id": entity_id})
+                self._call_climate_service(entity_id, "set_hvac_mode", {"hvac_mode": last_mode})
             current_target = _safe_float(attrs.get("temperature"))
             if current_target is None or abs(current_target - compensated) > TEMP_SEND_TOLERANCE_DEG:
-                self.ws.call_service("climate", "set_temperature", service_data={"temperature": compensated}, target={"entity_id": entity_id})
+                self._call_climate_service(entity_id, "set_temperature", {"temperature": compensated})
             self._drive_delegate_fan_mode(entity_id, state, urgent=False)
         else:
             self._compensate_delegate_target(entity_id, state, last_target, current_temp)

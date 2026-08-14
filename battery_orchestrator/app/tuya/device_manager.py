@@ -21,6 +21,7 @@ import logging
 import threading
 from typing import Any, Callable
 
+from .discovery import DiscoveredDevice, PersistentDiscovery
 from .profile import ClimateMapping, DeviceProfile, parse_profile
 from .tuya_lan import TuyaLocalDevice
 
@@ -45,6 +46,14 @@ class TuyaDeviceManager:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._loop_ready = threading.Event()
         self._thread: threading.Thread | None = None
+        # Escucha PERSISTENTE de los broadcasts LAN (no una ventana de
+        # unos segundos por consulta) -- mismo motivo que el proyecto
+        # original: un dispositivo que emite en un intervalo irregular
+        # puede no caer dentro de una ventana corta, pero casi nunca se
+        # pierde una escucha que esta abierta ~100% del tiempo. Puramente
+        # informativo hasta que el usuario decide añadir uno (ver
+        # get_discovered_devices()) -- nunca añade nada por su cuenta.
+        self._discovery = PersistentDiscovery()
 
     # ------------------------------------------------------------ arranque
 
@@ -59,7 +68,16 @@ class TuyaDeviceManager:
         self._loop = loop
         self._loop_ready.set()
         loop.create_task(self._reconnect_loop())
+        loop.create_task(self._discovery.start())
         loop.run_forever()
+
+    def get_discovered_devices(self) -> list[DiscoveredDevice]:
+        """Snapshot de lo visto por broadcast LAN hasta ahora -- solo
+        device_id/ip/product_key/version (el broadcast NUNCA lleva el
+        local_key; eso solo lo da la nube de Tuya al vincular una cuenta,
+        ver tuya_cloud.py). Puramente informativo: el usuario decide, uno
+        a uno, si añade alguno (ver tuya_plugin.py)."""
+        return list(self._discovery.devices.values())
 
     async def _reconnect_loop(self) -> None:
         """Mismo criterio que el __init__.py original: cualquier

@@ -104,12 +104,55 @@
 </div>
 
 <div class="card">
+  <h2><span>Cuenta Tuya</span> <span class="hint" id="account-status">—</span></h2>
+  <p class="help">Solo para traer el <code>local_key</code> y el esquema real de cada dispositivo al darlo de alta desde "Detectados" — nunca se vuelve a usar después, la operación es 100% LAN. Necesita un proyecto "Cloud" (gratuito) en <a href="https://iot.tuya.com" target="_blank" rel="noopener">Tuya IoT Platform</a> con tu cuenta de la app vinculada (Devices → Link Tuya App Account).</p>
+  <details id="account-details">
+    <summary><span class="add-toggle">Vincular / cambiar cuenta</span></summary>
+    <div class="grid2" style="margin-top:12px">
+      <div>
+        <label for="ac-region">Región</label>
+        <select id="ac-region">
+          <option value="eu">Europa</option>
+          <option value="us">Estados Unidos</option>
+          <option value="cn">China</option>
+          <option value="in">India</option>
+        </select>
+      </div>
+      <div>
+        <label for="ac-uid">UID de la cuenta vinculada</label>
+        <input id="ac-uid" placeholder="uid mostrado en Tuya IoT Platform">
+      </div>
+    </div>
+    <div class="grid2">
+      <div>
+        <label for="ac-access-id">Access ID</label>
+        <input id="ac-access-id" placeholder="Access ID / Client ID">
+      </div>
+      <div>
+        <label for="ac-access-secret">Access Secret</label>
+        <input id="ac-access-secret" type="password" placeholder="Access Secret / Client Secret">
+      </div>
+    </div>
+    <div class="actions">
+      <button type="button" onclick="linkAccount()">Vincular</button>
+    </div>
+  </details>
+</div>
+
+<div class="card">
+  <h2><span>Detectados en la red</span> <span class="hint">solo informativo — tú decides si añadir alguno</span></h2>
+  <p class="help">Dispositivos Tuya vistos por su propio anuncio en la LAN. No se conectan ni se controlan hasta que pulsas "Añadir" en uno concreto.</p>
+  <div id="discovered-grid" class="device-grid"></div>
+  <div id="discovered-empty" class="empty" style="display:none">Todavía no se ha visto ningún dispositivo Tuya en la red.</div>
+</div>
+
+<div class="card">
   <h2>
     <span>Dispositivos</span>
     <span class="hint" id="conn-mqtt">MQTT: —</span>
   </h2>
   <div id="device-grid" class="device-grid"></div>
-  <div id="device-empty" class="empty" style="display:none">Todavía no hay ningún dispositivo dado de alta — añade el primero abajo.</div>
+  <div id="device-empty" class="empty" style="display:none">Todavía no hay ningún dispositivo dado de alta — añade el primero abajo, o "Añadir" uno de los detectados arriba.</div>
 </div>
 
 <div class="card">
@@ -220,6 +263,98 @@ async function loadStatus() {
   } catch (e) { /* idem */ }
 }
 
+// --------------------------------------------------------- cuenta Tuya --
+
+async function loadAccount() {
+  try {
+    const r = await fetch(`${API}/account`);
+    const a = await r.json();
+    document.getElementById("account-status").textContent = a.linked ? `vinculada (${a.access_id})` : "sin vincular";
+    if (a.linked) {
+      document.getElementById("ac-region").value = a.region;
+      document.getElementById("ac-access-id").value = a.access_id;
+      document.getElementById("ac-uid").value = a.uid;
+    }
+  } catch (e) { /* red temporalmente caida */ }
+}
+
+async function linkAccount() {
+  const payload = {
+    region: document.getElementById("ac-region").value,
+    access_id: document.getElementById("ac-access-id").value.trim(),
+    access_secret: document.getElementById("ac-access-secret").value.trim(),
+    uid: document.getElementById("ac-uid").value.trim(),
+  };
+  if (!payload.access_id || !payload.access_secret || !payload.uid) {
+    toast("Access ID, Access Secret y UID son obligatorios");
+    return;
+  }
+  const r = await fetch(`${API}/account`, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(payload)});
+  if (r.ok) {
+    toast("Cuenta vinculada");
+    document.getElementById("ac-access-secret").value = "";
+    document.getElementById("account-details").open = false;
+    loadAccount();
+  } else {
+    const body = await r.json().catch(() => ({}));
+    toast(body.error || "Fallo al vincular la cuenta");
+  }
+}
+
+// ---------------------------------------------------------- descubiertos -
+
+let lastDiscovered = [];
+
+function renderDiscovered(devices) {
+  const grid = document.getElementById("discovered-grid");
+  const empty = document.getElementById("discovered-empty");
+  const notAdded = devices.filter(d => !d.already_added);
+  if (!notAdded.length) { grid.innerHTML = ""; empty.style.display = devices.length ? "none" : "block"; return; }
+  empty.style.display = "none";
+  grid.innerHTML = notAdded.map(d => `
+    <div class="device-card">
+      <div class="device-card-head">
+        <span class="device-name">${esc(d.device_id)}</span>
+      </div>
+      <div class="device-meta">${esc(d.ip)}${d.version ? ' · v' + esc(d.version) : ''}</div>
+      <div class="device-actions">
+        <button onclick="addFromDiscovered('${d.device_id}')">Añadir</button>
+      </div>
+    </div>`).join("");
+}
+
+async function loadDiscovered() {
+  try {
+    const r = await fetch(`${API}/discovered`);
+    lastDiscovered = await r.json();
+    renderDiscovered(lastDiscovered);
+  } catch (e) { /* red temporalmente caida */ }
+}
+
+async function addFromDiscovered(deviceId) {
+  const seen = lastDiscovered.find(d => d.device_id === deviceId);
+  cancelDeviceForm();
+  try {
+    const r = await fetch(`${API}/discovered/${deviceId}/resolve`, {method: "POST"});
+    if (r.ok) {
+      const suggested = await r.json();
+      fillDeviceForm(suggested);
+      toast(suggested.warnings && suggested.warnings.length
+        ? "Perfil generado con avisos — revísalo antes de guardar"
+        : "Perfil generado automáticamente — revísalo antes de guardar");
+    } else {
+      const body = await r.json().catch(() => ({}));
+      fillDeviceForm({device_id: deviceId, address: seen ? seen.ip : "", protocol_version: seen ? (seen.version || "3.3") : "3.3"});
+      toast((body.error || "No se pudo autocompletar") + " — rellena local_key y perfil a mano");
+    }
+  } catch (e) {
+    fillDeviceForm({device_id: deviceId, address: seen ? seen.ip : ""});
+    toast("Fallo al resolver el dispositivo — rellena el resto a mano");
+  }
+  document.getElementById("add-device-details").open = true;
+  document.getElementById("add-device-details").scrollIntoView({behavior: "smooth", block: "start"});
+}
+
 async function deleteDevice(id, name) {
   if (!confirm(`¿Eliminar "${name}"? Se cierra la conexión y, si estaba expuesto, se retira de Home Assistant.`)) return;
   const r = await fetch(`${API}/devices/${id}`, {method: "DELETE"});
@@ -313,9 +448,15 @@ async function renderPluginSwitch() {
 
 loadDevices();
 loadStatus();
+loadAccount();
+loadDiscovered();
 renderPluginSwitch();
 setInterval(loadDevices, 8000);
 setInterval(loadStatus, 8000);
+// El descubrimiento LAN acumula lo que se va oyendo -- un dispositivo
+// puede tardar en anunciarse, asi que se refresca con menos prisa que el
+// resto (no hace falta verlo aparecer al segundo).
+setInterval(loadDiscovered, 15000);
 </script>
 </body>
 </html>

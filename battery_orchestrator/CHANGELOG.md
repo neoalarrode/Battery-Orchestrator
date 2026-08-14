@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.58
+**Bug real, confirmado**: `sensor.battery_orchestrator_energy_charged`/`_discharged` no correspondían con `sensor.battery_orchestrator_power` porque no medían lo mismo. La acumulación usaba la potencia PLANIFICADA (`distribution["per_battery"]`, lo que el ciclo decidió mandar) multiplicada por el `cycle_seconds` NOMINAL — no la potencia real medida, y en descarga ni siquiera se repartía de verdad entre baterías, solo se estimaba proporcional a la potencia máxima declarada de cada una (el propio comentario del código ya lo admitía).
+
+Además, el ciclo reactivo (v0.11.55) empeoró esto: al poder ejecutarse `run_cycle` mucho más a menudo que `cycle_seconds`, cada ejecución reactiva seguía multiplicando por el `cycle_seconds` NOMINAL completo, contando de más cada vez que disparaba antes de tiempo.
+
+Corregido: ahora se integra la potencia REAL medida (misma fuente que `sensor.battery_orchestrator_power`, `_live_battery_totals`) sobre el tiempo REAL transcurrido desde la última vuelta — mismo criterio que ya usa `solar_energy_store.py` para la energía solar. Si no hay dato en vivo de una batería en ese instante, no se acumula nada para ella ese tick (mejor perder un incremento pequeño, que se recupera solo, que acumular un número inventado).
+
 ## 0.11.57
 Declara `services: [mqtt:want]` en `config.yaml` — Supervisor aprovisiona automáticamente credenciales del broker MQTT local (Mosquitto) al propio addon, vía `http://supervisor/services/mqtt`, sin ninguna acción manual del usuario. Preparación para el plugin de Climate (fase 2, MQTT Discovery) — todavía no se usa MQTT hacia el broker local en esta versión, solo se solicita el acceso.
 

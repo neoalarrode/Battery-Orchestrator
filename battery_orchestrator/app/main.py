@@ -465,6 +465,16 @@ def _ecoflow_pv_live_overrides(cfg: dict) -> dict[str, float]:
     return overrides
 
 
+# Tope de cuanto tiempo "de golpe" se deja integrar en una sola vuelta de
+# la acumulacion de energia de baterias (ver mas abajo) — si run_cycle
+# estuvo sin ejecutarse un rato (reinicio, fallo...) no se quiere sumar
+# ese hueco entero como si hubiera habido la misma potencia todo ese
+# tiempo; se descarta ese hueco, igual criterio que SOLAR_ENERGY_MAX_GAP_
+# SECONDS.
+ENERGY_ACCUMULATE_MAX_GAP_SECONDS = 300
+_energy_accumulate_last_ts: float | None = None
+
+
 def run_cycle():
     """Un ciclo completo: leer estado, planificar, repartir, ejecutar."""
     cfg = config_store.load_config()
@@ -844,39 +854,53 @@ def run_cycle():
         "vertido_w": (lambda v: round(v) if v is not None else None)(_live_export_w(cfg, known_net_grid_w=net_grid_now_w)),
     }
 
-    # Energia (Wh) movida en este ciclo, por bateria. En carga usamos la
-    # potencia real repartida a cada una; en descarga cada bateria se
-    # autogestiona (no la repartimos de verdad), asi que aqui SOLO para
-    # llevar la cuenta se estima proporcional a su potencia maxima de
-    # descarga entre las que estan activas — es una estimacion, no una
-    # medicion exacta de lo que ha hecho cada una.
-    by_id = {b.id: b for b in batteries}
-    per_battery_energy: dict[str, tuple[str | None, float]] = {b.id: (None, 0.0) for b in batteries}
-    if distribution["action"] == "charge":
-        for entry in distribution["per_battery"]:
-            wh = entry["power_w"] * cycle_hours
-            if wh > 0:
-                per_battery_energy[entry["id"]] = ("charge", wh)
-    elif distribution["action"] == "discharge":
-        enabled = [e for e in distribution["per_battery"] if e.get("enabled")]
-        total_max_discharge = sum(by_id[e["id"]].max_discharge_w for e in enabled) or 1
-        for e in enabled:
-            share = by_id[e["id"]].max_discharge_w / total_max_discharge
-            wh = now_hp.discharge_w * share * cycle_hours
-            if wh > 0:
-                per_battery_energy[e["id"]] = ("discharge", wh)
-
-    # Acumular energia de por vida (para "ciclos equivalentes") y
-    # alimentar la estimacion de capacidad real (para la "salud" por
-    # comparacion con la capacidad declarada). Ver capacity_store.py.
-    for b in batteries:
-        action, wh = per_battery_energy[b.id]
-        key = _stable_battery_key(b)
-        if action == "charge":
-            lifetime_store.accumulate(key, b.name, charged_wh=wh, discharged_wh=0, legacy_id=b.id)
-        elif action == "discharge":
-            lifetime_store.accumulate(key, b.name, charged_wh=0, discharged_wh=wh, legacy_id=b.id)
-        capacity_store.update(key, b.name, socs.get(b.id), action, wh, legacy_id=b.id)
+    # Energia (Wh) movida desde el ultimo ciclo, por bateria — potencia
+    # REAL MEDIDA (misma fuente que sensor.battery_orchestrator_power, ver
+    # _live_battery_totals/battery_live) integrada sobre el tiempo REAL
+    # transcurrido, igual criterio que solar_energy_store.py.
+    #
+    # ANTES esto usaba la potencia PLANIFICADA (lo que el ciclo decidio
+    # mandar, `distribution["per_battery"]`) multiplicada por el
+    # `cycle_seconds` NOMINAL de la config — dos fallos reales a la vez:
+    # 1) lo planificado no es lo que la bateria hace de verdad (EcoFlow
+    #    tiene su propia gestion interna de potencia, puede no cumplir el
+    #    numero exacto que se le pidio), y en descarga ni siquiera se
+    #    repartia de verdad entre baterias, solo se ESTIMABA proporcional
+    #    a la potencia maxima declarada de cada una — el propio comentario
+    #    ya lo admitia ("una estimacion, no una medicion exacta").
+    # 2) con el ciclo reactivo (ver ha_websocket.py), `run_cycle` puede
+    #    ejecutarse mucho mas a menudo que `cycle_seconds` — multiplicar
+    #    por el nominal completo en CADA ejecucion reactiva contaba de mas
+    #    cada vez que el reactivo disparaba antes de tiempo.
+    #
+    # Si no hay dato en vivo para una bateria concreta en este instante
+    # (BLE/Cloud momentaneamente sin respuesta), sencillamente no se
+    # acumula nada para ella este tick — mejor perder un incremento
+    # pequeño (se recupera solo en el siguiente ciclo) que acumular un
+    # numero inventado.
+    global _energy_accumulate_last_ts
+    now_ts = time.time()
+    if _energy_accumulate_last_ts is not None:
+        elapsed_h = min(now_ts - _energy_accumulate_last_ts, ENERGY_ACCUMULATE_MAX_GAP_SECONDS) / 3600
+        if elapsed_h > 0:
+            live_now = _live_battery_totals(cfg)
+            live_by_id = {entry["id"]: entry for entry in live_now["battery_live"]}
+            for b in batteries:
+                entry = live_by_id.get(b.id)
+                net_power = entry.get("net_power_w") if entry else None
+                if net_power is None:
+                    continue
+                wh = abs(net_power) * elapsed_h
+                if wh <= 0:
+                    continue
+                key = _stable_battery_key(b)
+                action = "charge" if net_power > 0 else "discharge"
+                if action == "charge":
+                    lifetime_store.accumulate(key, b.name, charged_wh=wh, discharged_wh=0, legacy_id=b.id)
+                else:
+                    lifetime_store.accumulate(key, b.name, charged_wh=0, discharged_wh=wh, legacy_id=b.id)
+                capacity_store.update(key, b.name, socs.get(b.id), action, wh, legacy_id=b.id)
+    _energy_accumulate_last_ts = now_ts
 
     # Registrar la decision REAL de esta hora en el historico (se
     # sobreescribe con cada ciclo hasta que la hora termine, quedando la

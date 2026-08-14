@@ -35,6 +35,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import queue
 import threading
 import time
 
@@ -76,6 +77,104 @@ class HAWebSocketClient:
         self._ws = None
         self._stop = False
         self.connected = False
+        # Peticion/respuesta sobre la MISMA conexion persistente (ver
+        # `call`) -- ademas de escuchar eventos, cualquier hilo puede
+        # pedir algo puntual (get_states, historico, llamar a un
+        # servicio...) y esperar su respuesta, correlacionada por id de
+        # mensaje. Todo lo que hable con HA pasa por aqui, nunca por REST
+        # aparte -- una unica conexion, un unico transporte.
+        self._id_lock = threading.Lock()
+        self._next_id = 0
+        self._send_lock = threading.Lock()
+        self._pending: dict[int, queue.Queue] = {}
+
+    def _next_msg_id(self) -> int:
+        with self._id_lock:
+            self._next_id += 1
+            return self._next_id
+
+    def call(self, msg_type: str, timeout: float = 20, **kwargs):
+        """Pide algo puntual a HA por la conexion ya abierta y espera su
+        respuesta -- bloqueante, pensado para llamarse desde CUALQUIER hilo
+        que no sea el propio lector (`run_forever`). Lanza si no hay
+        conexion, si HA responde error, o si no responde a tiempo (nunca
+        se queda esperando para siempre)."""
+        if not self.connected or self._ws is None:
+            raise RuntimeError("WebSocket de HA no conectado todavia")
+        msg_id = self._next_msg_id()
+        q: queue.Queue = queue.Queue(maxsize=1)
+        self._pending[msg_id] = q
+        payload = {"id": msg_id, "type": msg_type, **kwargs}
+        try:
+            with self._send_lock:
+                self._ws.send(json.dumps(payload))
+            try:
+                result = q.get(timeout=timeout)
+            except queue.Empty:
+                raise TimeoutError(f"WebSocket de HA: sin respuesta a '{msg_type}' en {timeout}s")
+            if not result.get("success", True):
+                raise RuntimeError(f"WebSocket de HA devolvio error para '{msg_type}': {result.get('error')}")
+            return result.get("result")
+        finally:
+            self._pending.pop(msg_id, None)
+
+    # ---------------------------------------------------- atajos comunes --
+
+    def get_states(self) -> list[dict]:
+        return self.call("get_states") or []
+
+    def get_state(self, entity_id: str) -> dict | None:
+        for s in self.get_states():
+            if s.get("entity_id") == entity_id:
+                return s
+        return None
+
+    def call_service(self, domain: str, service: str, service_data: dict | None = None,
+                      target: dict | None = None, return_response: bool = False):
+        kwargs = {"domain": domain, "service": service}
+        if service_data:
+            kwargs["service_data"] = service_data
+        if target:
+            kwargs["target"] = target
+        if return_response:
+            kwargs["return_response"] = True
+        result = self.call("call_service", **kwargs)
+        return result.get("response") if return_response and result else None
+
+    def get_history(self, entity_id: str, start_iso: str, with_attributes: bool = False) -> list[dict]:
+        """
+        Historico de UNA entidad desde `start_iso` hasta ahora, normalizado
+        a una lista de puntos `{"state", "last_updated", "attributes"}` —
+        oculta el formato compacto real del WebSocket (`history/
+        history_during_period`, claves "s"/"lu"/"a") a quien llama.
+
+        OJO con `with_attributes=True`: cada punto solo trae los
+        atributos que CAMBIARON respecto al anterior (formato comprimido
+        de HA), no el diccionario completo — aqui se rellenan hacia
+        adelante (el primer punto SI trae el conjunto completo, los
+        siguientes se van fusionando encima) para que quien llama siempre
+        vea el estado de atributos COMPLETO en cada punto, nunca uno a
+        medias.
+        """
+        result = self.call(
+            "history/history_during_period",
+            start_time=start_iso,
+            entity_ids=[entity_id],
+            minimal_response=not with_attributes,
+            no_attributes=not with_attributes,
+            significant_changes_only=False,
+        )
+        raw = (result or {}).get(entity_id) or []
+        points = []
+        known_attrs: dict = {}
+        for p in raw:
+            if with_attributes:
+                known_attrs = {**known_attrs, **(p.get("a") or {})}
+                attrs = dict(known_attrs)
+            else:
+                attrs = {}
+            points.append({"state": p.get("s"), "last_updated": p.get("lu"), "attributes": attrs})
+        return points
 
     def set_watched_entities(self, entities: set[str]) -> None:
         with self._watched_lock:
@@ -125,7 +224,8 @@ class HAWebSocketClient:
             if auth_result.get("type") != "auth_ok":
                 raise RuntimeError(f"Autenticacion WebSocket de HA fallida: {auth_result}")
 
-            self._ws.send(json.dumps({"id": 1, "type": "subscribe_events", "event_type": "state_changed"}))
+            sub_id = self._next_msg_id()
+            self._ws.send(json.dumps({"id": sub_id, "type": "subscribe_events", "event_type": "state_changed"}))
             sub_ack = json.loads(self._ws.recv())
             if not sub_ack.get("success"):
                 raise RuntimeError(f"No se pudo suscribir a state_changed: {sub_ack}")
@@ -138,7 +238,21 @@ class HAWebSocketClient:
                 if not raw:
                     raise RuntimeError("WebSocket de HA cerrado por el otro lado")
                 msg = json.loads(raw)
-                if msg.get("type") != "event":
+                msg_type = msg.get("type")
+
+                if msg_type == "result":
+                    # Respuesta a una llamada puntual hecha desde OTRO hilo
+                    # (ver `call`) -- se entrega a quien esperaba ese id
+                    # concreto, nunca se procesa aqui mismo.
+                    q = self._pending.get(msg.get("id"))
+                    if q is not None:
+                        try:
+                            q.put_nowait(msg)
+                        except queue.Full:
+                            pass
+                    continue
+
+                if msg_type != "event":
                     continue
                 event = msg.get("event") or {}
                 if event.get("event_type") != "state_changed":
@@ -164,6 +278,14 @@ class HAWebSocketClient:
             except Exception:
                 pass
             self._ws = None
+            # Cualquier `call()` en espera no se queda colgada hasta su
+            # propio timeout si la conexion se cae entera -- se entera YA
+            # de que ha fallado.
+            for q in list(self._pending.values()):
+                try:
+                    q.put_nowait({"success": False, "error": {"message": "conexion WebSocket perdida"}})
+                except queue.Full:
+                    pass
 
 
 class ReactiveTrigger:

@@ -161,6 +161,27 @@ def publish_sensor(entity_id: str, state, attributes: dict | None = None):
     return r.json()
 
 
+def get_history_with_attributes(entity_id: str, days: int) -> list[dict]:
+    """
+    Igual que `get_history`, pero SIN "minimal_response" -- cada punto trae
+    sus atributos completos, no solo el primero. Mas caro (respuesta mucho
+    mayor), asi que solo se usa cuando de verdad hace falta leer un
+    atributo del historico (p.ej. `hvac_action` de un climate.* delegado,
+    ver climate/thermal_model.py) -- para el resto, `get_history` (con
+    minimal_response) es mas barato y suficiente.
+    """
+    start = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    r = requests.get(
+        f"{BASE_URL}/history/period/{start}",
+        headers=HEADERS,
+        params={"filter_entity_id": entity_id},
+        timeout=30,
+    )
+    r.raise_for_status()
+    data = r.json()
+    return data[0] if data else []
+
+
 def get_history(entity_id: str, days: int) -> list[dict]:
     # OJO: la marca de tiempo va EMBEBIDA en la ruta de la URL (no en un
     # parametro de query), asi que tiene que ir "limpia". .isoformat() por

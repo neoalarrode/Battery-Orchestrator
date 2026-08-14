@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.73
+**Arranque del plugin de Tuya** (tercer plugin, en construcción — todavía no se carga ni aparece en la tienda). Diseño: dispositivos Tuya consumidos de dos formas — internamente por Climate (nuevo tipo de actuador resuelto en el mismo proceso, sin pasar por HA) y, opcionalmente, expuestos a HA por MQTT Discovery para cualquier dominio (no solo climates: switch, sensor, number, binary_sensor, select).
+
+Portados `tuya/tuya_lan.py` (protocolo LAN cifrado de Tuya, handshake de sesión 3.4 incluido) y `tuya/profile.py` (perfiles YAML declarativos de datapoints) desde `neoalarrode/Tuya-Orchestrator` — ninguno de los dos toca nada de Home Assistant, así que se reutiliza el protocolo ya probado en producción tal cual, sin reescribirlo. `pycryptodome`/`pyyaml` añadidas al Dockerfile para esto. Pendiente: `tuya/device_manager.py` (sustituto del coordinator de HA, mismo patrón reactivo que ya usa Climate), `mqtt_tuya.py`, el enganche en `ZoneRunner` y la página de alta de cuenta/dispositivos.
+
 ## 0.11.72
 Sha256 de Energy y Climate re-pineados en el catálogo, ambos al tag `v0.11.71` (el que trae el fix de rutas relativas) — verificado con una descarga real de los dos antes de fijarlo. Sin esto, instalar cualquiera de los dos desde cero seguiría trayendo la versión con el 404.
 

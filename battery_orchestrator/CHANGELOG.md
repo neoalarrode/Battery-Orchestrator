@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.89
+**Bug real, confirmado en producción: instalar Tuya Orchestrator desde la tienda daba 404 al intentar configurarlo.** Causa: `.dockerignore` seguía excluyendo `tuya_plugin.py`/`tuya/`/`tuya_templates/` con un comentario ya desfasado ("todavía no existen") de cuando de verdad no existían, y el catálogo (`plugin_loader.py`) tenía a Tuya marcado `downloadable: False` — la combinación significa que el plugin NUNCA estaba disponible en ningún sitio (ni horneado en la imagen, ni descargable), así que marcarlo "instalado" solo hacía que el núcleo intentase `import tuya_plugin` y fallase en silencio (`ModuleNotFoundError`, capturado y logueado por `load_all_plugins()` para no tumbar el resto del addon) — sin ese módulo cargado, no hay ruta `/plugins/tuya/` que montar, de ahí el 404. Fix: Tuya pasa a ser descargable de verdad, igual que Energy y Climate (tag+sha256 pineados en el catálogo). Sigue sin verificar contra un dispositivo Tuya físico real — eso queda pendiente del usuario, que es quien tiene el hardware.
+
 ## 0.11.88
 Sha256 de Climate re-pineado al tag `v0.11.87` (modulación de consigna + anticipar ocupación) — verificado con una descarga real antes de fijarlo.
 

@@ -37,8 +37,8 @@ app/solar_energy_store.py
 app/tariff_source.py
 app/templates/
 
-# Tuya (en construccion -- tuya_plugin.py y el resto del pegamento todavia
-# no existen; tuya_lan.py/profile.py ya estan portados, en reposo)
+# Tuya -- igual que Energy/Climate: descargable desde la tienda (ver
+# plugin_loader.py PLUGIN_CATALOG), nunca horneado en la imagen del nucleo.
 app/tuya_plugin.py
 app/tuya/
 app/tuya_templates/

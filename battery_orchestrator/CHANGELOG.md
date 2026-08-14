@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.11.55
+**Nuevo: ciclo de planificación reactivo, vía WebSocket** (`ha_websocket.py`, nuevo módulo). Hasta ahora todo el add-on funcionaba por sondeo: `run_cycle` solo se relanzaba cada `cycle_seconds` (30-60s típico), aunque el consumo o el solar cambiaran mucho antes. Ahora el add-on abre una conexión WebSocket persistente a HA (`/api/websocket`), se suscribe a `state_changed` de los sensores que declares (consumo, solar, SOC/potencia de baterías por HA, PVPC si aplica), y en cuanto cambian de verdad dispara una reevaluación del ciclo en segundos, no en minutos.
+
+- Reconexión automática con backoff si se cae el WebSocket (WiFi, reinicio de HA Core...) — nunca deja al add-on sin datos por un fallo puntual.
+- El ciclo PERIÓDICO de siempre se mantiene intacto como respaldo — si el WebSocket falla, todo sigue funcionando exactamente igual que antes de esta versión.
+- Debounce/coalesce (`ReactiveTrigger`): varios sensores cambiando casi a la vez no lanzan el ciclo completo más de una vez cada 5s — reacciona casi al instante al primer cambio, y si llega más durante esa ventana, recoge todo en una sola vuelta más justo después, nunca se pierde un cambio real.
+- Nuevo `_run_cycle_lock`: el disparo periódico y el reactivo nunca se ejecutan a la vez — el que llega segundo simplemente espera a que termine el primero.
+- Las baterías EcoFlow (BLE/Cloud) no son entidades de HA, así que no participan de este mecanismo — su frescura la sigue cubriendo `_live_sensor_loop` como hasta ahora.
+
 ## 0.11.54
 Fix: "Flujo de energía ahora mismo" (`/api/live`) mostraba un consumo total absurdamente bajo mientras la batería descargaba cientos de W. Causa: en modo "separate", `load_now_w` se leía directo de `load_sensor` (p.ej. "consumo_instantaneo") sin reconstruirlo — ese sensor es solo el lado de red, YA SIN la carga de baterías, no el consumo total de la vivienda (igual que ya se documentaba en `true_load_forecast`). Faltaba sumarle de vuelta el solar y la descarga de baterías, tal y como el modo "combined" ya hacía bien un poco más arriba en el mismo endpoint.
 

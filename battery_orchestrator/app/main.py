@@ -25,6 +25,7 @@ import ecoflow_login
 import forecast_store
 import ha_client
 import ha_statistics
+import ha_websocket
 import history_store
 import lifetime_store
 import pv_source
@@ -61,6 +62,16 @@ def _restrict_wallpanel_port():
                  "Configura el add-on desde el panel lateral de Home Assistant.",
     }), 403
 
+
+# WebSocket reactivo hacia HA (ver ha_websocket.py): en cuanto cambia un
+# sensor que nos interesa, dispara una reevaluacion del ciclo de
+# planificacion en segundos, en vez de esperar al proximo `cycle_seconds`.
+# `_reactive_trigger` hace de debounce (ver ReactiveTrigger) para que
+# varios cambios seguidos no lancen el ciclo completo mas de una vez cada
+# `REACTIVE_MIN_INTERVAL_SECONDS`. El propio ciclo periodico sigue
+# funcionando igual, como respaldo si el WebSocket se cae.
+_reactive_trigger = ha_websocket.ReactiveTrigger(lambda: _run_cycle_locked())
+_ha_ws_client = ha_websocket.HAWebSocketClient(lambda entity_id, new_state: _reactive_trigger.trigger())
 
 _state_lock = threading.Lock()
 _last_status = {
@@ -138,6 +149,36 @@ def _battery_from_cfg(b: dict, cfg: dict) -> battery_exec.Battery:
         ecoflow_secret_key=cfg.get("ecoflow_secret_key") or None if ecoflow_mode in ("cloud", "hybrid") else None,
         ecoflow_user_id=cfg.get("ecoflow_user_id") or None if ecoflow_mode in ("bluetooth", "hybrid") else None,
     )
+
+
+def _watched_entities_from_cfg(cfg: dict) -> set[str]:
+    """
+    Que sensores de HA le interesa escuchar al WebSocket reactivo (ver
+    ha_websocket.py) — cualquiera cuyo cambio deberia disparar una
+    reevaluacion del ciclo de planificacion antes del proximo `cycle_seconds`.
+    Las baterias EcoFlow (BLE/Cloud) NO son entidades de HA — se leen por su
+    propio canal (BLE bridge, MQTT), asi que no aportan nada aqui; su
+    frescura ya la cubre `_live_sensor_loop`/el ciclo periodico.
+    """
+    watched: set[str] = set()
+    watched.add(cfg.get("load_sensor") or "")
+    watched.add(cfg.get("export_sensor") or "")
+    watched.add(cfg.get("net_grid_sensor") or "")
+    if (cfg.get("tariff") or {}).get("mode") == "pvpc_sensor":
+        watched.add((cfg.get("tariff") or {}).get("pvpc_sensor") or "")
+    for array in cfg.get("pv_arrays") or []:
+        watched.add(array.get("current_sensor") or "")
+    for b in cfg.get("batteries") or []:
+        if (b.get("source") or "ha") != "ha":
+            continue
+        watched.add(b.get("soc_sensor") or "")
+        watched.add(b.get("power_sensor") or "")
+        watched.add(b.get("net_power_sensor") or "")
+        watched.add(b.get("charge_power_sensor") or "")
+    for load in cfg.get("deferrable_loads") or []:
+        watched.add(load.get("power_sensor") or "")
+    watched.discard("")
+    return watched
 
 
 def _live_battery_charge_discharge_w(batteries_cfg: list[dict], cfg: dict) -> tuple[float, float, bool]:
@@ -427,6 +468,10 @@ def _ecoflow_pv_live_overrides(cfg: dict) -> dict[str, float]:
 def run_cycle():
     """Un ciclo completo: leer estado, planificar, repartir, ejecutar."""
     cfg = config_store.load_config()
+    # Cada vuelta (periodica o reactiva) refresca que sensores le interesa
+    # escuchar al WebSocket -- baterias/sensores pueden cambiar en caliente
+    # desde la interfaz, sin reiniciar el add-on.
+    _ha_ws_client.set_watched_entities(_watched_entities_from_cfg(cfg))
     _reconcile_ecoflow_ble_addresses(cfg)
     _reconcile_ecoflow_sn_from_ble(cfg)
     batteries_cfg = cfg["batteries"]
@@ -1028,10 +1073,25 @@ def run_cycle():
         )
 
 
+# Protege `run_cycle()` de ejecutarse dos veces a la vez -- el disparo
+# PERIODICO (este bucle) y el REACTIVO (ver ha_websocket.ReactiveTrigger,
+# arrancado mas abajo) son dos hilos distintos que pueden coincidir en el
+# tiempo si un sensor cambia justo cuando toca el ciclo periodico. Nunca se
+# pierde una vuelta por esto: el que llega segundo simplemente espera a que
+# termine el primero (los dos hacen exactamente lo mismo, config recien
+# recargada), no hace falta descartar nada.
+_run_cycle_lock = threading.Lock()
+
+
+def _run_cycle_locked() -> None:
+    with _run_cycle_lock:
+        run_cycle()
+
+
 def background_loop():
     while True:
         try:
-            run_cycle()
+            _run_cycle_locked()
         except Exception:
             log.exception("Fallo en el ciclo de planificacion")
             with _state_lock:
@@ -2008,4 +2068,8 @@ if __name__ == "__main__":
     live_t.start()
     wp = threading.Thread(target=_run_wallpanel_server, daemon=True)
     wp.start()
+    ws_t = threading.Thread(target=_ha_ws_client.run_forever, daemon=True)
+    ws_t.start()
+    reactive_t = threading.Thread(target=_reactive_trigger.worker_loop, daemon=True)
+    reactive_t.start()
     app.run(host="0.0.0.0", port=8099, threaded=True)

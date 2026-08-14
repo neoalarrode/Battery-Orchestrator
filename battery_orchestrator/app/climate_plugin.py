@@ -35,7 +35,7 @@ REACTIVE_MIN_INTERVAL_SECONDS = 5
 class ClimatePlugin(Plugin):
     slug = "climate"
     name = "Climate Orchestrator"
-    version = "0.2.2"
+    version = "0.2.3"
 
     def __init__(self) -> None:
         self._runners: dict[str, ZoneRunner] = {}
@@ -77,6 +77,26 @@ class ClimatePlugin(Plugin):
         device_id = parts[0]
         index = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
         return provider.climate_handle(device_id, index)
+
+    def get_history(self, ref: str, days: int) -> list[dict]:
+        """Historico de un actuador de otro plugin, para que
+        thermal_model.py aprenda su inercia termica igual que ya aprende
+        de un `climate.*`/switch de HA -- `[]` si el proveedor no expone
+        historico (capacidad opcional, ver TuyaPlugin.get_actuator_history)
+        o si el prefijo no tiene proveedor registrado ahora mismo."""
+        prefix, rest = ref.split(":", 1)
+        provider = self._actuator_providers.get(prefix)
+        getter = getattr(provider, "get_actuator_history", None)
+        if getter is None:
+            return []
+        parts = rest.split(":", 1)
+        device_id = parts[0]
+        index = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
+        try:
+            return getter(device_id, index, days)
+        except Exception:
+            log.exception("Fallo obteniendo historico de '%s'", ref)
+            return []
 
     # --------------------------------------------------------------- Flask -
 

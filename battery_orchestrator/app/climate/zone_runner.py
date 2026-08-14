@@ -658,7 +658,7 @@ class ZoneRunner:
         ):
             self._thermal_model = thermal_model.get_model(
                 self.ws, self.zone, int(self.zone.get(CONF_HISTORY_DAYS_FOR_INERTIA, DEFAULT_HISTORY_DAYS_FOR_INERTIA)),
-                fallback=self._thermal_model,
+                fallback=self._thermal_model, bridges=self.bridges,
             )
             self._power_model = power_model.get_power_model(
                 self.ws, entities_to_learn, self.zone_id, self.all_zones, home_power_sensor,

@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+import time
 from typing import Any, Callable
 
 from .discovery import DiscoveredDevice, PersistentDiscovery
@@ -29,6 +30,16 @@ log = logging.getLogger("tuya.device_manager")
 
 DEFAULT_CALL_TIMEOUT_SECONDS = 10
 RECONNECT_CHECK_INTERVAL_SECONDS = 30
+
+# Historial LOCAL por (device_id, dp_id) -- para que thermal_model.py
+# pueda aprender la inercia termica de un actuador consumido
+# INTERNAMENTE (sin pasar por HA, asi que sin historico en su recorder).
+# Mismos limites de sensatez que ya usa thermal_model.py para el
+# historico de HA (ver MAX_STATES_PER_ENTITY ahi): un limite duro por
+# cuenta de puntos Y una edad maxima, para que esto nunca crezca sin fin
+# en un proceso que vive dias/semanas seguidas.
+HISTORY_MAX_POINTS_PER_DP = 5000
+HISTORY_MAX_AGE_DAYS = 14
 
 
 class TuyaDeviceManager:
@@ -42,6 +53,11 @@ class TuyaDeviceManager:
         self._devices: dict[str, TuyaLocalDevice] = {}
         self._profiles: dict[str, DeviceProfile] = {}
         self._state: dict[str, dict[int, Any]] = {}
+        # (device_id, dp_id) -> [(epoch_ts, raw_value), ...], en orden
+        # cronologico. Alimenta thermal_model.py para actuadores/sensores
+        # consumidos internamente (sin historico en el recorder de HA) --
+        # ver get_actuator_history()/get_sensor_history() mas abajo.
+        self._dp_history: dict[tuple[str, int], list[tuple[float, Any]]] = {}
         self._lock = threading.Lock()
         self._loop: asyncio.AbstractEventLoop | None = None
         self._loop_ready = threading.Event()
@@ -111,6 +127,7 @@ class TuyaDeviceManager:
         def _on_update(dps: dict[int, Any]) -> None:
             with self._lock:
                 self._state.setdefault(device_id, {}).update(dps)
+                self._record_dp_history(device_id, dps)
             if self._on_any_change:
                 try:
                     self._on_any_change(device_id)
@@ -129,12 +146,28 @@ class TuyaDeviceManager:
 
         self._run_coro(self._connect_and_prime(device_id))
 
+    def _record_dp_history(self, device_id: str, dps: dict[int, Any]) -> None:
+        """Llamar SIEMPRE con `self._lock` ya tomado -- comparte
+        estructura con `self._state`, mismo criterio de bloqueo. Poda por
+        cuenta Y por edad en cada escritura -- barato (listas ya cortas
+        por el propio tope) y evita depender de un hilo de limpieza
+        aparte."""
+        now = time.time()
+        cutoff = now - HISTORY_MAX_AGE_DAYS * 86400
+        for dp_id, value in dps.items():
+            key = (device_id, dp_id)
+            points = self._dp_history.setdefault(key, [])
+            points.append((now, value))
+            if len(points) > HISTORY_MAX_POINTS_PER_DP or (points and points[0][0] < cutoff):
+                self._dp_history[key] = [p for p in points if p[0] >= cutoff][-HISTORY_MAX_POINTS_PER_DP:]
+
     async def _connect_and_prime(self, device_id: str) -> None:
         device = self._devices[device_id]
         await device.connect()
         dps = await device.status()
         with self._lock:
             self._state.setdefault(device_id, {}).update(dps)
+            self._record_dp_history(device_id, dps)
         if self._on_any_change:
             self._on_any_change(device_id)
 
@@ -170,6 +203,27 @@ class TuyaDeviceManager:
         mapping = next((d for d in profile.dps if d.dp_id == dp_id), None)
         return mapping.decode(raw) if mapping else raw
 
+    def get_actuator_history(self, device_id: str, climate_index: int, days: int) -> list[dict]:
+        """Historico on/off de un termostato Tuya consumido internamente,
+        en la MISMA forma que climate/thermal_model.py ya espera del
+        recorder de HA (`[{"state": "on"|"off", "last_updated": epoch}]`)
+        -- usa el `switch_dp` del bloque `climates:` como señal de
+        "actuando" (es lo unico que un perfil Tuya declara de forma
+        fiable como on/off del propio termostato; no hay un `hvac_action`
+        de ciclado interno que traducir, a diferencia de un climate.* de
+        HA). Sin `switch_dp` en el perfil, no hay nada que aprender de
+        este actuador -- lista vacia, nunca un dato inventado."""
+        profile = self._profiles.get(device_id)
+        if profile is None or climate_index >= len(profile.climates):
+            return []
+        switch_dp = profile.climates[climate_index].switch_dp
+        if switch_dp is None:
+            return []
+        cutoff = time.time() - days * 86400
+        with self._lock:
+            points = list(self._dp_history.get((device_id, switch_dp), []))
+        return [{"state": "on" if bool(v) else "off", "last_updated": ts} for ts, v in points if ts >= cutoff]
+
     # ------------------------------------------------------------ escritura
 
     def set_dp(self, device_id: str, dp_id: int, raw_value: Any, timeout: float = DEFAULT_CALL_TIMEOUT_SECONDS) -> None:
@@ -179,6 +233,7 @@ class TuyaDeviceManager:
         self._run_coro(device.set_dps({dp_id: raw_value}), timeout=timeout)
         with self._lock:
             self._state.setdefault(device_id, {})[dp_id] = raw_value
+            self._record_dp_history(device_id, {dp_id: raw_value})
 
     # ---------------------------------------------------- fachada climate
 

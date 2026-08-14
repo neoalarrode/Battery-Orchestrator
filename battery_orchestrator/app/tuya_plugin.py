@@ -35,7 +35,7 @@ log = logging.getLogger("tuya_plugin")
 class TuyaPlugin(Plugin):
     slug = "tuya"
     name = "Tuya Orchestrator"
-    version = "0.1.0"
+    version = "0.2.0"
 
     def __init__(self) -> None:
         self._manager = TuyaDeviceManager(on_any_change=self._on_device_change)
@@ -255,6 +255,12 @@ class TuyaPlugin(Plugin):
         """Punto de entrada para consumo INTERNO desde otro plugin (hoy
         Climate) -- ver tuya/device_manager.py:TuyaClimateHandle."""
         return self._manager.climate_handle(device_id, climate_index)
+
+    def get_actuator_history(self, device_id: str, climate_index: int, days: int) -> list[dict]:
+        """Historico local para que thermal_model.py aprenda la inercia
+        termica de un termostato consumido internamente -- ver
+        device_manager.py:get_actuator_history."""
+        return self._manager.get_actuator_history(device_id, climate_index, days)
 
     def list_climate_actuators(self) -> list[dict]:
         """Un `{"ref", "name", "brand"}` por cada bloque `climates:` de

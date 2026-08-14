@@ -181,21 +181,33 @@ def _learn_idle_loss_coeff(temp_states: list, runs: list[_Run], outdoor_states: 
     return statistics.median(coeffs), len(coeffs)
 
 
-def _history_for(ws, entity_id: str, days: int) -> list:
+def _history_for(ws, entity_id: str, days: int, bridges=None) -> list:
     """Historico de una entidad simple (switch, sensor): una entrada por
     cambio de SU `state`, sin atributos (mas barato). Acotado con
     `_cap_states` (ver MAX_STATES_PER_ENTITY arriba) — limite duro, no
-    solo para sensores parlanchines conocidos."""
-    try:
-        raw = ws.get_history(entity_id, _start_iso(days), with_attributes=False)
-    except Exception:
-        _LOGGER.debug("Sin historico (via WebSocket) de %s todavia", entity_id, exc_info=True)
-        raw = []
+    solo para sensores parlanchines conocidos.
+
+    Si `entity_id` es de OTRO plugin (Tuya u otra marca, ver
+    ClimatePlugin.is_bridge_ref/get_history) el historico se pide a ese
+    plugin en vez de a HA -- un actuador consumido internamente nunca pasa
+    por el recorder de HA, asi que no tiene historico ahi que consultar."""
+    if bridges is not None and bridges.is_bridge_ref(entity_id):
+        try:
+            raw = bridges.get_history(entity_id, days)
+        except Exception:
+            _LOGGER.debug("Sin historico propio de %s todavia", entity_id, exc_info=True)
+            raw = []
+    else:
+        try:
+            raw = ws.get_history(entity_id, _start_iso(days), with_attributes=False)
+        except Exception:
+            _LOGGER.debug("Sin historico (via WebSocket) de %s todavia", entity_id, exc_info=True)
+            raw = []
     points = [_SyntheticState(p["state"], _to_dt(p["last_updated"])) for p in raw if p.get("last_updated") is not None]
     return _cap_states(points)
 
 
-def _climate_actuator_states(ws, entity_id: str, wanted_action: str, days: int) -> list:
+def _climate_actuator_states(ws, entity_id: str, wanted_action: str, days: int, bridges=None) -> list:
     """Traduce el historico de un climate.* delegado a la misma forma
     on/off que un switch, usando su atributo `hvac_action` (heating/
     cooling/idle/off/fan/drying): "on" mientras coincide con
@@ -205,7 +217,14 @@ def _climate_actuator_states(ws, entity_id: str, wanted_action: str, days: int) 
     no el `state` de la entidad (que es el hvac_mode: heat/cool/off/...).
     Acotado con `_cap_states` ANTES de traducir — con atributos completos
     por punto, esta es la consulta mas cara de las dos, el limite duro
-    importa mas aqui todavia."""
+    importa mas aqui todavia.
+
+    Un delegado de OTRO plugin (Tuya u otra marca) no tiene `hvac_action`
+    que traducir -- su propio historico ya viene en la misma forma on/off
+    (ver TuyaDeviceManager.get_actuator_history, que usa el switch_dp del
+    dispositivo como señal de "actuando"), asi que se devuelve tal cual."""
+    if bridges is not None and bridges.is_bridge_ref(entity_id):
+        return _history_for(ws, entity_id, days, bridges=bridges)
     try:
         raw = ws.get_history(entity_id, _start_iso(days), with_attributes=True)
     except Exception:
@@ -219,28 +238,36 @@ def _climate_actuator_states(ws, entity_id: str, wanted_action: str, days: int) 
     return synthetic
 
 
-def _runs_for_side(ws, zone: dict, side: str, wanted_action: str, days: int) -> list[_Run]:
+def _runs_for_side(ws, zone: dict, side: str, wanted_action: str, days: int, bridges=None) -> list[_Run]:
     """Tramos on/off combinados de TODOS los actuadores de un lado
     ("heat" o "cool"): sus switches dedicados, mas cualquier climate.*
     delegado que soporte ese modo de verdad (comprobado en vivo contra
     sus `hvac_modes` — nunca una declaracion nuestra, ver const.py).
     Concatenar tramos de fuentes distintas es seguro: `_learn_rate`/
-    `_learn_idle_loss_coeff` no asumen ningun orden cronologico global."""
+    `_learn_idle_loss_coeff` no asumen ningun orden cronologico global.
+
+    Un delegado de otro plugin (Tuya u otra marca) no tiene un
+    `hvac_modes` que consultar por WebSocket -- se asume heat+cool
+    disponibles (mismo par minimo que ya usa ZoneRunner._get_state para
+    controlarlo, ver zone_runner.py)."""
     runs: list[_Run] = []
     for sw in zone.get(f"{side}_switches") or []:
-        runs.extend(_state_runs(_history_for(ws, sw, days)))
+        runs.extend(_state_runs(_history_for(ws, sw, days, bridges=bridges)))
     for entity_id in zone.get("climate_entities") or []:
-        try:
-            state = ws.get_state(entity_id)
-        except Exception:
-            state = None
-        supported = ((state or {}).get("attributes") or {}).get("hvac_modes") or []
+        if bridges is not None and bridges.is_bridge_ref(entity_id):
+            supported = ["heat", "cool"]
+        else:
+            try:
+                state = ws.get_state(entity_id)
+            except Exception:
+                state = None
+            supported = ((state or {}).get("attributes") or {}).get("hvac_modes") or []
         if side in supported:
-            runs.extend(_state_runs(_climate_actuator_states(ws, entity_id, wanted_action, days)))
+            runs.extend(_state_runs(_climate_actuator_states(ws, entity_id, wanted_action, days, bridges=bridges)))
     return runs
 
 
-def _compute_model_sync(ws, zone: dict, days: int) -> dict:
+def _compute_model_sync(ws, zone: dict, days: int, bridges=None) -> dict:
     model = {
         "heating_rate_deg_h": DEFAULT_HEATING_RATE_DEG_H,
         "cooling_rate_deg_h": DEFAULT_COOLING_RATE_DEG_H,
@@ -252,20 +279,20 @@ def _compute_model_sync(ws, zone: dict, days: int) -> dict:
     if not zone.get("current_temp_sensor"):
         return model
 
-    temp_states = _history_for(ws, zone["current_temp_sensor"], days)
+    temp_states = _history_for(ws, zone["current_temp_sensor"], days, bridges=bridges)
     if not temp_states:
         return model
 
     runs_used = 0
 
-    heat_runs = _runs_for_side(ws, zone, "heat", "heating", days)
+    heat_runs = _runs_for_side(ws, zone, "heat", "heating", days, bridges=bridges)
     if heat_runs:
         rate, n = _learn_rate(temp_states, heat_runs)
         if rate is not None:
             model["heating_rate_deg_h"] = rate
             runs_used += n
 
-    cool_runs = _runs_for_side(ws, zone, "cool", "cooling", days)
+    cool_runs = _runs_for_side(ws, zone, "cool", "cooling", days, bridges=bridges)
     if cool_runs:
         rate, n = _learn_rate(temp_states, cool_runs)
         if rate is not None:
@@ -286,7 +313,7 @@ def _compute_model_sync(ws, zone: dict, days: int) -> dict:
     # de las dos eficiente.
     idle_runs = heat_runs + cool_runs
     if outdoor_sensor and idle_runs:
-        outdoor_states = _history_for(ws, outdoor_sensor, days)
+        outdoor_states = _history_for(ws, outdoor_sensor, days, bridges=bridges)
         coeff, n = _learn_idle_loss_coeff(temp_states, idle_runs, outdoor_states)
         if coeff is not None:
             model["idle_loss_coeff"] = coeff
@@ -303,7 +330,7 @@ MODEL_COMPUTE_TIMEOUT_SECONDS = 60  # limite duro de espera — ver mas abajo
 _executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="thermal_model")
 
 
-def get_model(ws, zone: dict, days: int, fallback: dict | None = None) -> dict:
+def get_model(ws, zone: dict, days: int, fallback: dict | None = None, bridges=None) -> dict:
     """Consulta el historico por WebSocket en su propio hilo (nunca
     bloquea el hilo que llama mas de MODEL_COMPUTE_TIMEOUT_SECONDS — una
     consulta de varios dias puede tardar). `ws`: instancia de
@@ -331,7 +358,7 @@ def get_model(ws, zone: dict, days: int, fallback: dict | None = None) -> dict:
         "runs_used": 0,
     }
     fallback = fallback if fallback is not None else default_fallback
-    future = _executor.submit(_compute_model_sync, ws, zone, days)
+    future = _executor.submit(_compute_model_sync, ws, zone, days, bridges)
     try:
         return future.result(timeout=MODEL_COMPUTE_TIMEOUT_SECONDS)
     except FutureTimeoutError:

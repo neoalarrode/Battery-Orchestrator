@@ -9,12 +9,34 @@ Uso, en el <script> de cada pagina:
 
     renderPluginSwitch("climate");
 
-Rutas siempre ABSOLUTAS ("/", "/plugins/<slug>/", "/api/core/plugins") --
-`DispatcherMiddleware` (ver core_app.py) enruta cualquier peticion que no
-empiece por "/plugins/<otro-slug>" al app raiz, asi que "/api/core/..."
-y "/shared/..." resuelven igual da igual desde que pagina se pidan, sin
-tener que calcular "cuantos niveles subir" en cada plantilla.
+BUG REAL, confirmado por el usuario en produccion (las paginas se veian
+sin ningun estilo -- serif, sin colores -- bajo Home Assistant): las
+rutas de aqui (y las de `/shared/design-system.css`/`/shared/plugin-
+switch.js` en cada plantilla) eran ABSOLUTAS ("/api/core/plugins",
+"/plugins/<slug>/"). Eso solo es correcto accediendo al add-on
+DIRECTAMENTE por su IP:puerto -- bajo el Ingress real de HA (`ingress:
+true` en config.yaml, la via normal por la que el usuario entra desde la
+barra lateral), el navegador esta en realidad en un prefijo dinamico
+tipo "/api/hassio_ingress/<token>/...", y una ruta absoluta empezando
+por "/" se va al DOMINIO RAIZ de HA, no al add-on -- 404 en todo lo que
+empieza por "/", CSS y JS compartidos incluidos, y la navegacion entre
+plugins tambien rota.
+
+`ingressRoot()` calcula el prefijo real de la peticion en tiempo de
+ejecucion (nunca hardcodeado) mirando la URL actual del navegador --
+funciona igual de bien accediendo directo por IP:puerto (donde el
+prefijo es simplemente "/") que por Ingress (cualquier prefijo, cualquier
+profundidad). Los ficheros ESTATICOS (`design-system.css`, este mismo
+script) no pueden usar esto -- se resuelven ANTES de que corra ningun
+JS -- asi que cada plantilla los enlaza con una ruta RELATIVA fija segun
+su propia profundidad de montaje (ver comentario en cada plantilla).
 */
+
+function ingressRoot() {
+  const path = location.pathname;
+  const idx = path.indexOf("/plugins/");
+  return idx === -1 ? path.replace(/[^/]*$/, "") : path.slice(0, idx + 1);
+}
 
 const PLUGIN_ICONS = {
   battery: '<path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="currentColor"/>',
@@ -32,14 +54,15 @@ const PLUGIN_LABELS = { battery: "Energy", climate: "Climate", tuya: "Tuya", lig
 const PLUGIN_SWITCH_VISIBLE = new Set(["battery", "climate", "lighting"]);
 
 function _pluginHref(slug) {
-  return slug === "battery" ? "/" : `/plugins/${slug}/`;
+  const root = ingressRoot();
+  return slug === "battery" ? root : `${root}plugins/${slug}/`;
 }
 
 async function renderPluginSwitch(slug, containerId = "plugin-switch-nav") {
   const nav = document.getElementById(containerId);
   if (!nav) return;
   try {
-    const plugins = await (await fetch("/api/core/plugins")).json();
+    const plugins = await (await fetch(`${ingressRoot()}api/core/plugins`)).json();
     nav.innerHTML = plugins
       .filter((p) => p.installed && PLUGIN_SWITCH_VISIBLE.has(p.slug))
       .map((p) => {

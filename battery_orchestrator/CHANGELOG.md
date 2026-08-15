@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.22.9
+Sha256 de Climate/Tuya/Lighting/TP-Link re-pineados al tag `v0.22.8` (fix real: paginas rotas bajo Ingress) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`, `core_static/plugin-switch.js`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
+## 0.22.8
+**Bug real, GRAVE, confirmado por el usuario en producción con una captura de pantalla: las 4 páginas migradas al sistema de diseño compartido (Climate, Lighting, Tuya, TP-Link) se veían sin ningún estilo -- tipografía serif por defecto, sin colores, sin tarjetas -- exactamente el aspecto de un HTML sin CSS.** Causa real: `/shared/design-system.css` y `/shared/plugin-switch.js` se enlazaban con rutas ABSOLUTAS (`href="/shared/..."`). Eso es correcto accediendo al add-on DIRECTAMENTE por IP:puerto (como se verificaba en este mismo chat, vía SSH+curl) -- pero el usuario entra por el Ingress real de Home Assistant (`ingress: true` en `config.yaml`, la vía normal desde la barra lateral), donde el navegador esta en un prefijo dinámico tipo `/api/hassio_ingress/<token>/...` -- una ruta absoluta que empieza por `/` se va al DOMINIO RAÍZ de HA, no al add-on. 404 en el CSS/JS compartidos, y además el selector de plugins de la cabecera (que también usaba rutas absolutas para `/api/core/plugins` y `/plugins/<slug>/`) tampoco funcionaba.
+
+Todas las verificaciones de esta sesión se hicieron por IP:puerto directo (vía SSH), donde las rutas absolutas SÍ funcionan -- por eso el bug no se detectó hasta que el usuario mandó una captura real de su propio acceso (por Ingress). Lección: verificar SIEMPRE el aspecto final también por el camino real del usuario, no solo por curl directo al puerto del add-on.
+
+Arreglo: `/shared/design-system.css` y `/shared/plugin-switch.js` pasan a enlazarse con rutas RELATIVAS fijas según la profundidad real de montaje de cada plantilla (`shared/...` para Battery, que sirve la raíz; `../../shared/...` para Climate/Lighting/Tuya/TP-Link, montadas en `/plugins/<slug>/`) -- los ficheros estáticos se resuelven antes de que corra ningún JS, así que no pueden calcularse en tiempo de ejecución. `plugin-switch.js` (que SÍ corre como JS, después de cargar la página) usa ahora `ingressRoot()`, una función que calcula el prefijo real mirando `location.pathname` del navegador en cada momento -- funciona igual de bien por IP:puerto directo (prefijo `/`) que por Ingress (cualquier prefijo, cualquier profundidad), sin nada hardcodeado.
+
 ## 0.22.7
 Sha256 de Climate/Lighting re-pineados al tag `v0.22.6` (enlaces cruzados a Tuya/TP-Link) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

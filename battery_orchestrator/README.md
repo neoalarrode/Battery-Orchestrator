@@ -154,5 +154,7 @@ permiso expreso.
 
 El plugin Starlink vendoriza el build web oficial de
 [Dishylink](https://github.com/DaveyHert/dishylink) (© daveyhert,
-licencia MIT) sin modificaciones — ver
+licencia MIT), con un único cambio de código fuente antes de compilar
+(necesario para que funcione fuera de la raíz del dominio — ver
+`app/starlink_dist/PATCH.md`) — licencia en
 `app/starlink_dist/DISHYLINK_LICENSE.txt`.

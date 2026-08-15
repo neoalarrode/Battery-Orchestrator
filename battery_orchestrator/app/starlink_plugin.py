@@ -7,29 +7,35 @@ Dishylink (https://github.com/DaveyHert/dishylink, MIT), una app de
 monitorizacion de Starlink ya hecha y muy cuidada -- el objetivo aqui no
 es rehacer sus graficos, es integrarla.
 
-`app/starlink_dist/` es EXACTAMENTE lo que produce su propio
-`npm run build --base=./` (el `--base=./` es la unica desviacion de sus
-instrucciones por defecto -- su config usa rutas absolutas "/" para el
-build de navegador, que rompen bajo el mismo problema de Ingress que ya
-se corrigio para el resto de este proyecto, ver CHANGELOG 0.22.8; rutas
-relativas lo evitan igual que en el resto de plantillas). Ni una linea
-de su codigo React/TypeScript esta tocada.
+`app/starlink_dist/` es su propio `npm run build --base=./` con UN solo
+cambio de codigo fuente antes de compilar (ver `app/starlink_dist/
+PATCH.md` para el detalle exacto y como reconstruirlo tras una
+actualizacion del proyecto original): la app da por hecho que se sirve
+en la RAIZ del dominio (su dev harness, Electron, la extension) -- aqui
+cuelga de "/plugins/starlink/", nunca de "/". Sin el parche, tanto el
+proxy `/dishy` como el fichero `dish.protoset` se pedian con rutas
+absolutas de raiz de dominio ("/dishy/...", "/dish.protoset"), que bajo
+Ingress (o incluso por IP directa) se resuelven contra el sitio
+equivocado -- BUG REAL, confirmado en produccion: la interfaz mostraba
+"dish unreachable" pero CERO peticiones llegaban al proxy de aqui abajo,
+porque el fetch del protoset fallaba antes de intentar hablar con el
+dish siquiera. El parche llama a `setDishHost()` (el propio mecanismo de
+extension del proyecto, ya usado por sus builds de Electron/extension)
+con las mismas rutas mas como RELATIVAS -- cero logica nueva, solo
+apuntarlas donde de verdad cuelga esta pagina.
 
-Lo UNICO que hace falta en el backend: la app habla con el dish
-(192.168.100.1:9201) por grpc-web DIRECTO desde el navegador en su modo
-"dev harness" -- pero el dish solo responde CORS/Referer a su propio
-origen (ver LOCAL-API.md del proyecto: "port 9201 only answers CORS
-preflights for the dish's own origin" + "requests carrying an
-unrecognized Referer header get an empty 200 back"), asi que un origen
-de terceros no puede llamarlo cross-origin de verdad. Su propio servidor
-de desarrollo (Vite) ya resuelve esto con un proxy same-origin en
-"/dishy" que reescribe la URL y quita las cabeceras Referer/Origin antes
-de reenviar (ver su vite.config.ts) -- este plugin REPLICA EXACTAMENTE
-ese mismo contrato en el backend, ya que aqui no hay ningun Vite
-corriendo en produccion. La app, sin configurar explicitamente otro host
-(ver `setDishHost` en su propio `core/dishClient.ts`), YA usa por
-defecto esa misma ruta relativa "/dishy/..." -- cero cambios en su
-codigo hacen falta para que esto encaje.
+Lo UNICO que hace falta en el backend (aparte de ese parche): la app
+habla con el dish (192.168.100.1:9201) por grpc-web DIRECTO desde el
+navegador en su modo "dev harness" -- pero el dish solo responde
+CORS/Referer a su propio origen (ver LOCAL-API.md del proyecto: "port
+9201 only answers CORS preflights for the dish's own origin" + "requests
+carrying an unrecognized Referer header get an empty 200 back"), asi que
+un origen de terceros no puede llamarlo cross-origin de verdad. Su
+propio servidor de desarrollo (Vite) ya resuelve esto con un proxy
+same-origin en "/dishy" que reescribe la URL y quita las cabeceras
+Referer/Origin antes de reenviar (ver su vite.config.ts) -- este plugin
+REPLICA EXACTAMENTE ese mismo contrato en el backend, ya que aqui no hay
+ningun Vite corriendo en produccion.
 
 Deliberadamente SIN proxy de router (`/router/...`, lista de
 dispositivos/uso por wifi de la app original): la direccion por defecto
@@ -78,7 +84,7 @@ _STRIP_RESPONSE_HEADERS = {"content-length", "content-encoding", "transfer-encod
 class StarlinkPlugin(Plugin):
     slug = "starlink"
     name = "Starlink Orchestrator"
-    version = "0.1.0"
+    version = "0.1.1"
 
     def __init__(self) -> None:
         self._app = flask.Flask("starlink_plugin", static_folder=_DIST_DIR, static_url_path="")

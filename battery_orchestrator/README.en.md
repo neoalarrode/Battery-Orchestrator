@@ -152,5 +152,6 @@ without explicit permission.
 
 The Starlink plugin vendors the official web build of
 [Dishylink](https://github.com/DaveyHert/dishylink) (© daveyhert, MIT
-license) unmodified — see
-`app/starlink_dist/DISHYLINK_LICENSE.txt`.
+license), with a single source change before building (needed for it to
+work outside the domain root — see `app/starlink_dist/PATCH.md`) —
+license in `app/starlink_dist/DISHYLINK_LICENSE.txt`.

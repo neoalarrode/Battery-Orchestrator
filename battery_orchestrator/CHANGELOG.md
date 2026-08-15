@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.24.3
+Sha256 de Starlink re-pineado al tag `v0.24.2` (fix real: el dish nunca llegaba a contactarse) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
+## 0.24.2
+**Bug real, GRAVE, confirmado por el usuario en producción: la interfaz de Starlink mostraba "dish unreachable" y CERO peticiones llegaban al proxy `/dishy` del backend.** Causa real: `DISH_HANDLE_URL` y el `protosetUrl` por defecto de Dishylink (`core/dishClient.ts`) son rutas ABSOLUTAS de raíz de dominio (`/dishy/...`, `/dish.protoset`) -- correctas para una app pensada para servirse en `/` (su dev harness, Electron, la extensión), rotas para esta, que cuelga de `/plugins/starlink/`. El `fetch` del `dish.protoset` fallaba ANTES de intentar hablar con el dish siquiera, así que el proxy del backend (correcto, ya verificado contra el dish real en la v0.24.1) nunca llegaba a recibir ninguna petición.
+
+Corrección: UN cambio de código fuente en `src/main.tsx` (documentado en detalle en `app/starlink_dist/PATCH.md`, con instrucciones para reaplicarlo tras una actualización del proyecto original) -- una llamada a `setDishHost()`, el propio mecanismo de extensión que Dishylink ya usa para sus builds de Electron/extensión, con las mismas rutas pero relativas. Corrige también la afirmación de la v0.24.0/v0.24.1 ("ni una línea de su código está tocada") -- ya no es exacta, ahora hay ese único cambio aditivo, necesario para que la integración funcione de verdad bajo cualquier despliegue que no sirva la app en la raíz del dominio (Ingress incluido, pero no exclusivo de Ingress).
+
 ## 0.24.1
 Sha256 de Starlink re-pineado al tag `v0.24.0` (version real, tras el primer commit) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

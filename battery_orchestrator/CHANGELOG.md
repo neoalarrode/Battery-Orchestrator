@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.16.4
+**Segundo bug real de color en TP-Link, encontrado en la misma verificación:** faltaba el flag `color_temp_kelvin: true` en el discovery MQTT (nombre real del campo, ver `homeassistant/components/mqtt/const.py:CONF_COLOR_TEMP_KELVIN`) -- sin él, HA sigue interpretando el payload de `color_temp_state_topic` como MIREDS por defecto (retrocompatibilidad) sin importar que `min_kelvin`/`max_kelvin` estén declarados. Se publicaban 6500 (Kelvin reales) y HA los convertía de vuelta como si fueran 6500 mireds, mostrando "153K" en la entidad real. De paso, se sustituye la inferencia de `color_mode` por el mecanismo explícito real de HA (`color_mode_state_topic`) en vez de depender de cuál topic de estado llegó más tarde. Verificado contra hardware real: la entidad de este plugin ahora coincide exactamente con la integración nativa de TP-Link de Home Assistant para el mismo dispositivo físico.
+
 ## 0.16.3
 Sha256 de TP-Link re-pineado al tag `v0.16.2` (fix real de color_mode) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

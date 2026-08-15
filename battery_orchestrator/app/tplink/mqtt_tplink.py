@@ -106,15 +106,32 @@ class MqttTplinkDevice:
             payload.update(
                 color_temp_state_topic=f"{base}/color_temp_kelvin/state",
                 color_temp_command_topic=f"{base}/color_temp_kelvin/set",
-                # HA moderno acepta min/max_kelvin directamente en el
-                # discovery de MQTT light -- evita la conversion a
-                # mireds por completo (y el bug que eso causo en Tuya).
+                # BUG REAL, confirmado en produccion: `min_kelvin`/
+                # `max_kelvin` NO bastan por si solos -- sin el flag
+                # `color_temp_kelvin: true` (el nombre real en el schema
+                # MQTT de HA, ver `homeassistant/components/mqtt/const.py:
+                # CONF_COLOR_TEMP_KELVIN`), el payload de
+                # `color_temp_state_topic`/`command_topic` se sigue
+                # interpretando como MIREDS por defecto (retrocompatible)
+                # sin importar que min/max_kelvin esten declarados --
+                # visto tal cual: se publico 6500 (Kelvin) y HA lo
+                # convirtio de vuelta como si fueran 6500 MIREDS,
+                # mostrando "153K" en la entidad real.
+                color_temp_kelvin=True,
                 min_kelvin=int(lo), max_kelvin=int(hi),
             )
             self._mqtt.subscribe(f"{base}/color_temp_kelvin/set", self._on_color_temp)
         if light.is_color:
             payload.update(hs_state_topic=f"{base}/hs/state", hs_command_topic=f"{base}/hs/set")
             self._mqtt.subscribe(f"{base}/hs/set", self._on_hs)
+        if light.is_variable_color_temp and light.is_color:
+            # Mecanismo REAL y explicito de HA para decir que modo esta
+            # activo (`color_mode_state_topic`, ver
+            # `mqtt/light/schema_basic.py:_color_mode_received`) --
+            # mas robusto que dejar que HA lo infiera de cual topic de
+            # estado llego mas tarde (la ambiguedad que causo el bug real
+            # ya corregido en `publish_state`, ver `_color_temp_active`).
+            payload.update(color_mode_state_topic=f"{base}/color_mode/state")
 
         self._mqtt.subscribe(f"{base}/set", self._on_power)
         self._mqtt.publish(f"{base}/config", payload, retain=True)
@@ -186,11 +203,17 @@ class MqttTplinkDevice:
             # mqtt_tuya.py, aqui con su propia causa (ver
             # `_color_temp_active`, replica exacta de la logica real de
             # `_determine_color_mode` del `light.py` de Home Assistant).
-            if light.is_variable_color_temp and _color_temp_active(light):
+            ct_active = light.is_variable_color_temp and _color_temp_active(light)
+            if ct_active:
                 self._mqtt.publish(f"{base}/color_temp_kelvin/state", round(light.color_temp), retain=True)
             elif light.is_color:
                 h, s, _v = light.hsv
                 self._mqtt.publish(f"{base}/hs/state", f"{h:.1f},{s:.1f}", retain=True)
+            if light.is_variable_color_temp and light.is_color:
+                # Reporte EXPLICITO del modo activo (ver `_publish_light`)
+                # -- HA ya no tiene que adivinar de cual topic de estado
+                # llego mas tarde.
+                self._mqtt.publish(f"{base}/color_mode/state", "color_temp" if ct_active else "hs", retain=True)
         else:
             base = self._base("switch").format(domain="switch")
             self._mqtt.publish(f"{base}/state", "ON" if device.is_on else "OFF", retain=True)

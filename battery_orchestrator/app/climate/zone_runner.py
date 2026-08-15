@@ -961,7 +961,18 @@ class ZoneRunner:
         self._maybe_publish_state()
 
     def _maybe_publish_state(self) -> None:
-        signature = (self.available, self.hvac_action, self.hvac_mode, self.reason)
+        # Bug real, confirmado en produccion: la firma de "cambio
+        # significativo" no incluia las consignas -- si pones una
+        # temperatura nueva (o el par calor/frio de heat_cool) y ni la
+        # accion ni el motivo cambian en ese mismo instante (p.ej. ya
+        # estaba enfriando y sigue enfriando, solo que hacia un numero
+        # distinto), el valor nuevo tardaba hasta WRITE_MIN_INTERVAL_SECONDS
+        # (20s) en llegar a HA -- el termostato parecia "no coger" el
+        # cambio recien hecho.
+        signature = (
+            self.available, self.hvac_action, self.hvac_mode, self.reason,
+            self.target_temperature, self.target_temperature_low, self.target_temperature_high,
+        )
         now_ts = _utcnow().timestamp()
         significant_change = signature != self._last_written_signature
         elapsed_enough = (

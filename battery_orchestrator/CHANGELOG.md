@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.12.2
+**Bug real, confirmado en producción (zona Dormitorio): cambiar la consigna manual (calor/frío) podía tardar hasta 20s en reflejarse en el termostato de HA**, dando la sensación de que "no coge" el valor nuevo. Causa: `_maybe_publish_state()` decide si publica el estado inmediatamente mirando si `(available, hvac_action, hvac_mode, reason)` cambió — si la acción y el motivo seguían siendo los mismos justo después de cambiar la consigna (p.ej. ya estaba enfriando y sigue enfriando, solo que hacia un número distinto), la nueva temperatura objetivo se quedaba sin publicar hasta el siguiente ciclo de 20s. Fix: la firma de "cambio significativo" ahora incluye también `target_temperature`/`target_temperature_low`/`target_temperature_high` — cualquier cambio de consigna se publica al instante, sin esperar al throttle.
+
+Verificado en producción contra la zona real: modo Automático con presencia/ausencia real, dual-setpoint (calor+frío a la vez), modulación de consigna y fallback a ventilador funcionan correctamente — el problema reportado ("entra en calor a menos que cambie a frío a mano") era el retraso de publicación descrito arriba, no un fallo del motor de decisión.
+
 ## 0.12.1
 Sha256 de Climate re-pineado al tag `v0.12.0` (fix real: humidificador enmascaraba capacidad pendiente) — verificado con una descarga real antes de fijarlo.
 

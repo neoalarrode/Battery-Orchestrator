@@ -51,6 +51,21 @@ def all_lights(rules: list[dict]) -> set[str]:
     return out
 
 
+def _parse_light_entry(raw: str) -> tuple[str, bool]:
+    """«light.x» o «light.x:solo_brillo» -> (entity_id, solo_brillo).
+    El sufijo «:solo_brillo» excluye esa luz en concreto del cambio de
+    color/temperatura de color de la curva solar de la zona -- sigue
+    encendiendose/apagandose y ajustando BRILLO con normalidad, solo se
+    le deja de mandar color. Pensado para una luz que no soporta color,
+    o que el usuario prefiere dejar siempre en un tono fijo (p.ej. una
+    lampara de lectura) dentro de una zona que por lo demas si varia de
+    color -- sin tener que sacarla a su propia regla/zona aparte."""
+    if ":" in raw:
+        entity_id, flag = raw.split(":", 1)
+        return entity_id.strip(), flag.strip().lower() == "solo_brillo"
+    return raw.strip(), False
+
+
 def parse_rules_text(text: str) -> list[dict]:
     """Convierte el texto declarado en el asistente en una lista de
     reglas -- mismo espiritu que `climate/presets.py:parse_presets`, pero
@@ -67,7 +82,12 @@ def parse_rules_text(text: str) -> list[dict]:
       por comas significan "cualquiera de estos" (OR dentro de esa
       condicion).
     - El trozo «luces=...» (obligatorio, al menos una) es la lista de
-      `light.*` que controla esta regla.
+      `light.*` que controla esta regla. Una luz puede llevar el sufijo
+      «:solo_brillo» («light.x:solo_brillo») para excluirla del cambio de
+      color/temperatura de color de la curva -- sigue encendiendose y
+      ajustando brillo con normalidad, solo se le deja de mandar color
+      (util para una luz sin color, o que se quiere dejar siempre en un
+      tono fijo dentro de una zona que por lo demas si varia).
     - Una regla SIN ninguna condicion siempre coincide -- se usa como
       reserva/por defecto; el orden de las lineas es el orden de
       evaluacion (la primera regla cuyas condiciones se cumplen gana).
@@ -95,6 +115,7 @@ def parse_rules_text(text: str) -> list[dict]:
 
         conditions: list[dict] = []
         lights: list[str] = []
+        brightness_only: list[str] = []
         for chunk in chunks[1:]:
             low = chunk.lower()
             if low.startswith("si "):
@@ -108,14 +129,22 @@ def parse_rules_text(text: str) -> list[dict]:
                     raise ValueError(f"«{chunk}» no es una condicion valida en la regla «{name}»")
                 conditions.append({"entity_id": entity_id, "state": values[0] if len(values) == 1 else values})
             elif low.startswith("luces="):
-                lights = [e.strip() for e in chunk[len("luces="):].split(",") if e.strip()]
+                entries = [e.strip() for e in chunk[len("luces="):].split(",") if e.strip()]
+                lights = []
+                brightness_only = []
+                for entry in entries:
+                    entity_id, only_brightness = _parse_light_entry(entry)
+                    if entity_id:
+                        lights.append(entity_id)
+                        if only_brightness:
+                            brightness_only.append(entity_id)
             else:
                 raise ValueError(
                     f"«{chunk}» no se reconoce en la regla «{name}» (usa «si entidad=valor» o «luces=...»)"
                 )
         if not lights:
             raise ValueError(f"la regla «{name}» no declara ninguna luz («luces=...»)")
-        parsed.append({"name": name, "conditions": conditions, "lights": lights})
+        parsed.append({"name": name, "conditions": conditions, "lights": lights, "brightness_only": brightness_only})
     if not parsed:
         raise ValueError("declara al menos una regla (una sin «si...» sirve de reserva por defecto)")
     return parsed
@@ -131,7 +160,12 @@ def rules_to_text(rule_list: list[dict]) -> str:
             state = c.get("state")
             state_str = ",".join(state) if isinstance(state, list) else (state or "")
             chunks.append(f"si {c.get('entity_id', '')}={state_str}")
-        chunks.append("luces=" + ",".join(r.get("lights") or []))
+        brightness_only = set(r.get("brightness_only") or [])
+        light_entries = [
+            f"{e}:solo_brillo" if e in brightness_only else e
+            for e in (r.get("lights") or [])
+        ]
+        chunks.append("luces=" + ",".join(light_entries))
         lines.append("; ".join(chunks))
     return "\n".join(lines)
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.17.0
+**Lighting**: tres mejoras pedidas por el usuario tras usar el motor en producción.
+
+- `current_values` (la curva de brillo/color según la posición del sol) se calcula SIEMPRE, esté ocupada la zona o no -- antes se quedaba en `None` sin presencia, indistinguible desde fuera de "sun.sun no disponible". Ahora una zona vacía sigue mostrando la previsualización de lo que se aplicaría si entrase alguien.
+- Nueva sintaxis `light.x:solo_brillo` en el campo `luces=...` de una regla: excluye esa luz en concreto del cambio de color/temperatura de color de la curva -- sigue encendiéndose/apagándose y ajustando brillo con normalidad, solo se le deja de mandar color. Útil para una luz sin color, o que se prefiere dejar siempre en un tono fijo dentro de una zona que por lo demás sí varía.
+- Bug real encontrado de paso al implementar lo anterior: `_detect_manual_overrides` comparaba `None - int` cuando una luz no tenía brillo/color en el último comando registrado (p.ej. antes de la primera lectura de `sun.sun`), lo que podía reventar el ciclo de decisión. Corregido.
+- Nuevo `lighting/presets.py` + `GET /api/room-presets`: valores de brillo/color recomendados por tipo de estancia (Cocina, Salón, Dormitorio, Baño, Despacho, Pasillo/Entrada, Exterior/Patio, Escalera), más un preset "Manual" sin autofill. Solo un atajo de relleno rápido para el formulario -- la zona nunca guarda una referencia al preset, solo los 4 números ya copiados.
+
 ## 0.16.9
 Sha256 de TP-Link re-pineado al tag `v0.16.8` (fix real de reintento en escrituras) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

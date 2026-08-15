@@ -30,7 +30,7 @@ import time
 import flask
 
 import ha_websocket
-from lighting import zone_store
+from lighting import presets, zone_store
 from lighting.zone_runner import ZoneRunner
 from plugin_base import Plugin
 
@@ -43,7 +43,7 @@ REACTIVE_MIN_INTERVAL_SECONDS = 5
 class LightingPlugin(Plugin):
     slug = "lighting"
     name = "Lighting Orchestrator"
-    version = "0.2.0"
+    version = "0.3.0"
 
     def __init__(self) -> None:
         self._runners: dict[str, ZoneRunner] = {}
@@ -131,6 +131,14 @@ class LightingPlugin(Plugin):
                 except Exception:
                     log.exception("Fallo listando actuadores de luz del proveedor '%s'", prefix)
             return flask.jsonify(out)
+
+        @app.get("/api/room-presets")
+        def _list_room_presets():
+            """Presets recomendados de brillo/color por tipo de estancia
+            (ver lighting/presets.py) -- solo un atajo de relleno rapido
+            para el formulario de la interfaz, la zona nunca guarda una
+            referencia al preset en si, solo los 4 numeros ya copiados."""
+            return flask.jsonify(presets.list_presets())
 
         @app.get("/api/zones")
         def _list_zones():

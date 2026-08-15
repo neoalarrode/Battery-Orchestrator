@@ -190,14 +190,18 @@ class ZoneRunner:
         except Exception:
             log.exception("Zona lighting %s: fallo apagando %s", self.zone_id, entity_id)
 
-    def _apply_values(self, entity_id: str, values: dict | None, turning_on: bool) -> None:
+    def _apply_values(self, entity_id: str, values: dict | None, turning_on: bool, brightness_only: bool = False) -> None:
         """Enciende/ajusta segun la curva solar (`values`, puede ser None
         si `sun.sun` no esta disponible ahora mismo -- en ese caso solo
         se enciende, sin tocar color/brillo). Registra lo mandado en
         `_state["commanded"]` para poder detectar despues si alguien lo
-        cambio a mano (ver `_detect_manual_overrides`)."""
+        cambio a mano (ver `_detect_manual_overrides`). `brightness_only`
+        (luz marcada «:solo_brillo» en la regla, ver rules.py) excluye
+        esta luz en concreto del color/temperatura de color -- se ajusta
+        el brillo igual que cualquier otra, simplemente nunca se le manda
+        color."""
         brightness_pct = values.get("brightness_pct") if values else None
-        color_temp_kelvin = values.get("color_temp_kelvin") if values else None
+        color_temp_kelvin = None if brightness_only else (values.get("color_temp_kelvin") if values else None)
         try:
             if self._is_bridge_ref(entity_id):
                 handle = self._resolve_bridge_handle(entity_id)
@@ -218,7 +222,18 @@ class ZoneRunner:
             log.exception("Zona lighting %s: fallo encendiendo/ajustando %s", self.zone_id, entity_id)
             return
         commanded = self._state.setdefault("commanded", {})
-        commanded[entity_id] = {**(values or {}), "ts": time.time()}
+        # OJO: se guarda lo que de VERDAD se mando (brightness_pct/
+        # color_temp_kelvin ya filtrados arriba por `brightness_only`),
+        # NUNCA el `values` crudo de la curva -- si no, una luz «:solo_
+        # brillo» quedaria con un color_temp_kelvin "esperado" en cache
+        # que el dispositivo real nunca recibio, y `_detect_manual_
+        # overrides` la marcaria como tocada a mano en el proximo ciclo
+        # sin que nadie la haya tocado.
+        commanded[entity_id] = {
+            "brightness_pct": brightness_pct,
+            "color_temp_kelvin": color_temp_kelvin,
+            "ts": time.time(),
+        }
         if turning_on:
             # entrada fresca en la zona (o cambio de regla): se considera
             # "mano limpia" de nuevo, cualquier marca de override anterior
@@ -246,10 +261,15 @@ class ZoneRunner:
             if not cmd or not vals or not vals["on"]:
                 continue
             mismatch = False
-            if "brightness_pct" in cmd and vals["brightness_pct"] is not None:
+            # `cmd.get(...) is not None` -- NO solo "in cmd": desde que
+            # `_apply_values` guarda siempre las dos claves (ver su
+            # comentario), una luz «:solo_brillo» o sin lectura de sol
+            # todavia tiene la clave con valor `None`, que no es
+            # comparable (bug real que esto evita: `None - int` revienta).
+            if cmd.get("brightness_pct") is not None and vals["brightness_pct"] is not None:
                 if abs(vals["brightness_pct"] - cmd["brightness_pct"]) > BRIGHTNESS_TOLERANCE_PCT:
                     mismatch = True
-            if not mismatch and "color_temp_kelvin" in cmd and vals["color_temp_kelvin"] is not None:
+            if not mismatch and cmd.get("color_temp_kelvin") is not None and vals["color_temp_kelvin"] is not None:
                 if abs(vals["color_temp_kelvin"] - cmd["color_temp_kelvin"]) > COLOR_TEMP_TOLERANCE_KELVIN:
                     mismatch = True
             if mismatch:
@@ -275,6 +295,16 @@ class ZoneRunner:
         # cuando la zona se queda vacia.
         self._detect_manual_overrides(states, all_zone_lights)
 
+        # `current_values` se calcula SIEMPRE, este ocupada o no la zona
+        # -- es la curva solar en si (brillo/color que TOCARIA ahora
+        # mismo segun la hora del dia), independiente de si hay alguien
+        # para aplicarsela. Antes se dejaba en None sin presencia, lo que
+        # desde fuera (interfaz, API) era indistinguible de "sun.sun no
+        # disponible" -- ahora ambos casos se ven distintos: sin
+        # presencia con sol legible sigue mostrando la previsualizacion
+        # de lo que se encenderia si entrase alguien.
+        self.current_values = schedule.value_at(cfg, states.get("sun.sun"))
+
         if not occupied:
             self.active_rule = None
             self._state["active_rule"] = None
@@ -285,12 +315,12 @@ class ZoneRunner:
                 self.reason = "sin presencia -> apagado"
             else:
                 self.reason = "sin presencia (apagado automatico desactivado)"
-            self.current_values = None
             return
 
         selected = rules.select_rule(self._rules, states)
         selected_name = selected.get("name") if selected else None
         selected_lights = set(selected.get("lights") or []) if selected else set()
+        selected_brightness_only = set(selected.get("brightness_only") or []) if selected else set()
 
         transitioned = (not was_occupied) or (selected_name != self.active_rule)
         self.active_rule = selected_name
@@ -301,8 +331,7 @@ class ZoneRunner:
                 if self._is_on(states, entity_id):
                     self._turn_off(entity_id)
 
-        values = schedule.value_at(cfg, states.get("sun.sun"))
-        self.current_values = values
+        values = self.current_values
 
         if selected is None:
             self.reason = "presencia detectada, ninguna regla coincide -- nada que encender"
@@ -319,11 +348,12 @@ class ZoneRunner:
         auto_on = cfg.get("auto_on", True)
         overrides = self._state.get("manual_override") or {}
         for entity_id in selected_lights:
+            only_brightness = entity_id in selected_brightness_only
             if self._is_on(states, entity_id):
                 if not overrides.get(entity_id):
-                    self._apply_values(entity_id, values, turning_on=False)
+                    self._apply_values(entity_id, values, turning_on=False, brightness_only=only_brightness)
             elif auto_on and transitioned:
-                self._apply_values(entity_id, values, turning_on=True)
+                self._apply_values(entity_id, values, turning_on=True, brightness_only=only_brightness)
 
         self.reason = f"regla activa: {selected_name or '(sin nombre)'}"
 

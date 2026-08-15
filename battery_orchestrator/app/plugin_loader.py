@@ -96,10 +96,10 @@ PLUGIN_CATALOG = {
     "climate": {
         "name": "Climate Orchestrator",
         "description": "Termostatos adaptativos por zona, expuestos como climate.* nativos de HA (HomeKit/Matter) vía MQTT Discovery",
-        "version": "0.2.9",  # version PROPIA del plugin (ClimatePlugin.version) -- distinta de "tag", que es la version del REPO de la que se descarga
+        "version": "0.3.0",  # version PROPIA del plugin (ClimatePlugin.version) -- distinta de "tag", que es la version del REPO de la que se descarga
         "downloadable": True,
-        "tag": "v0.12.0",
-        "sha256": "36fdc8c82c94b1c6660eb271981edd9dc6d1d5734e081f005ac4350958f85cd8",  # sha256 real del tarball de v0.12.0, verificado contra una descarga real antes de fijarlo aqui (fix real: humidificador enmascaraba capacidad pendiente de un actuador de otro plugin)
+        "tag": "v0.12.2",
+        "sha256": "51c950e61ee30f5a96dfc20c045711b0479f82a044f0f85806adff9d382cc108",  # sha256 real del tarball de v0.12.2, verificado contra una descarga real antes de fijarlo aqui (fix: cambio de consigna manual tardaba hasta 20s en publicarse)
         "files": ["climate_plugin.py", "climate", "climate_templates"],
     },
     "tuya": {

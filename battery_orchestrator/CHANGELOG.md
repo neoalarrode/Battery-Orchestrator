@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.20.0
+**Lighting**: color manual (HS) en la luz "dummy" de conjunto de cada zona, a petición expresa del usuario. Además de la curva automática de blancos (nunca produce color, solo temperatura de color), ahora se puede fijar un color concreto a mano desde HomeKit/Lovelace en la propia luz de conjunto -- se reenvía a las luces reales de la zona que lo soporten (TP-Link, Tuya, o cualquier `light.*` nativo de HA vía `hs_color`).
+
+- Cada luz que recibe el color manual se marca como "tocada a mano" -- el siguiente reajuste automático de la curva no se lo pisa, se queda así hasta la próxima transición real de la zona (verificado con un test simulado antes de desplegar).
+- `color_mode_state_topic` explícito en la luz dummy (mismo mecanismo real de HA que ya se usó para TP-Link) -- HA no tiene que adivinar si el modo activo es color o temperatura de color.
+- Ajustar el brillo desde la luz dummy ya no tira abajo un color manual activo -- se reenvían juntos.
+- **Refactor de paso**: el códec de color HS de Tuya (formato real de 12 hex, `h+s+v` empaquetados) vivía solo en `mqtt_tuya.py` -- movido a `tuya/profile.py` (junto al resto de códecs de DP) para que `device_manager.py` (control directo desde Lighting) también lo pueda usar sin duplicar código ni depender de la capa MQTT.
+
 ## 0.19.6
 Sha256 de Lighting re-pineado al tag `v0.19.5` (curva de brillo corregida) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

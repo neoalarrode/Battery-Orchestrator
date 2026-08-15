@@ -68,6 +68,16 @@ class MqttLightingZone:
             # desde el principio.
             "color_temp_kelvin": True,
             "min_kelvin": int(min_color_temp_kelvin), "max_kelvin": int(max_color_temp_kelvin),
+            # Color manual (HS), a peticion expresa del usuario -- ademas
+            # de la curva automatica de blancos, se puede fijar un color
+            # concreto a mano desde HomeKit/Lovelace (ver
+            # `ZoneRunner.manual_command`). `color_mode_state_topic`
+            # explicito (no inferido de cual topic llego mas tarde) --
+            # mismo mecanismo real de HA que ya se uso para arreglar este
+            # mismo problema en tplink/mqtt_tplink.py.
+            "hs_state_topic": f"{t}/hs/state",
+            "hs_command_topic": f"{t}/hs/set",
+            "color_mode_state_topic": f"{t}/color_mode/state",
             "availability_topic": f"{t}/availability",
             "device": {
                 "identifiers": [f"home_orchestrator_lighting_{self.zone_id}"],
@@ -80,6 +90,7 @@ class MqttLightingZone:
         self._mqtt.subscribe(f"{t}/set", self._on_power)
         self._mqtt.subscribe(f"{t}/brightness/set", self._on_brightness)
         self._mqtt.subscribe(f"{t}/color_temp_kelvin/set", self._on_color_temp)
+        self._mqtt.subscribe(f"{t}/hs/set", self._on_hs)
         self._mqtt.publish(f"{t}/availability", "online", retain=True)
 
     def remove_discovery(self) -> None:
@@ -95,8 +106,13 @@ class MqttLightingZone:
         self._mqtt.publish(f"{t}/state", "ON" if group["on"] else "OFF", retain=True)
         if group.get("brightness_pct") is not None:
             self._mqtt.publish(f"{t}/brightness/state", round(group["brightness_pct"]), retain=True)
-        if group.get("color_temp_kelvin") is not None:
+        hs = group.get("hs_color")
+        if hs is not None:
+            self._mqtt.publish(f"{t}/hs/state", f"{hs[0]:.1f},{hs[1]:.1f}", retain=True)
+            self._mqtt.publish(f"{t}/color_mode/state", "hs", retain=True)
+        elif group.get("color_temp_kelvin") is not None:
             self._mqtt.publish(f"{t}/color_temp_kelvin/state", round(group["color_temp_kelvin"]), retain=True)
+            self._mqtt.publish(f"{t}/color_mode/state", "color_temp", retain=True)
 
     # ----------------------------------------------------------- comandos -
 
@@ -110,8 +126,23 @@ class MqttLightingZone:
 
     def _on_brightness(self, client, userdata, msg) -> None:
         if self._runner:
-            self._runner.manual_command(on=True, brightness_pct=float(msg.payload.decode()))
+            # Un cambio de brillo por si solo NO debe tirar abajo un color
+            # manual que ya estuviera activo (ver ZoneRunner._manual_hs) --
+            # se reenvia junto con el, no en vez de el.
+            self._runner.manual_command(
+                on=True,
+                brightness_pct=float(msg.payload.decode()),
+                hs=self._runner._manual_hs,
+            )
 
     def _on_color_temp(self, client, userdata, msg) -> None:
         if self._runner:
             self._runner.manual_command(on=True, color_temp_kelvin=float(msg.payload.decode()))
+
+    def _on_hs(self, client, userdata, msg) -> None:
+        if self._runner:
+            try:
+                h_str, s_str = msg.payload.decode().split(",")
+                self._runner.manual_command(on=True, hs=(float(h_str), float(s_str)))
+            except ValueError:
+                log.warning("Zona lighting %s: payload de color HS invalido: %r", self.zone_id, msg.payload)

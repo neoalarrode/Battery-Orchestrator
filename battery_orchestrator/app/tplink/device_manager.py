@@ -292,8 +292,9 @@ class TplinkLightHandle:
         light = self._light()
         return int(light.color_temp) if light and light.is_variable_color_temp else None
 
-    def turn_on(self, brightness_pct: float | None = None, color_temp_kelvin: float | None = None) -> None:
-        self._manager.turn_on(self._device_id, brightness_pct=brightness_pct, color_temp_kelvin=color_temp_kelvin)
+    def turn_on(self, brightness_pct: float | None = None, color_temp_kelvin: float | None = None,
+                hs: tuple[float, float] | None = None) -> None:
+        self._manager.turn_on(self._device_id, brightness_pct=brightness_pct, color_temp_kelvin=color_temp_kelvin, hs=hs)
 
     def turn_off(self) -> None:
         self._manager.turn_off(self._device_id)

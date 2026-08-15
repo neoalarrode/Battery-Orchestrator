@@ -46,6 +46,7 @@ open an issue if a real device needs more.
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -236,6 +237,40 @@ def light_dp_to_mireds(dp_value: float, lt: "LightMapping") -> int:
     t = (dp_value - lt.color_temp_min) / span_dp  # 0=calido, 1=frio
     t = max(0.0, min(1.0, t))
     return round(LIGHT_MAX_MIREDS - t * (LIGHT_MAX_MIREDS - LIGHT_MIN_MIREDS))
+
+
+# ------------------------------------------------------------ color codec -
+# Formato REAL confirmado contra un dispositivo real (no el JSON que
+# describia antes este mismo docstring, que resulto ser el formato de la
+# nube, distinto del que de verdad viaja por LAN en este dispositivo): una
+# cadena de 12 caracteres hexadecimales, tres campos de 16 bits big-endian
+# consecutivos -- h(4 hex)+s(4 hex)+v(4 hex). Ej. visto en produccion:
+# "000003e803e8" = h=0, s=1000, v=1000. Vivia en mqtt_tuya.py -- movido
+# aqui (junto al resto de codecs de DP) para que tambien lo pueda usar
+# `device_manager.py` (control directo desde Lighting) sin depender de la
+# capa de publicacion MQTT.
+
+def decode_color_hs(lt: "LightMapping", raw) -> tuple[float, float] | None:
+    if raw is None:
+        return None
+    if isinstance(raw, str) and len(raw) >= 12 and all(c in "0123456789abcdefABCDEF" for c in raw[:12]):
+        h_raw = int(raw[0:4], 16)
+        s_raw = int(raw[4:8], 16)
+        return (h_raw * 360 / lt.color_h_max, s_raw * 100 / lt.color_s_max)
+    # Defensivo, nunca confirmado en real: por si un dispositivo distinto
+    # de verdad envia la forma JSON que Tuya Cloud describe.
+    try:
+        obj = raw if isinstance(raw, dict) else json.loads(raw)
+        return (obj["h"] * 360 / lt.color_h_max, obj["s"] * 100 / lt.color_s_max)
+    except Exception:
+        return None
+
+
+def encode_color_hs(lt: "LightMapping", h: float, s: float, v_percent: float = 100.0) -> str:
+    h_raw = round(max(0.0, min(360.0, h)) * lt.color_h_max / 360)
+    s_raw = round(max(0.0, min(100.0, s)) * lt.color_s_max / 100)
+    v_raw = round(max(0.0, min(100.0, v_percent)) * lt.color_v_max / 100)
+    return f"{h_raw:04x}{s_raw:04x}{v_raw:04x}"
 
 
 @dataclass

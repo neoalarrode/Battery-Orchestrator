@@ -23,7 +23,15 @@ import time
 from typing import Any, Callable
 
 from .discovery import DiscoveredDevice, PersistentDiscovery
-from .profile import ClimateMapping, DeviceProfile, LightMapping, light_dp_to_mireds, mireds_to_light_dp, parse_profile
+from .profile import (
+    ClimateMapping,
+    DeviceProfile,
+    LightMapping,
+    encode_color_hs,
+    light_dp_to_mireds,
+    mireds_to_light_dp,
+    parse_profile,
+)
 from .tuya_lan import TuyaLocalDevice
 
 log = logging.getLogger("tuya.device_manager")
@@ -421,9 +429,26 @@ class TuyaLightHandle:
         mireds = light_dp_to_mireds(raw, m)
         return round(1_000_000 / mireds) if mireds else None
 
-    def turn_on(self, brightness_pct: float | None = None, color_temp_kelvin: float | None = None) -> None:
+    def turn_on(self, brightness_pct: float | None = None, color_temp_kelvin: float | None = None,
+                hs: tuple[float, float] | None = None) -> None:
         m = self._mapping
         self._manager.set_dp(self._device_id, m.switch_dp, True)
+        if hs is not None and m.color_dp is not None:
+            # Color HS manual (ver lighting/zone_runner.py:manual_command) --
+            # mismo DP/codec que ya usa mqtt_tuya.py:_on_light_hs, control
+            # directo sin pasar por MQTT. El modo "color" (no "blanco") se
+            # fuerza ANTES de escribir el DP de color, igual que alli.
+            if m.work_mode_dp is not None:
+                self._manager.set_dp(self._device_id, m.work_mode_dp, m.work_mode_colour)
+            # El "v" del propio DP de color YA lleva el brillo (ver
+            # docstring de LightMapping) -- el DP de brillo "blanco" aparte
+            # no aplica mientras se esta en modo color, asi que el brillo
+            # pedido se empaqueta directamente en "v" en vez de escribirlo
+            # por separado.
+            v_percent = brightness_pct if brightness_pct is not None else 100.0
+            raw = encode_color_hs(m, hs[0], hs[1], v_percent)
+            self._manager.set_dp(self._device_id, m.color_dp, raw)
+            return
         if m.work_mode_dp is not None and (brightness_pct is not None or color_temp_kelvin is not None):
             # Igual que mqtt_tuya.py: forzar modo "blanco" ANTES de tocar
             # brillo/color -- si el dispositivo esta en modo color, un

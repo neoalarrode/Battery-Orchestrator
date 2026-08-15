@@ -86,6 +86,14 @@ class ZoneRunner:
         self.active_rule: str | None = self._state.get("active_rule")
         self.current_values: dict | None = None
         self.reason: str = "sin evaluar todavia"
+        # Color manual (HS) pedido desde la luz "dummy" de la zona (ver
+        # `manual_command`/mqtt_lighting.py) -- la curva solar automatica
+        # NUNCA produce hs, solo brillo/temperatura de color, asi que esto
+        # se queda en None salvo que el usuario haya fijado un color a
+        # mano. Deliberadamente EN MEMORIA, no persistido: un reinicio del
+        # addon vuelve a la curva automatica de blancos, nunca se queda
+        # "atascado" en un color a medias sin que nadie lo sepa.
+        self._manual_hs: tuple[float, float] | None = None
 
     # ------------------------------------------------------------ estado -
 
@@ -190,7 +198,8 @@ class ZoneRunner:
         except Exception:
             log.exception("Zona lighting %s: fallo apagando %s", self.zone_id, entity_id)
 
-    def _apply_values(self, entity_id: str, values: dict | None, turning_on: bool, brightness_only: bool = False) -> None:
+    def _apply_values(self, entity_id: str, values: dict | None, turning_on: bool, brightness_only: bool = False,
+                       hs: tuple[float, float] | None = None) -> None:
         """Enciende/ajusta segun la curva solar (`values`, puede ser None
         si `sun.sun` no esta disponible ahora mismo -- en ese caso solo
         se enciende, sin tocar color/brillo). Registra lo mandado en
@@ -199,20 +208,24 @@ class ZoneRunner:
         (luz marcada «:solo_brillo» en la regla, ver rules.py) excluye
         esta luz en concreto del color/temperatura de color -- se ajusta
         el brillo igual que cualquier otra, simplemente nunca se le manda
-        color."""
+        color. `hs` (color manual, ver `manual_command`) tiene PRIORIDAD
+        sobre `color_temp_kelvin` de la curva -- nunca se mandan los dos a
+        la vez, el color HS explicito siempre gana."""
         brightness_pct = values.get("brightness_pct") if values else None
-        color_temp_kelvin = None if brightness_only else (values.get("color_temp_kelvin") if values else None)
+        color_temp_kelvin = None if (brightness_only or hs is not None) else (values.get("color_temp_kelvin") if values else None)
         try:
             if self._is_bridge_ref(entity_id):
                 handle = self._resolve_bridge_handle(entity_id)
                 if handle is None:
                     return
-                handle.turn_on(brightness_pct=brightness_pct, color_temp_kelvin=color_temp_kelvin)
+                handle.turn_on(brightness_pct=brightness_pct, color_temp_kelvin=color_temp_kelvin, hs=hs)
             else:
                 service_data: dict = {}
                 if brightness_pct is not None:
                     service_data["brightness_pct"] = brightness_pct
-                if color_temp_kelvin is not None:
+                if hs is not None:
+                    service_data["hs_color"] = [hs[0], hs[1]]
+                elif color_temp_kelvin is not None:
                     service_data["color_temp_kelvin"] = color_temp_kelvin
                 transition = self.zone.get("transition_seconds")
                 if transition is not None:
@@ -388,30 +401,50 @@ class ZoneRunner:
         luces objetivo esta encendida ahora mismo; brillo/color = la
         curva solar ya calculada de la zona (`current_values`, ver
         decide_and_act -- se recalcula cada ciclo, este ocupada la zona
-        o no)."""
+        o no). Si hay un color manual activo (`_manual_hs`, fijado desde
+        la propia luz dummy via `manual_command`), ese GANA sobre el
+        color_temp_kelvin de la curva -- nunca se reportan los dos a la
+        vez, igual que nunca se mandan los dos a la vez (ver
+        `_apply_values`)."""
         states = self._snapshot_states()
         target, _brightness_only = self._target_lights()
         on = any(self._is_on(states, e) for e in target)
         vals = self.current_values or {}
-        return {
-            "on": on,
-            "brightness_pct": vals.get("brightness_pct") if on else None,
-            "color_temp_kelvin": vals.get("color_temp_kelvin") if on else None,
-        }
+        out = {"on": on, "brightness_pct": vals.get("brightness_pct") if on else None}
+        if on and self._manual_hs is not None:
+            out["hs_color"] = self._manual_hs
+            out["color_temp_kelvin"] = None
+        else:
+            out["hs_color"] = None
+            out["color_temp_kelvin"] = vals.get("color_temp_kelvin") if on else None
+        return out
 
-    def manual_command(self, on: bool, brightness_pct: float | None = None, color_temp_kelvin: float | None = None) -> None:
+    def manual_command(self, on: bool, brightness_pct: float | None = None, color_temp_kelvin: float | None = None,
+                        hs: tuple[float, float] | None = None) -> None:
         """Comando desde la luz dummy (MQTT, HomeKit...) -- se reenvia TAL
         CUAL a las luces objetivo ahora mismo (ver `_target_lights`),
-        respetando `:solo_brillo` por luz. No toca la logica de
-        presencia/reglas -- es un override puntual, exactamente igual que
-        si alguien hubiera tocado esas luces a mano por su cuenta (el
-        propio `_detect_manual_overrides` ya se encarga de no pelearse
-        con el en el siguiente ciclo si el valor no encaja con lo que la
-        curva esperaria)."""
+        respetando `:solo_brillo` por luz (esas nunca reciben `hs`, solo
+        brillo). No toca la logica de presencia/reglas -- es un override
+        puntual, igual que si alguien hubiera tocado esas luces a mano.
+
+        `hs` (color manual): ademas de mandarlo, marca cada luz que lo
+        recibe como "tocada a mano" (`manual_override`) -- si no, el
+        proximo reajuste automatico de la curva (color_temp_kelvin) la
+        pisaria en el siguiente ciclo periodico sin que nadie la haya
+        tocado de verdad. Se queda asi hasta la proxima transicion real de
+        la zona (entrada fresca, o cambio de regla -- ver `_apply_values`,
+        `turning_on=True` limpia la marca de nuevo). Un comando SIN `hs`
+        (o `on=False`) vuelve a dejar la zona en manos de la curva
+        automatica de blancos."""
         target, brightness_only = self._target_lights()
         for entity_id in target:
             if on:
+                only_brightness = entity_id in brightness_only
+                entity_hs = None if only_brightness else hs
                 values = {"brightness_pct": brightness_pct, "color_temp_kelvin": color_temp_kelvin}
-                self._apply_values(entity_id, values, turning_on=True, brightness_only=entity_id in brightness_only)
+                self._apply_values(entity_id, values, turning_on=True, brightness_only=only_brightness, hs=entity_hs)
+                if entity_hs is not None:
+                    self._state.setdefault("manual_override", {})[entity_id] = True
             else:
                 self._turn_off(entity_id)
+        self._manual_hs = hs if on else None

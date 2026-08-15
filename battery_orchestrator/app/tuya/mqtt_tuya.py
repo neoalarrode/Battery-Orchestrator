@@ -20,7 +20,14 @@ import json
 import logging
 from functools import partial
 
-from tuya.profile import LIGHT_MAX_MIREDS, LIGHT_MIN_MIREDS, light_dp_to_mireds, mireds_to_light_dp
+from tuya.profile import (
+    LIGHT_MAX_MIREDS,
+    LIGHT_MIN_MIREDS,
+    decode_color_hs,
+    encode_color_hs,
+    light_dp_to_mireds,
+    mireds_to_light_dp,
+)
 
 log = logging.getLogger("tuya.mqtt")
 
@@ -256,7 +263,7 @@ class MqttTuyaDevice:
                 self._mqtt.publish(f"{base}/color_temp/state", light_dp_to_mireds(ct, lt), retain=True)
         if publish_hs:
             raw = self._manager.get_decoded(self.device_id, lt.color_dp)
-            hs = _decode_color_hs(lt, raw)
+            hs = decode_color_hs(lt, raw)
             if hs is not None:
                 self._mqtt.publish(f"{base}/hs/state", f"{hs[0]:.1f},{hs[1]:.1f}", retain=True)
 
@@ -375,40 +382,9 @@ class MqttTuyaDevice:
             return
         try:
             h_str, s_str = msg.payload.decode().split(",")
-            raw = _encode_color_hs(lt, float(h_str), float(s_str))
+            raw = encode_color_hs(lt, float(h_str), float(s_str))
             if lt.work_mode_dp is not None:
                 self._manager.set_dp(self.device_id, lt.work_mode_dp, lt.work_mode_colour)
             self._manager.set_dp(self.device_id, lt.color_dp, raw)
         except Exception:
             log.exception("Tuya %s: fallo aplicando color de luz %s", self.device_id, index)
-
-
-# ------------------------------------------------------------ color codec -
-# Formato REAL confirmado contra un dispositivo real (no el JSON que
-# describia el docstring de LightMapping, que resulto ser el formato de la
-# nube, distinto del que de verdad viaja por LAN en este dispositivo): una
-# cadena de 12 caracteres hexadecimales, tres campos de 16 bits big-endian
-# consecutivos -- h(4 hex)+s(4 hex)+v(4 hex). Ej. visto en produccion:
-# "000003e803e8" = h=0, s=1000, v=1000.
-
-def _decode_color_hs(lt, raw) -> tuple[float, float] | None:
-    if raw is None:
-        return None
-    if isinstance(raw, str) and len(raw) >= 12 and all(c in "0123456789abcdefABCDEF" for c in raw[:12]):
-        h_raw = int(raw[0:4], 16)
-        s_raw = int(raw[4:8], 16)
-        return (h_raw * 360 / lt.color_h_max, s_raw * 100 / lt.color_s_max)
-    # Defensivo, nunca confirmado en real: por si un dispositivo distinto
-    # de verdad envia la forma JSON que Tuya Cloud describe.
-    try:
-        obj = raw if isinstance(raw, dict) else json.loads(raw)
-        return (obj["h"] * 360 / lt.color_h_max, obj["s"] * 100 / lt.color_s_max)
-    except Exception:
-        return None
-
-
-def _encode_color_hs(lt, h: float, s: float, v_percent: float = 100.0) -> str:
-    h_raw = round(max(0.0, min(360.0, h)) * lt.color_h_max / 360)
-    s_raw = round(max(0.0, min(100.0, s)) * lt.color_s_max / 100)
-    v_raw = round(max(0.0, min(100.0, v_percent)) * lt.color_v_max / 100)
-    return f"{h_raw:04x}{s_raw:04x}{v_raw:04x}"

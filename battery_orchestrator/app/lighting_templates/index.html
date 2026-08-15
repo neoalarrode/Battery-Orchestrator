@@ -449,6 +449,160 @@ function readZoneForm() {
   };
 }
 
+// ------------------------------------------------- editor visual de reglas --
+// Sustituye el textarea de texto plano como forma PRINCIPAL de editar
+// reglas -- el textarea (`zf-rules`) sigue siendo el formato de
+// intercambio REAL con el backend (nunca se toca `readZoneForm`/
+// `submitZoneForm`, sigue leyendo su `.value` tal cual), solo que ahora
+// se genera desde este modelo visual en vez de teclearse a mano. Espejo
+// en JS de `lighting/rules.py` (parse_rules_text/rules_to_text/
+// _parse_light_entry) -- MISMO formato exacto, para que lo que se ve
+// aqui sea EXACTAMENTE lo que el backend va a interpretar, sin sorpresas.
+
+let rulesModel = [];
+
+function parseRulesTextToModel(text) {
+  const rules = [];
+  for (const rawLine of (text || "").split("\n")) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const chunks = line.split(";").map(c => c.trim()).filter(Boolean);
+    if (!chunks.length) continue;
+    const rule = {name: chunks[0], conditions: [], lights: []};
+    for (const chunk of chunks.slice(1)) {
+      const low = chunk.toLowerCase();
+      if (low.startsWith("si ")) {
+        const condStr = chunk.slice(3).trim();
+        const eq = condStr.indexOf("=");
+        if (eq === -1) continue;
+        rule.conditions.push({entity_id: condStr.slice(0, eq).trim(), values: condStr.slice(eq + 1).trim()});
+      } else if (low.startsWith("luces=")) {
+        const entries = chunk.slice(6).split(",").map(e => e.trim()).filter(Boolean);
+        rule.lights = entries.map(entry => {
+          if (entry.toLowerCase().endsWith(":solo_encendido")) return {ref: entry.slice(0, -15), mode: "solo_encendido"};
+          if (entry.toLowerCase().endsWith(":solo_brillo")) return {ref: entry.slice(0, -12), mode: "solo_brillo"};
+          return {ref: entry, mode: ""};
+        });
+      }
+    }
+    rules.push(rule);
+  }
+  return rules;
+}
+
+function modelToRulesText(model) {
+  return model.map(rule => {
+    const chunks = [rule.name || ""];
+    for (const c of rule.conditions) {
+      if (c.entity_id) chunks.push(`si ${c.entity_id}=${c.values}`);
+    }
+    const lightEntries = rule.lights.filter(l => l.ref).map(l => l.mode ? `${l.ref}:${l.mode}` : l.ref);
+    chunks.push(`luces=${lightEntries.join(",")}`);
+    return chunks.join("; ");
+  }).join("\n");
+}
+
+function syncRulesText() {
+  document.getElementById("zf-rules").value = modelToRulesText(rulesModel);
+}
+
+function renderRulesEditor() {
+  const host = document.getElementById("rules-editor");
+  if (!rulesModel.length) {
+    host.innerHTML = '<p class="rule-empty-hint">Ninguna regla todavía -- añade la primera abajo.</p>';
+    return;
+  }
+  host.innerHTML = rulesModel.map((rule, ri) => `
+    <div class="rule-card">
+      <div class="rule-card-head">
+        <input type="text" value="${esc(rule.name)}" placeholder="Nombre de la regla" oninput="updateRuleName(${ri}, this.value)">
+        <div class="rule-order">
+          <button type="button" class="ghost" ${ri === 0 ? "disabled" : ""} onclick="moveRule(${ri}, -1)" title="Subir">▲</button>
+          <button type="button" class="ghost" ${ri === rulesModel.length - 1 ? "disabled" : ""} onclick="moveRule(${ri}, 1)" title="Bajar">▼</button>
+        </div>
+        <button type="button" class="danger rule-del" onclick="removeRule(${ri})" title="Eliminar regla">✕</button>
+      </div>
+
+      <div class="rule-section-label">Condiciones (vacío = regla de reserva, siempre coincide)</div>
+      ${rule.conditions.map((c, ci) => `
+        <div class="rule-cond-row">
+          <input type="text" class="cond-entity" placeholder="media_player.salon_tv" value="${esc(c.entity_id)}" oninput="updateCondition(${ri}, ${ci}, 'entity_id', this.value)">
+          <span class="muted" style="font-size:.8rem">=</span>
+          <input type="text" class="cond-values" placeholder="playing, paused" value="${esc(c.values)}" oninput="updateCondition(${ri}, ${ci}, 'values', this.value)">
+          <button type="button" class="rule-row-del" onclick="removeCondition(${ri}, ${ci})" title="Quitar condición">✕</button>
+        </div>`).join("")}
+      <button type="button" class="rule-add-row" onclick="addCondition(${ri})">＋ Condición</button>
+
+      <div class="rule-section-label">Luces</div>
+      ${rule.lights.map((l, li) => `
+        <div class="rule-light-row">
+          <input type="text" class="light-ref" placeholder="light.techo_salon" value="${esc(l.ref)}" oninput="updateLightRef(${ri}, ${li}, this.value)">
+          <select onchange="updateLightMode(${ri}, ${li}, this.value)">
+            <option value="" ${!l.mode ? "selected" : ""}>Color + brillo</option>
+            <option value="solo_brillo" ${l.mode === "solo_brillo" ? "selected" : ""}>Solo brillo</option>
+            <option value="solo_encendido" ${l.mode === "solo_encendido" ? "selected" : ""}>Solo on/off</option>
+          </select>
+          <button type="button" class="rule-row-del" onclick="removeLight(${ri}, ${li})" title="Quitar luz">✕</button>
+        </div>`).join("")}
+      ${!rule.lights.length ? '<p class="rule-empty-hint">Ninguna luz todavía -- añade abajo o haz clic en la referencia.</p>' : ""}
+      <button type="button" class="rule-add-row" onclick="addLight(${ri})">＋ Luz</button>
+    </div>`).join("");
+}
+
+function addRule() {
+  rulesModel.push({name: `Regla ${rulesModel.length + 1}`, conditions: [], lights: []});
+  renderRulesEditor();
+  syncRulesText();
+}
+function removeRule(ri) {
+  rulesModel.splice(ri, 1);
+  renderRulesEditor();
+  syncRulesText();
+}
+function moveRule(ri, dir) {
+  const target = ri + dir;
+  if (target < 0 || target >= rulesModel.length) return;
+  [rulesModel[ri], rulesModel[target]] = [rulesModel[target], rulesModel[ri]];
+  renderRulesEditor();
+  syncRulesText();
+}
+function updateRuleName(ri, value) {
+  rulesModel[ri].name = value;
+  syncRulesText();
+}
+function addCondition(ri) {
+  rulesModel[ri].conditions.push({entity_id: "", values: ""});
+  renderRulesEditor();
+  syncRulesText();
+}
+function removeCondition(ri, ci) {
+  rulesModel[ri].conditions.splice(ci, 1);
+  renderRulesEditor();
+  syncRulesText();
+}
+function updateCondition(ri, ci, field, value) {
+  rulesModel[ri].conditions[ci][field] = value;
+  syncRulesText();
+}
+function addLight(ri, ref) {
+  rulesModel[ri].lights.push({ref: ref || "", mode: ""});
+  renderRulesEditor();
+  syncRulesText();
+}
+function removeLight(ri, li) {
+  rulesModel[ri].lights.splice(li, 1);
+  renderRulesEditor();
+  syncRulesText();
+}
+function updateLightRef(ri, li, value) {
+  rulesModel[ri].lights[li].ref = value;
+  syncRulesText();
+}
+function updateLightMode(ri, li, value) {
+  rulesModel[ri].lights[li].mode = value;
+  syncRulesText();
+}
+
 function fillZoneForm(cfg) {
   document.getElementById("zf-name").value = cfg.name || "";
   document.getElementById("zf-presence").value = listToCsv(cfg.presence_entities);
@@ -464,6 +618,8 @@ function fillZoneForm(cfg) {
   document.getElementById("zf-min-kelvin").value = cfg.min_color_temp_kelvin ?? 2200;
   document.getElementById("zf-max-kelvin").value = cfg.max_color_temp_kelvin ?? 5000;
   document.getElementById("zf-rules").value = cfg.rules_text || "";
+  rulesModel = parseRulesTextToModel(cfg.rules_text || "");
+  renderRulesEditor();
 }
 
 function editZone(id) {
@@ -481,6 +637,8 @@ function cancelZoneForm() {
   document.getElementById("zf-id").value = "";
   document.getElementById("zf-submit-btn").textContent = "Crear zona";
   document.getElementById("add-zone-details").open = false;
+  rulesModel = [];
+  renderRulesEditor();
 }
 
 async function submitZoneForm(ev) {
@@ -533,12 +691,27 @@ async function loadTuyaRef() {
 document.getElementById("tuya-ref-details").addEventListener("toggle", (e) => { if (e.target.open) loadTuyaRef(); });
 
 function insertLightRef(entityId) {
-  const ta = document.getElementById("zf-rules");
-  ta.value = ta.value + (ta.value && !ta.value.endsWith("\n") ? "" : "") + entityId;
-  ta.focus();
+  // Añade a la ULTIMA regla del editor visual (creando una si no hay
+  // ninguna todavia) -- reemplaza el viejo "pegar al final del texto
+  // crudo" ahora que el editor visual es la forma principal.
+  if (!rulesModel.length) rulesModel.push({name: "Regla 1", conditions: [], lights: []});
+  rulesModel[rulesModel.length - 1].lights.push({ref: entityId, mode: ""});
+  renderRulesEditor();
+  syncRulesText();
 }
 document.querySelector(".lights-ref").addEventListener("toggle", (e) => { if (e.target.open) loadLightsRef(); });
 
+// Modo texto avanzado -- al cerrar el detalle, lo tecleado a mano se
+// vuelve a interpretar hacia el editor visual, para que ambos nunca
+// queden desincronizados.
+document.getElementById("raw-rules-details").addEventListener("toggle", (e) => {
+  if (!e.target.open) {
+    rulesModel = parseRulesTextToModel(document.getElementById("zf-rules").value);
+    renderRulesEditor();
+  }
+});
+
+renderRulesEditor();
 loadZones();
 loadStatus();
 renderPluginSwitch("lighting");

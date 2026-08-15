@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.23.1
+Sha256 de Lighting re-pineado al tag `v0.23.0` (editor visual de reglas) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
+## 0.23.0
+**Lighting: editor visual de reglas** (revisión de arquitectura de páginas) -- sustituye el textarea de texto plano (`Nombre; si entidad=valor; luces=light.a,light.b:solo_brillo`) como forma PRINCIPAL de editar: tarjetas por regla con nombre, condiciones (entidad + valores) y luces (referencia + modo color+brillo/solo brillo/solo on-off), con botones para añadir/quitar/reordenar. El textarea sigue siendo el formato de intercambio REAL con el backend -- ni `readZoneForm` ni `submitZoneForm` cambian, solo que ahora se genera desde el editor visual (`modelToRulesText`, espejo exacto en JS de `lighting/rules.py:rules_to_text`) en vez de teclearse a mano. Un "Modo texto avanzado" colapsable mantiene el textarea crudo accesible y sincronizado en ambas direcciones para quien lo prefiera. Clicar una luz en "Ver luces"/"Ver luces Tuya/TP-Link" la añade ahora a la última regla del editor visual, en vez de pegar texto suelto.
+
 ## 0.22.9
 Sha256 de Climate/Tuya/Lighting/TP-Link re-pineados al tag `v0.22.8` (fix real: paginas rotas bajo Ingress) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`, `core_static/plugin-switch.js`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

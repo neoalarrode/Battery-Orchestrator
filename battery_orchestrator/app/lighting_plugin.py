@@ -44,7 +44,7 @@ DEFAULT_REAPPLY_MINUTES = 5
 class LightingPlugin(Plugin):
     slug = "lighting"
     name = "Lighting Orchestrator"
-    version = "0.6.3"
+    version = "0.7.0"
 
     def __init__(self) -> None:
         self._runners: dict[str, ZoneRunner] = {}

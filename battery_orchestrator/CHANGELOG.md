@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.15.1
+Sha256 de Tuya y de Lighting re-pineados al tag `v0.15.0` (fix de color + control directo de luces) — verificado con una descarga real antes de fijarlos. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
 ## 0.15.0
 **Dos piezas, encontradas y arregladas verificando Lighting en producción contra la bombilla Tuya real:**
 

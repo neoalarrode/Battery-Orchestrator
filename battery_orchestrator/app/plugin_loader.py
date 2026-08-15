@@ -111,19 +111,19 @@ PLUGIN_CATALOG = {
     "tuya": {
         "name": "Tuya Orchestrator",
         "description": "Puente de ingesta para dispositivos Tuya-por-LAN — consumo interno por Climate y/o exposición opcional a HA por MQTT",
-        "version": "0.3.5",
+        "version": "0.4.0",
         "downloadable": True,
-        "tag": "v0.13.8",
-        "sha256": "e40b69f05e9b73510620d1df0a518b911ef19b87591d0f380c471dbac9f0fe70",  # sha256 real del tarball de v0.13.8, verificado contra una descarga real antes de fijarlo aqui (fix real de 3.5: _status_once petaba tras el fix de v0.13.6, payload sin decodificar en el emparejador por comando)
+        "tag": "v0.15.0",
+        "sha256": "fc36b7dee2a42c28b3d974d5e81768e2b36fc4708366657f9e71c57f9177ca45",  # sha256 real del tarball de v0.15.0, verificado contra una descarga real antes de fijarlo aqui (fix real: conversion mireds/DP de color + light_handle para control directo desde Lighting)
         "files": ["tuya_plugin.py", "tuya", "tuya_templates"],
     },
     "lighting": {
         "name": "Lighting Orchestrator",
         "description": "Iluminación adaptativa por zona — color y brillo por hora, encendido/apagado por presencia y reglas condicionales (p.ej. TV encendida -> luces laterales en vez del techo)",
-        "version": "0.1.0",
+        "version": "0.2.0",
         "downloadable": True,
-        "tag": "v0.14.0",
-        "sha256": "d360371ca39a58cc6a2b201edbddca866896ae8ad2d4d0458b46c9e67ca01a9c",  # sha256 real del tarball de v0.14.0, verificado contra una descarga real antes de fijarlo aqui
+        "tag": "v0.15.0",
+        "sha256": "fc36b7dee2a42c28b3d974d5e81768e2b36fc4708366657f9e71c57f9177ca45",  # sha256 real del tarball de v0.15.0, verificado contra una descarga real antes de fijarlo aqui (control directo de luces Tuya via light_handle, sin pasar por HA/MQTT)
         "files": ["lighting_plugin.py", "lighting", "lighting_templates"],
     },
 }

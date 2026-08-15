@@ -1065,7 +1065,21 @@ class TuyaLocalDevice:
                     # for SESS_KEY_NEG_RESP.
                     cmd_fut = self._pending_cmd.get(frame.command)
                     if cmd_fut and not cmd_fut.done():
-                        cmd_fut.set_result(TuyaMessage(frame.seq, frame.command, frame.payload))
+                        # REAL BUG FIXED HERE (found deploying the 3.5
+                        # write fix above): this always handed back the
+                        # RAW payload bytes, which is what the handshake
+                        # needs (it's not JSON - it does its own further
+                        # decrypt/HMAC work on it), but now that ordinary
+                        # 3.5 commands (DP_QUERY_NEW/CONTROL_NEW replies)
+                        # are ALSO routed through this cmd-keyed waiter,
+                        # callers like `_extract_dps` got raw bytes instead
+                        # of the decoded dict and crashed with
+                        # `AttributeError: 'bytes' object has no attribute
+                        # 'get'`. `obj` is None for the handshake's raw,
+                        # non-JSON payload anyway, so falling back to
+                        # `frame.payload` there is safe and keeps the
+                        # handshake working unchanged.
+                        cmd_fut.set_result(TuyaMessage(frame.seq, frame.command, obj if obj is not None else frame.payload))
                         continue
 
                     # BUG FIXED HERE: a spontaneous report could satisfy a

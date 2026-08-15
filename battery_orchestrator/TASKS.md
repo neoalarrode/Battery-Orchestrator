@@ -110,7 +110,26 @@ Decisión del usuario (verbatim, resumida): Climate/Lighting/Tuya/Tapo
   DENTRO de Climate/Lighting real todavía NO está construido).
 - Energy no debería forzar el `main` del proyecto/obligar a instalarlo.
 
-### 1. Dashboard de Climate -- EN PROGRESO ahora mismo
+### 1. Dashboard de Climate -- PRIMER PASO HECHO Y DESPLEGADO (v0.22.1)
+
+Tarjeta de termostato interactiva añadida a cada zona de
+`climate_templates/index.html` (stepper de temperatura, selector de
+modo/preset), sobre el gráfico de previsión de 24h que YA EXISTÍA (no
+hacía falta construirlo). Backend: `POST /api/zones/<id>/set_temperature`
+`/set_hvac_mode` `/set_preset_mode` en `climate_plugin.py`, llaman directo
+a `ZoneRunner.set_temperature`/`set_hvac_mode`/`set_preset_mode` (métodos
+que YA EXISTÍAN, mismo mecanismo que la orden MQTT real). Verificado
+funcionalmente en producción contra la zona Dormitorio (cambio de target
+low/high, cambio de preset, vuelta al valor original). Desplegado como
+v0.22.1, `docker ps` estable, sin AssertionError.
+
+**Pendiente si se quiere pulir más**: la página sigue teniendo el mismo
+formulario de configuración larga debajo (sin pestañas Dashboard/Config
+separadas) -- decidir si merece la pena separar visualmente ahora o
+dejarlo así (la tarjeta interactiva ya está arriba del todo, visible sin
+scroll para pocas zonas).
+
+### 1bis. Dashboard de Climate -- notas técnicas ya no necesarias (referencia)
 
 Investigado (backend YA EXISTE, no hace falta tocar Python, solo
 construir la vista):

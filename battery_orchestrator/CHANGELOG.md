@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.17.1
+Sha256 de Lighting re-pineado al tag `v0.17.0` — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
 ## 0.17.0
 **Lighting**: tres mejoras pedidas por el usuario tras usar el motor en producción.
 

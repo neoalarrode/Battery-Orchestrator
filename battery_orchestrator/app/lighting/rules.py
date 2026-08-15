@@ -59,10 +59,23 @@ def _parse_light_entry(raw: str) -> tuple[str, bool]:
     le deja de mandar color. Pensado para una luz que no soporta color,
     o que el usuario prefiere dejar siempre en un tono fijo (p.ej. una
     lampara de lectura) dentro de una zona que por lo demas si varia de
-    color -- sin tener que sacarla a su propia regla/zona aparte."""
-    if ":" in raw:
-        entity_id, flag = raw.split(":", 1)
-        return entity_id.strip(), flag.strip().lower() == "solo_brillo"
+    color -- sin tener que sacarla a su propia regla/zona aparte.
+
+    BUG REAL, confirmado en produccion: la version anterior partia por
+    el PRIMER «:» sin mas («if ":" in raw: entity_id, flag = raw.split
+    (":", 1)») -- rompia CUALQUIER referencia de bridge («tplink:
+    <device_id>», «tuya:<device_id>»), que YA usa ":" como separador
+    propio. «tplink:76812943» se leia como luz "tplink" a secas (el id
+    del dispositivo se interpretaba, y descartaba, como si fuera el
+    flag «solo_brillo»). Roto desde que se añadio este sufijo (misma
+    version) para toda zona con luces TP-Link/Tuya directas -- visto
+    tal cual en produccion: las bombillas de Cocina se quedaban
+    encendidas para siempre, `all_lights()` ni siquiera las reconocia
+    como las luces reales que son. Fix: el sufijo SOLO cuenta si el
+    texto entero TERMINA en ":solo_brillo" -- una referencia de bridge
+    nunca termina asi, asi que nunca coincide por error."""
+    if raw.lower().endswith(":solo_brillo"):
+        return raw[: -len(":solo_brillo")].strip(), True
     return raw.strip(), False
 
 

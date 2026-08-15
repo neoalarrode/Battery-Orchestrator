@@ -102,8 +102,8 @@ PLUGIN_CATALOG = {
         "description": "Baterías, solar y cargas diferibles — carga y descarga adaptativa por precio, sol y consumo real",
         "version": "0.11.78",
         "downloadable": True,
-        "tag": "v0.22.8",
-        "sha256": "44de0dd2b2a8d716a762237ee339e486af4adb5bf9341fd800ccd89036419494",  # sha256 real del tarball de v0.22.8, verificado contra una descarga real antes de fijarlo aqui (FIX: /shared/design-system.css a ruta relativa, rota bajo Ingress)
+        "tag": "v0.25.0",
+        "sha256": "a59ddc6a9918a93b0bfa69c1cda3729456d3fcf39488cac41fc25060e114f363",  # sha256 real del tarball de v0.25.0, verificado contra una descarga real antes de fijarlo aqui (fix: Tuya/TP-Link seguian en el selector de plugins de Energy)
         "files": [
             "main.py", "battery_plugin.py", "battery_exec.py", "anomaly_store.py",
             "capacity_store.py", "climate_link.py", "deferrable_exec.py",

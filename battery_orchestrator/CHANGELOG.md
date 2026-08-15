@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.25.2
+Sha256 de Energy re-pineado al tag `v0.25.0` (fix real: Tuya/TP-Link seguían en el selector de plugins de Energy pese a estar excluidos en el resto de páginas) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub. El fix en sí (`app/templates/index.html`) ya iba dentro del tag v0.25.0 (se coló en el mismo commit que Starlink); esta versión solo actualiza el pin de Energy para que la tienda de plugins lo descargue.
+
 ## 0.25.1
 Sha256 de Starlink re-pineado al tag `v0.25.0` (historian real, cuenta real, IP de router manual) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`, `Dockerfile`) el que cambia, así que esta versión SÍ lleva Release en GitHub. **Este cambio instala Node.js/npm en la imagen base del addon** (`apk add nodejs npm`) -- necesario para el historian/servidor de cuenta reales de Starlink, aunque el plugin no esté instalado.
 

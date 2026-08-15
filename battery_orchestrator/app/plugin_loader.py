@@ -62,8 +62,17 @@ def _lighting():
     return LightingPlugin()
 
 
+def _tplink():
+    _prefer_downloaded("tplink")
+    from tplink_plugin import TplinkPlugin
+    return TplinkPlugin()
+
+
 # Slug -> constructor.
-PLUGIN_REGISTRY = {"battery": _battery, "climate": _climate, "tuya": _tuya, "lighting": _lighting}
+PLUGIN_REGISTRY = {
+    "battery": _battery, "climate": _climate, "tuya": _tuya,
+    "lighting": _lighting, "tplink": _tplink,
+}
 
 # Metadatos + procedencia verificada para la tienda de plugins de la
 # interfaz -- deliberadamente SIN instanciar nada aqui (un plugin no
@@ -125,6 +134,15 @@ PLUGIN_CATALOG = {
         "tag": "v0.15.0",
         "sha256": "fc36b7dee2a42c28b3d974d5e81768e2b36fc4708366657f9e71c57f9177ca45",  # sha256 real del tarball de v0.15.0, verificado contra una descarga real antes de fijarlo aqui (control directo de luces Tuya via light_handle, sin pasar por HA/MQTT)
         "files": ["lighting_plugin.py", "lighting", "lighting_templates"],
+    },
+    "tplink": {
+        "name": "TP-Link Orchestrator",
+        "description": "Puente de ingesta para dispositivos TP-Link (Kasa/Tapo) vía python-kasa (misma librería que usa Home Assistant) — consumo interno por Lighting y/o exposición opcional a HA por MQTT",
+        "version": "0.1.0",
+        "downloadable": True,
+        "tag": "PENDING",  # se rellena en el primer despliegue real (ver deploy)
+        "sha256": "PENDING",
+        "files": ["tplink_plugin.py", "tplink", "tplink_templates", "tplink_store.py"],
     },
 }
 

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.16.0
+**Nuevo plugin: TP-Link Orchestrator (`tplink`)** -- cuarto plugin de ingesta, mismo papel que Tuya pero para Kasa/Tapo, usando `python-kasa` (dependencia nueva del addon, ver Dockerfile) -- la MISMA librería que usa de verdad el componente `tplink` de Home Assistant, en vez de reimplementar el protocolo a mano.
+
+- **Descubrimiento activo por broadcast** (`Discover.discover()`, botón "Escanear ahora" -- a diferencia del listener pasivo de Tuya, aquí es un escaneo bajo demanda) y alta por IP directa.
+- **Cuenta TP-Link compartida** (email/contraseña, una sola para toda la instalación -- mismo modelo que usa Home Assistant) para el saludo local KLAP de los Tapo nuevos; un Kasa clásico (HS1xx/KP1xx) no la necesita.
+- **Sondeo periódico** (`device.update()` cada 5s, igual que `TPLinkDataUpdateCoordinator` real de HA) en vez de push -- diferencia real de arquitectura frente a Tuya, documentada en `tplink/device_manager.py`.
+- **Bombillas**: brillo, temperatura de color (en Kelvin NATIVO, `python-kasa`/HA moderno no usan mireds -- se evita desde el principio la clase de bug que hubo que arreglar en Tuya) y color HS.
+- **Enchufes con monitor de energía** (P110 y similares): sensor de potencia instantánea vía `Module.Energy`.
+- **Control directo desde Lighting** (`tplink:<id>`, mismo patrón `light_handle`/`TplinkLightHandle` que ya tiene Tuya) o exposición opcional a HA por MQTT (`expose_mqtt` por dispositivo, apagado por defecto).
+- Cámaras Tapo (`SMART.IPCAMERA`) quedan fuera de alcance a propósito -- ni `python-kasa` ni el componente `tplink` de HA las soportan (API completamente distinta); el descubrimiento las descarta en vez de reventar.
+
+Verificado end-to-end contra hardware real del usuario: conexión, encendido/brillo/color_temp/hsv/apagado sobre una tira Tapo L630, descubrimiento por broadcast (13 dispositivos reales detectados, cámaras excluidas limpiamente) y lectura de potencia real sobre un enchufe P110 (frigorífico, 90.3W). Dos bugs propios encontrados y arreglados durante esa misma verificación: (1) el objeto que devuelve el broadcast de descubrimiento no viene "actualizado" — leer `device_type` sin llamar antes a `update()` reventaba con `KeyError` para TODOS los dispositivos, incluidos los soportados; (2) una cámara Tapo detectada colaba un objeto a medio inicializar que tiraba abajo el escaneo entero.
+
 ## 0.15.1
 Sha256 de Tuya y de Lighting re-pineados al tag `v0.15.0` (fix de color + control directo de luces) — verificado con una descarga real antes de fijarlos. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

@@ -3,9 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Home Orchestrator — Tuya</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%3E%3Cdefs%3E%3ClinearGradient%20id%3D%27g%27%20x1%3D%270%27%20y1%3D%270%27%20x2%3D%2724%27%20y2%3D%2724%27%20gradientUnits%3D%27userSpaceOnUse%27%3E%3Cstop%20offset%3D%270%27%20stop-color%3D%27%238b5cf6%27%2F%3E%3Cstop%20offset%3D%271%27%20stop-color%3D%27%2322d3ee%27%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%2724%27%20height%3D%2724%27%20rx%3D%276%27%20fill%3D%27url%28%23g%29%27%2F%3E%3Cpath%20d%3D%27M6%204h9a2%202%200%200%201%202%202v9l-7%207-9-9V6a2%202%200%200%201%202-2Zm2.5%202.5a1.5%201.5%200%201%200%200%203%201.5%201.5%200%200%200%200-3Z%27%20fill%3D%27%230b0a16%27%2F%3E%3C%2Fsvg%3E">
+<title>Home Orchestrator — TP-Link</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%3E%3Cdefs%3E%3ClinearGradient%20id%3D%27g%27%20x1%3D%270%27%20y1%3D%270%27%20x2%3D%2724%27%20y2%3D%2724%27%20gradientUnits%3D%27userSpaceOnUse%27%3E%3Cstop%20offset%3D%270%27%20stop-color%3D%27%238b5cf6%27%2F%3E%3Cstop%20offset%3D%271%27%20stop-color%3D%27%2322d3ee%27%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%2724%27%20height%3D%2724%27%20rx%3D%276%27%20fill%3D%27url%28%23g%29%27%2F%3E%3Cpath%20d%3D%27M12%205a7%207%200%200%200-4.95%2011.95l1.41-1.41a5%205%200%201%201%207.08%200l1.41%201.41A7%207%200%200%200%2012%205Zm0%204a3%203%200%200%200-2.12%205.12l1.41-1.41a1%201%200%201%201%201.42%200l1.41%201.41A3%203%200%200%200%2012%209Z%27%20fill%3D%27%230b0a16%27%2F%3E%3C%2Fsvg%3E">
 <style>
+  /* Mismo lenguaje visual que el resto de Home Orchestrator (ver
+     app/tuya_templates/index.html, plugin mas parecido en papel: puente
+     de ingesta sin logica de decision propia). Icono de marca: ondas
+     WiFi, para diferenciar del resto sin romper la identidad
+     compartida. */
   :root {
     color-scheme: dark light;
     --bg: #0b0a16; --bg-alt: #131226; --card: #14132a; --text: #eae8f7; --muted: #8b87ab;
@@ -28,6 +33,18 @@
       --green-soft:#159a6715; --amber-soft:#b3790a15; --red-soft:#e0475f15;
       --glass-bg: rgba(255, 255, 255, .52); --glass-border: rgba(255, 255, 255, .75); }
   }
+  :root[data-theme="light"] { --bg:#f2f1fa; --bg-alt:#e7e5f6; --card:#ffffff; --text:#1c1a2e; --muted:#68648c;
+    --border:#dcd9f2; --accent:#7c3aed; --accent-2:#0891b2; --accent-soft:#7c3aed15; --accent-ink:#ffffff;
+    --glow: 0 0 0 1px #7c3aed33, 0 0 20px -8px #7c3aed4d;
+    --green:#159a67; --amber:#b3790a; --red:#e0475f;
+    --green-soft:#159a6715; --amber-soft:#b3790a15; --red-soft:#e0475f15;
+    --glass-bg: rgba(255, 255, 255, .52); --glass-border: rgba(255, 255, 255, .75); }
+  :root[data-theme="dark"] { --bg: #0b0a16; --bg-alt: #131226; --card: #14132a; --text: #eae8f7; --muted: #8b87ab;
+    --border: #2a2850; --accent: #8b5cf6; --accent-2: #22d3ee; --accent-soft: #8b5cf626; --accent-ink: #0b0a16;
+    --glow: 0 0 0 1px #8b5cf64d, 0 0 24px -6px #8b5cf673;
+    --green: #34d399; --amber: #fbbf24; --red: #fb7185;
+    --green-soft: #34d39920; --amber-soft: #fbbf2420; --red-soft: #fb718520;
+    --glass-bg: rgba(20, 19, 42, .48); --glass-border: rgba(255, 255, 255, .1); }
   * { box-sizing: border-box; }
   html, body { overflow-x: hidden; }
   body {
@@ -38,6 +55,7 @@
     max-width: 1080px; margin: 0 auto; padding: 28px 20px 90px; line-height: 1.5;
   }
   a { color: var(--accent); }
+  code { font-family: var(--font-mono); background: var(--accent-soft); color: var(--accent); padding: 1px 5px; border-radius: 4px; font-size: .85em; }
   .topbar { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 22px; padding-bottom: 20px; border-bottom: 1px solid var(--border); gap: 12px; flex-wrap: wrap; }
   .topbar h1 { font-family: var(--font-display); font-size: 1.6rem; font-weight: 700; margin: 0; }
   .brand-mark { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: var(--accent-ink); box-shadow: var(--glow); margin-right: 10px; vertical-align: middle; position: relative; top: -2px; }
@@ -53,7 +71,6 @@
   .help { font-size: 0.78rem; color: var(--muted); margin-top: 5px; }
   label { font-size: 0.76rem; font-weight: 600; color: var(--muted); display: block; margin: 10px 0 4px; }
   input, select, textarea { width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--glass-border); background: var(--glass-bg); color: var(--text); font-size: 0.9rem; font-family: var(--font-body); }
-  textarea { font-family: var(--font-mono); font-size: .8rem; min-height: 140px; resize: vertical; }
   input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
   input[type=checkbox] { width: auto; accent-color: var(--accent); }
   .checkline { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 0.85rem; }
@@ -64,6 +81,7 @@
   button.secondary { background: var(--accent-soft); color: var(--accent); }
   button.danger { background: var(--red-soft); color: var(--red); }
   button.ghost { background: var(--glass-bg); color: var(--muted); border: 1px solid var(--glass-border); }
+  button:disabled { opacity: .5; cursor: default; }
   .actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
   summary { list-style: none; cursor: pointer; }
   summary::-webkit-details-marker { display: none; }
@@ -73,13 +91,13 @@
   .pill-ok { background: var(--green-soft); color: var(--green); }
   .pill-off { background: var(--glass-bg); color: var(--muted); box-shadow: 0 0 0 1px var(--border); }
   .pill-mqtt { background: var(--accent-soft); color: var(--accent); }
+  .pill-warn { background: var(--amber-soft); color: var(--amber); }
   .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
   .device-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
   .device-card { border: 1px solid var(--glass-border); border-radius: var(--radius); padding: 16px 18px; background: var(--glass-bg); box-shadow: var(--shadow); }
   .device-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
   .device-name { font-family: var(--font-display); font-weight: 700; font-size: 1rem; }
   .device-meta { font-size: .76rem; color: var(--muted); font-family: var(--font-mono); margin-top: 2px; }
-  .device-dps { font-size: .74rem; color: var(--muted); font-family: var(--font-mono); margin-top: 8px; max-height: 90px; overflow-y: auto; }
   .device-actions { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
   .device-actions button { padding: 6px 11px; font-size: .76rem; }
   .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 18px; border-radius: 9px; font-size: 0.85rem; opacity: 0; transition: opacity .25s; }
@@ -93,10 +111,10 @@
     <p class="eyebrow">Home Orchestrator</p>
     <h1><span class="brand-mark" aria-hidden="true">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M6 4h9a2 2 0 0 1 2 2v9l-7 7-9-9V6a2 2 0 0 1 2-2Zm2.5 2.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z" fill="currentColor"/>
+        <path d="M12 5a7 7 0 0 0-4.95 11.95l1.41-1.41a5 5 0 1 1 7.08 0l1.41 1.41A7 7 0 0 0 12 5Zm0 4a3 3 0 0 0-2.12 5.12l1.41-1.41a1 1 0 1 1 1.42 0l1.41 1.41A3 3 0 0 0 12 9Z" fill="currentColor"/>
       </svg>
-    </span>Tuya</h1>
-    <div class="subtitle">Puente de ingesta para dispositivos Tuya-por-LAN — consumidos internamente por Climate y/o expuestos a Home Assistant por MQTT. Sin nube en operación normal.</div>
+    </span>TP-Link</h1>
+    <div class="subtitle">Puente de ingesta para dispositivos TP-Link (Kasa/Tapo) — consumidos internamente por Lighting y/o expuestos a Home Assistant por MQTT. Usa <code>python-kasa</code>, la misma librería que el propio componente TP-Link de Home Assistant.</div>
   </div>
   <div class="topbar-right">
     <nav class="plugin-switch" id="plugin-switch-nav" aria-label="Cambiar de plugin"></nav>
@@ -104,46 +122,34 @@
 </div>
 
 <div class="card">
-  <h2><span>Cuenta Tuya</span> <span class="hint" id="account-status">—</span></h2>
-  <p class="help">Solo para traer el <code>local_key</code> y el esquema real de cada dispositivo al darlo de alta desde "Detectados" — nunca se vuelve a usar después, la operación es 100% LAN. Necesita un proyecto "Cloud" (gratuito) en <a href="https://iot.tuya.com" target="_blank" rel="noopener">Tuya IoT Platform</a> con tu cuenta de la app vinculada (Devices → Link Tuya App Account).</p>
+  <h2><span>Cuenta TP-Link</span> <span class="hint" id="account-status">—</span></h2>
+  <p class="help">Solo hace falta para dispositivos Tapo/Kasa nuevos (protocolo KLAP) — un Kasa clásico (HS1xx/KP1xx) no la necesita. Es la MISMA cuenta que usarías en la app Tapo/Kasa; nunca se usa para hablar con la nube, solo para el saludo local con el dispositivo.</p>
   <details id="account-details">
-    <summary><span class="add-toggle">Vincular / cambiar cuenta</span></summary>
+    <summary><span class="add-toggle">Configurar / cambiar cuenta</span></summary>
     <div class="grid2" style="margin-top:12px">
       <div>
-        <label for="ac-region">Región</label>
-        <select id="ac-region">
-          <option value="eu">Europa</option>
-          <option value="us">Estados Unidos</option>
-          <option value="cn">China</option>
-          <option value="in">India</option>
-        </select>
+        <label for="ac-username">Email de la cuenta TP-Link</label>
+        <input id="ac-username" type="email" placeholder="tucorreo@ejemplo.com">
       </div>
       <div>
-        <label for="ac-uid">UID de la cuenta vinculada</label>
-        <input id="ac-uid" placeholder="uid mostrado en Tuya IoT Platform">
-      </div>
-    </div>
-    <div class="grid2">
-      <div>
-        <label for="ac-access-id">Access ID</label>
-        <input id="ac-access-id" placeholder="Access ID / Client ID">
-      </div>
-      <div>
-        <label for="ac-access-secret">Access Secret</label>
-        <input id="ac-access-secret" type="password" placeholder="Access Secret / Client Secret">
+        <label for="ac-password">Contraseña</label>
+        <input id="ac-password" type="password" placeholder="contraseña de la cuenta">
       </div>
     </div>
     <div class="actions">
-      <button type="button" onclick="linkAccount()">Vincular</button>
+      <button type="button" onclick="saveAccount()">Guardar</button>
     </div>
   </details>
 </div>
 
 <div class="card">
-  <h2><span>Detectados en la red</span> <span class="hint">solo informativo — tú decides si añadir alguno</span></h2>
-  <p class="help">Dispositivos Tuya vistos por su propio anuncio en la LAN. No se conectan ni se controlan hasta que pulsas "Añadir" en uno concreto.</p>
-  <div id="discovered-grid" class="device-grid"></div>
-  <div id="discovered-empty" class="empty" style="display:none">Todavía no se ha visto ningún dispositivo Tuya en la red.</div>
+  <h2><span>Escanear la red</span> <span class="hint">solo informativo — tú decides si añadir alguno</span></h2>
+  <p class="help">Envía un broadcast a la LAN y espera unos segundos las respuestas — no es un listener permanente, pulsa "Escanear" cada vez que quieras ver qué hay.</p>
+  <div class="actions">
+    <button type="button" id="scan-btn" onclick="scanNow()">Escanear ahora</button>
+  </div>
+  <div id="discovered-grid" class="device-grid" style="margin-top:14px"></div>
+  <div id="discovered-empty" class="empty" style="display:none">Nada visto todavía — pulsa "Escanear ahora".</div>
 </div>
 
 <div class="card">
@@ -152,7 +158,7 @@
     <span class="hint" id="conn-mqtt">MQTT: —</span>
   </h2>
   <div id="device-grid" class="device-grid"></div>
-  <div id="device-empty" class="empty" style="display:none">Todavía no hay ningún dispositivo dado de alta — añade el primero abajo, o "Añadir" uno de los detectados arriba.</div>
+  <div id="device-empty" class="empty" style="display:none">Todavía no hay ningún dispositivo dado de alta — añade el primero abajo, o "Añadir" uno de los escaneados arriba.</div>
 </div>
 
 <div class="card">
@@ -162,42 +168,15 @@
       <input type="hidden" id="df-id" value="">
 
       <label for="df-name">Nombre</label>
-      <input id="df-name" required placeholder="Aire acondicionado salón">
+      <input id="df-name" required placeholder="Enchufe salón">
 
-      <div class="grid2">
-        <div>
-          <label for="df-device-id">Device ID</label>
-          <input id="df-device-id" required placeholder="bf1234567890abcdef">
-        </div>
-        <div>
-          <label for="df-address">Dirección IP en la LAN</label>
-          <input id="df-address" required placeholder="192.168.1.50">
-        </div>
-      </div>
-      <div class="grid2">
-        <div>
-          <label for="df-local-key">Local key</label>
-          <input id="df-local-key" required placeholder="local_key del emparejamiento">
-        </div>
-        <div>
-          <label for="df-protocol">Versión de protocolo</label>
-          <select id="df-protocol">
-            <option value="3.1">3.1</option>
-            <option value="3.2">3.2</option>
-            <option value="3.3" selected>3.3</option>
-            <option value="3.4">3.4</option>
-          </select>
-        </div>
-      </div>
-      <p class="help">Device ID / local_key / dirección se consiguen emparejando el dispositivo desde la app de Tuya/Smart Life y extrayéndolos (mismo procedimiento que usa Tuya Orchestrator o localtuya) — este plugin nunca habla con la nube en operación normal.</p>
-
-      <label for="df-profile">Perfil del dispositivo (YAML declarativo)</label>
-      <textarea id="df-profile" placeholder="name: Mi termostato&#10;climates:&#10;  - name: Clima&#10;    switch_dp: 1&#10;    current_temp_dp: 3&#10;    target_temp_dp: 2"></textarea>
-      <p class="help">Mismo formato de perfil que Tuya Orchestrator — un bloque <code>dps:</code> por entidad simple (switch/sensor/number/binary_sensor/select) y/o un bloque <code>climates:</code> para un termostato completo.</p>
+      <label for="df-host">Dirección IP en la LAN</label>
+      <input id="df-host" required placeholder="192.168.1.60">
+      <p class="help">Con la cuenta TP-Link configurada arriba, esto basta para conectar tanto a un Kasa clásico como a un Tapo — <code>python-kasa</code> detecta solo qué protocolo habla.</p>
 
       <div class="checkline">
         <input type="checkbox" id="df-expose-mqtt">
-        <label for="df-expose-mqtt">Exponer a Home Assistant por MQTT (además de poder usarse en Climate)</label>
+        <label for="df-expose-mqtt">Exponer a Home Assistant por MQTT (además de poder usarse en Lighting)</label>
       </div>
 
       <div class="actions">
@@ -229,16 +208,14 @@ function renderDevices(devices) {
   empty.style.display = "none";
   grid.innerHTML = devices.map(d => {
     const live = d.live || {};
-    const dpsLines = Object.entries(live.dps || {}).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join("<br>");
     return `
     <div class="device-card">
       <div class="device-card-head">
         <span class="device-name">${esc(d.config.name || d.id)}</span>
-        <span class="pill ${live.connected ? 'pill-ok' : 'pill-off'}">${live.connected ? 'conectado' : 'sin conexión'}</span>
+        <span class="pill ${live.connected ? 'pill-ok' : 'pill-off'}">${live.connected ? (live.is_on ? 'encendido' : 'apagado') : 'sin conexión'}</span>
       </div>
-      <div class="device-meta">${esc(d.config.device_id)} · ${esc(d.config.address)} · v${esc(d.config.protocol_version)}</div>
+      <div class="device-meta">${esc(d.config.host)}${live.model ? ' · ' + esc(live.model) : ''}</div>
       ${d.config.expose_mqtt ? '<span class="pill pill-mqtt" style="margin-top:8px">expuesto por MQTT</span>' : ''}
-      ${dpsLines ? `<div class="device-dps">${dpsLines}</div>` : ''}
       <div class="device-actions">
         <button class="ghost" onclick="editDevice('${d.id}')">Editar</button>
         <button class="danger" onclick="deleteDevice('${d.id}', '${esc(d.config.name || d.id).replace(/'/g, "\\'")}')">Eliminar</button>
@@ -263,45 +240,34 @@ async function loadStatus() {
   } catch (e) { /* idem */ }
 }
 
-// --------------------------------------------------------- cuenta Tuya --
+// ------------------------------------------------------- cuenta TP-Link -
 
 async function loadAccount() {
   try {
     const r = await fetch(`${API}/account`);
     const a = await r.json();
-    document.getElementById("account-status").textContent = a.linked ? `vinculada (${a.access_id})` : "sin vincular";
-    if (a.linked) {
-      document.getElementById("ac-region").value = a.region;
-      document.getElementById("ac-access-id").value = a.access_id;
-      document.getElementById("ac-uid").value = a.uid;
-    }
+    document.getElementById("account-status").textContent = a.linked ? `configurada (${a.username})` : "sin configurar";
+    if (a.linked) document.getElementById("ac-username").value = a.username;
   } catch (e) { /* red temporalmente caida */ }
 }
 
-async function linkAccount() {
+async function saveAccount() {
   const payload = {
-    region: document.getElementById("ac-region").value,
-    access_id: document.getElementById("ac-access-id").value.trim(),
-    access_secret: document.getElementById("ac-access-secret").value.trim(),
-    uid: document.getElementById("ac-uid").value.trim(),
+    username: document.getElementById("ac-username").value.trim(),
+    password: document.getElementById("ac-password").value,
   };
-  if (!payload.access_id || !payload.access_secret || !payload.uid) {
-    toast("Access ID, Access Secret y UID son obligatorios");
-    return;
-  }
   const r = await fetch(`${API}/account`, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(payload)});
   if (r.ok) {
-    toast("Cuenta vinculada");
-    document.getElementById("ac-access-secret").value = "";
+    toast("Cuenta guardada");
+    document.getElementById("ac-password").value = "";
     document.getElementById("account-details").open = false;
     loadAccount();
   } else {
-    const body = await r.json().catch(() => ({}));
-    toast(body.error || "Fallo al vincular la cuenta");
+    toast("Fallo al guardar la cuenta");
   }
 }
 
-// ---------------------------------------------------------- descubiertos -
+// -------------------------------------------------------------- escaneo -
 
 let lastDiscovered = [];
 
@@ -314,43 +280,33 @@ function renderDiscovered(devices) {
   grid.innerHTML = notAdded.map(d => `
     <div class="device-card">
       <div class="device-card-head">
-        <span class="device-name">${esc(d.device_id)}</span>
+        <span class="device-name">${esc(d.alias || d.host)}</span>
+        ${d.needs_auth ? '<span class="pill pill-warn">pide cuenta</span>' : ''}
       </div>
-      <div class="device-meta">${esc(d.ip)}${d.version ? ' · v' + esc(d.version) : ''}</div>
+      <div class="device-meta">${esc(d.host)}${d.model ? ' · ' + esc(d.model) : ''}</div>
       <div class="device-actions">
-        <button onclick="addFromDiscovered('${d.device_id}')">Añadir</button>
+        <button onclick="addFromDiscovered('${esc(d.host)}', '${esc((d.alias || '').replace(/'/g, "\\'"))}')">Añadir</button>
       </div>
     </div>`).join("");
 }
 
-async function loadDiscovered() {
+async function scanNow() {
+  const btn = document.getElementById("scan-btn");
+  btn.disabled = true; btn.textContent = "Escaneando…";
   try {
-    const r = await fetch(`${API}/discovered`);
-    lastDiscovered = await r.json();
+    const r = await fetch(`${API}/discover`, {method: "POST"});
+    lastDiscovered = r.ok ? await r.json() : [];
     renderDiscovered(lastDiscovered);
-  } catch (e) { /* red temporalmente caida */ }
+    if (!r.ok) toast("Fallo al escanear la red");
+  } catch (e) {
+    toast("Fallo al escanear la red");
+  }
+  btn.disabled = false; btn.textContent = "Escanear ahora";
 }
 
-async function addFromDiscovered(deviceId) {
-  const seen = lastDiscovered.find(d => d.device_id === deviceId);
+function addFromDiscovered(host, alias) {
   cancelDeviceForm();
-  try {
-    const r = await fetch(`${API}/discovered/${deviceId}/resolve`, {method: "POST"});
-    if (r.ok) {
-      const suggested = await r.json();
-      fillDeviceForm(suggested);
-      toast(suggested.warnings && suggested.warnings.length
-        ? "Perfil generado con avisos — revísalo antes de guardar"
-        : "Perfil generado automáticamente — revísalo antes de guardar");
-    } else {
-      const body = await r.json().catch(() => ({}));
-      fillDeviceForm({device_id: deviceId, address: seen ? seen.ip : "", protocol_version: seen ? (seen.version || "3.3") : "3.3"});
-      toast((body.error || "No se pudo autocompletar") + " — rellena local_key y perfil a mano");
-    }
-  } catch (e) {
-    fillDeviceForm({device_id: deviceId, address: seen ? seen.ip : ""});
-    toast("Fallo al resolver el dispositivo — rellena el resto a mano");
-  }
+  fillDeviceForm({name: alias || "", host});
   document.getElementById("add-device-details").open = true;
   document.getElementById("add-device-details").scrollIntoView({behavior: "smooth", block: "start"});
 }
@@ -364,22 +320,14 @@ async function deleteDevice(id, name) {
 function readDeviceForm() {
   return {
     name: document.getElementById("df-name").value.trim(),
-    device_id: document.getElementById("df-device-id").value.trim(),
-    address: document.getElementById("df-address").value.trim(),
-    local_key: document.getElementById("df-local-key").value.trim(),
-    protocol_version: document.getElementById("df-protocol").value,
-    profile_yaml: document.getElementById("df-profile").value,
+    host: document.getElementById("df-host").value.trim(),
     expose_mqtt: document.getElementById("df-expose-mqtt").checked,
   };
 }
 
 function fillDeviceForm(cfg) {
   document.getElementById("df-name").value = cfg.name || "";
-  document.getElementById("df-device-id").value = cfg.device_id || "";
-  document.getElementById("df-address").value = cfg.address || "";
-  document.getElementById("df-local-key").value = cfg.local_key || "";
-  document.getElementById("df-protocol").value = cfg.protocol_version || "3.3";
-  document.getElementById("df-profile").value = cfg.profile_yaml || "";
+  document.getElementById("df-host").value = cfg.host || "";
   document.getElementById("df-expose-mqtt").checked = !!cfg.expose_mqtt;
 }
 
@@ -404,8 +352,8 @@ async function submitDeviceForm(ev) {
   ev.preventDefault();
   const id = document.getElementById("df-id").value;
   const payload = readDeviceForm();
-  if (!payload.name || !payload.device_id || !payload.address || !payload.local_key) {
-    toast("Nombre, Device ID, dirección y local_key son obligatorios");
+  if (!payload.name || !payload.host) {
+    toast("Nombre y dirección IP son obligatorios");
     return false;
   }
   const url = id ? `${API}/devices/${id}` : `${API}/devices`;
@@ -423,10 +371,8 @@ async function submitDeviceForm(ev) {
 }
 
 // Selector de plugins de la cabecera -- dinamico, a partir de
-// /api/core/plugins (solo lo instalado). "/api/core/*" solo existe en la
-// app raiz -- esta pagina cuelga de "plugins/tuya/", asi que hay que
-// subir dos niveles para llegar a ella (una ruta relativa "api/core/..."
-// aqui pegaria contra la app de Tuya, que no tiene esas rutas).
+// /api/core/plugins (solo lo instalado). Esta pagina cuelga de
+// "plugins/tplink/", asi que Energy queda dos niveles arriba.
 const PLUGIN_SWITCH_ICONS = {
   battery: '<path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="currentColor"/>',
   climate: '<path d="M12 3a3 3 0 0 0-3 3v7.1a4 4 0 1 0 6 0V6a3 3 0 0 0-3-3Zm0 2a1 1 0 0 1 1 1v7.6l.6.5a2 2 0 1 1-3.2 0l.6-.5V6a1 1 0 0 1 1-1Z" fill="currentColor"/>',
@@ -440,8 +386,8 @@ async function renderPluginSwitch() {
     const plugins = await (await fetch('../../api/core/plugins')).json();
     const nav = document.getElementById('plugin-switch-nav');
     nav.innerHTML = plugins.filter(p => p.installed).map(p => {
-      const href = p.slug === 'battery' ? '../../' : (p.slug === 'tuya' ? './' : `../${p.slug}/`);
-      const current = p.slug === 'tuya' ? ' class="current"' : '';
+      const href = p.slug === 'battery' ? '../../' : (p.slug === 'tplink' ? './' : `../${p.slug}/`);
+      const current = p.slug === 'tplink' ? ' class="current"' : '';
       const icon = PLUGIN_SWITCH_ICONS[p.slug] || '';
       return `<a href="${href}"${current}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">${icon}</svg>${PLUGIN_SWITCH_LABEL[p.slug] || p.name}</a>`;
     }).join('');
@@ -451,14 +397,9 @@ async function renderPluginSwitch() {
 loadDevices();
 loadStatus();
 loadAccount();
-loadDiscovered();
 renderPluginSwitch();
 setInterval(loadDevices, 8000);
 setInterval(loadStatus, 8000);
-// El descubrimiento LAN acumula lo que se va oyendo -- un dispositivo
-// puede tardar en anunciarse, asi que se refresca con menos prisa que el
-// resto (no hace falta verlo aparecer al segundo).
-setInterval(loadDiscovered, 15000);
 </script>
 </body>
 </html>

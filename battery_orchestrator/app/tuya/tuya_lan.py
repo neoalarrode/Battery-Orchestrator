@@ -6,14 +6,22 @@ from-scratch reimplementation). Wire constants, framing, and the protocol
 reference, not a re-derivation - adapted to this project's simpler single
 `TuyaLocalDevice` class (the reference splits this across
 `TuyaProtocol`/`MessageDispatcher`/`AESCipher`) so the rest of this
-codebase (coordinator.py, active_scan.py) didn't need to change.
+codebase (coordinator.py, active_scan.py) didn't need to change. Protocol
+3.5 (added later) is ported from `tinytuya`'s `core/` package instead -
+the SAME reference `tuya-local` (a separate, actively maintained HA
+integration) depends on directly for its own 3.5 support, not a
+from-scratch guess either.
 
-Wire format, all fields big-endian:
+Wire format, all fields big-endian - TWO completely different frames, not
+one format with version flags:
 
     0x000055AA | seq(4) | command(4) | length(4) | [retcode(4), receive-only]
         | payload[...] | crc32(4) or hmac-sha256(32) [3.4 only] | 0x0000AA55
 
-Three protocol generations, real differences between them (not just a
+    0x00006699 | unknown(2) | seq(4) | command(4) | length(4)               [3.5 only]
+        | iv(12) | AES-GCM-ciphertext[...] | tag(16) | 0x00009966
+
+Four protocol generations, real differences between them (not just a
 version number):
 
 - **3.1**: CONTROL commands get a bespoke MD5-signature-prefixed,
@@ -29,17 +37,29 @@ version number):
   bytes) instead of a CRC32 (4 bytes) for integrity. DP_QUERY/CONTROL are
   sent as DP_QUERY_NEW/CONTROL_NEW instead, with different payload shapes
   (CONTROL_NEW nests the DPs under `data.dps`).
+- **3.5**: SAME 3-step session-key handshake as 3.4 (tinytuya's own
+  comment: "v3.5 is just a copy of v3.4" here), but everything else is a
+  different wire frame entirely - 0x6699 prefix (not 0x55AA), AES-GCM (not
+  ECB+HMAC) wrapping EVERYTHING including the handshake itself, a fresh
+  random 12-byte IV per message, and a version-specific final step in
+  deriving the session key from the nonce XOR (GCM-encrypt-and-slice
+  instead of a plain ECB-encrypt) - see `_negotiate_session_key`,
+  `_pack_6699`, `_try_parse_6699`.
 
 Known limitation, honestly narrower than it first looks: 3.1's CONTROL
 signature scheme is ported but has never been exercised against a real
-3.1 device (all live reports so far have been 3.3/3.4 devices). 3.4 is a
-careful, complete port of the reference's handshake and framing, verified
-here with direct crypto/framing round-trip tests (mirroring exactly what
-localtuya's own functions produce), but - like everything protocol-level
-in this project - has not been confirmed end-to-end against a real 3.4
-device from this sandbox (no live network access). Report back if a real
-3.4 device still doesn't work; the discrepancy is narrowed to "this port
-has a mistake" rather than "3.4 isn't attempted at all".
+3.1 device (all live reports so far have been 3.3/3.4/3.5 devices). 3.4 is
+a careful, complete port of the reference's handshake and framing,
+verified here with direct crypto/framing round-trip tests (mirroring
+exactly what localtuya's own functions produce), but has not been
+confirmed end-to-end against a real 3.4 device. **3.5 HAS been confirmed
+end-to-end against a real device** (a Tuya-branded WiFi bulb that never
+answered any of 3.1-3.4 identically regardless of key, which is exactly
+what a device that only speaks 3.5 looks like from the outside) - full
+handshake, DP_QUERY, and real decoded state on the first real attempt.
+Report back if a different real 3.4 device still doesn't work; the
+discrepancy is narrowed to "this port has a mistake" rather than "3.4
+isn't attempted at all".
 """
 from __future__ import annotations
 
@@ -50,6 +70,7 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 import struct
 import time
 from collections import deque
@@ -75,6 +96,24 @@ FOOTER_SIZE_HMAC = 36  # hmac-sha256(32)+suffix(4) - protocol 3.4 only
 # top out somewhere around 300 bytes, so anything past this is corruption
 # or a desynced stream, not a big legitimate frame.
 MAX_PAYLOAD_LEN = 1000
+
+# ---------------------------------------------------------------------------
+# Protocol 3.5 -- a COMPLETELY DIFFERENT wire frame, not just a different
+# cipher mode inside the same 0x55AA envelope. Ported from tinytuya's
+# `core/header.py`/`core/message_helper.py` (the same reference `tuya-local`
+# itself depends on directly, per its manifest.json -- not a from-scratch
+# guess). Header is 18 bytes (prefix+unknown(2)+seq+command+length, vs 16
+# for 0x55AA), payload is AES-GCM (not ECB+HMAC) with a fresh 12-byte IV
+# PREPENDED to the ciphertext and a 16-byte tag appended before the 4-byte
+# suffix -- and, unlike 3.4, this GCM framing wraps EVERYTHING including the
+# session-key handshake itself (real_local_key is the GCM key until the
+# session key is negotiated, exactly like 3.4 uses it as the ECB key).
+PREFIX_6699 = 0x00006699
+SUFFIX_6699 = 0x00009966
+PREFIX_6699_BYTES = b"\x00\x00\x66\x99"
+HEADER_SIZE_6699 = 18  # prefix(4)+unknown(2)+seq(4)+command(4)+length(4)
+GCM_IV_SIZE = 12
+GCM_TAG_SIZE = 16
 
 CMD_CONTROL = 0x07
 # The device's SPONTANEOUS state report. Distinct from CMD_STATUS (0x0a),
@@ -164,10 +203,10 @@ class TuyaLocalDevice:
         port: int = 6668,
         on_update: Callable[[dict[int, Any]], None] | None = None,
     ) -> None:
-        if protocol_version not in ("3.1", "3.2", "3.3", "3.4"):
+        if protocol_version not in ("3.1", "3.2", "3.3", "3.4", "3.5"):
             raise NotImplementedError(
                 f"Tuya protocol {protocol_version} is not implemented "
-                "(supported: 3.1, 3.2, 3.3, 3.4)."
+                "(supported: 3.1, 3.2, 3.3, 3.4, 3.5)."
             )
         self.device_id = device_id
         self.address = address
@@ -323,7 +362,7 @@ class TuyaLocalDevice:
         self._seq = 0
         self._listen_task = asyncio.ensure_future(self._listen())
 
-        if self.protocol_version == "3.4":
+        if self.protocol_version in ("3.4", "3.5"):
             ok = await self._negotiate_session_key()
             if not ok:
                 # BUG FIXED HERE: this called self.close(), which is now
@@ -333,7 +372,7 @@ class TuyaLocalDevice:
                 # stay retryable by the reconnect paths, so tear the socket
                 # down without latching the device closed.
                 self._teardown()
-                raise TuyaProtocolError(f"{self.device_id}: 3.4 session key negotiation failed")
+                raise TuyaProtocolError(f"{self.device_id}: {self.protocol_version} session key negotiation failed")
 
         self._heartbeat_task = asyncio.ensure_future(self._heartbeat_loop())
 
@@ -593,14 +632,23 @@ class TuyaLocalDevice:
             reply = await self._send_receive_json(CMD_CONTROL, obj)
         return _extract_dps(reply)
 
-    # -- 3.4 session-key handshake -----------------------------------------------
+    # -- 3.4/3.5 session-key handshake -------------------------------------------
     async def _negotiate_session_key(self) -> bool:
-        """Port of the reference's `_negotiate_session_key`. Waits for the
-        SESS_KEY_NEG_RESP reply by COMMAND, not by echoed sequence number -
-        matching the reference's own design (its comment: real 3.4 devices
-        don't reliably echo the expected seqno for this specific exchange,
-        so it deliberately doesn't rely on that here, unlike every other
-        exchange)."""
+        """Port of the reference's `_negotiate_session_key` -- SAME 3-step
+        nonce exchange for 3.4 AND 3.5 (tinytuya's own comment: "v3.5 is
+        just a copy of v3.4" for this exchange), only the two version-
+        specific bits differ, each handled inline below: how step 2's reply
+        arrives already-decrypted-or-not (3.5's GCM framing decrypts at
+        PARSE time, see `_try_parse_6699`, so `reply.payload` is already
+        plaintext by the time it gets here -- 3.4's ECB framing does not),
+        and how the final session key is derived from the nonce XOR (plain
+        ECB-encrypt for 3.4 vs a GCM-encrypt-and-slice for 3.5).
+
+        Waits for the SESS_KEY_NEG_RESP reply by COMMAND, not by echoed
+        sequence number - matching the reference's own design (its comment:
+        real 3.4/3.5 devices don't reliably echo the expected seqno for
+        this specific exchange, so it deliberately doesn't rely on that
+        here, unlike every other exchange)."""
         self.local_key = self.real_local_key
 
         try:
@@ -608,16 +656,16 @@ class TuyaLocalDevice:
                 CMD_SESS_KEY_NEG_START, self._local_nonce, wait_cmd=CMD_SESS_KEY_NEG_RESP
             )
         except asyncio.TimeoutError:
-            _LOGGER.debug("%s: 3.4 session key negotiation step 1 timed out", self.device_id)
+            _LOGGER.debug("%s: %s session key negotiation step 1 timed out", self.device_id, self.protocol_version)
             return False
 
         # GAP FIXED HERE: the reference adopts the device's sequence number
         # from this very message, with the reason in its own comment:
         # "for 3.4 devices, we get the starting seqno with the
-        # SESS_KEY_NEG_RESP message" (`self.seqno = msg.seqno`). A 3.4
+        # SESS_KEY_NEG_RESP message" (`self.seqno = msg.seqno`). A 3.4/3.5
         # device numbers the session from ITS side, so continuing with our
         # own counter left every subsequent reply carrying a seqno we were
-        # not waiting on - i.e. every command on a 3.4 device timing out,
+        # not waiting on - i.e. every command on the device timing out,
         # which is exactly the "unknown state on all values" symptom seen
         # on the 3.4 bulbs. (`- 1` because our counter pre-increments where
         # the reference's post-increments; next send lands on reply.seq
@@ -626,17 +674,24 @@ class TuyaLocalDevice:
             self._seq = reply.seq - 1
 
         if not reply.payload or len(reply.payload) < 48:
-            _LOGGER.debug("%s: 3.4 session key negotiation step 2 failed (short/no response)", self.device_id)
+            _LOGGER.debug("%s: %s session key negotiation step 2 failed (short/no response)", self.device_id, self.protocol_version)
             return False
 
-        try:
-            decrypted = self._decrypt_raw(reply.payload)
-        except (ValueError, KeyError) as err:
-            _LOGGER.debug("%s: 3.4 session key negotiation step 2 decrypt failed: %s", self.device_id, err)
-            return False
+        if self.protocol_version == "3.4":
+            try:
+                decrypted = self._decrypt_raw(reply.payload)
+            except (ValueError, KeyError) as err:
+                _LOGGER.debug("%s: 3.4 session key negotiation step 2 decrypt failed: %s", self.device_id, err)
+                return False
+        else:
+            # 3.5: `reply.payload` was already GCM-decrypted+verified by
+            # `_try_parse_6699` at frame-parse time (the tag/AAD needed for
+            # that are only available once the whole frame is buffered,
+            # unlike 3.4's ECB where decryption can happen later, on demand).
+            decrypted = reply.payload
 
         if len(decrypted) < 48:
-            _LOGGER.debug("%s: 3.4 session key negotiation step 2 response too short", self.device_id)
+            _LOGGER.debug("%s: %s session key negotiation step 2 response too short", self.device_id, self.protocol_version)
             return False
 
         self._remote_nonce = decrypted[:16]
@@ -644,7 +699,7 @@ class TuyaLocalDevice:
         if hmac_check != decrypted[16:48]:
             # Non-fatal in the reference too (logged, not aborted) - the
             # HMAC-FINISH step below is the real integrity confirmation.
-            _LOGGER.debug("%s: 3.4 session key negotiation HMAC check mismatch", self.device_id)
+            _LOGGER.debug("%s: %s session key negotiation HMAC check mismatch", self.device_id, self.protocol_version)
 
         rkey_hmac = hmac.new(self.local_key, self._remote_nonce, hashlib.sha256).digest()
         # FINISH is fire-and-forget in the reference (recv_retries=None ->
@@ -652,11 +707,102 @@ class TuyaLocalDevice:
         await self._send_only(CMD_SESS_KEY_NEG_FINISH, rkey_hmac)
 
         xored = bytes(a ^ b for a, b in zip(self._local_nonce, self._remote_nonce))
-        # NOT padded (pad=False in the reference) - the XOR result is
-        # already exactly 16 bytes, one AES block.
-        self.local_key = self._encrypt_raw(xored, pad_data=False)
-        _LOGGER.debug("%s: 3.4 session key negotiated successfully", self.device_id)
+        if self.protocol_version == "3.4":
+            # NOT padded (pad=False in the reference) - the XOR result is
+            # already exactly 16 bytes, one AES block.
+            self.local_key = self._encrypt_raw(xored, pad_data=False)
+        else:
+            # 3.5: GCM-encrypt the same 16-byte XOR with real_local_key,
+            # using local_nonce[:12] as the IV (ported exactly from the
+            # reference's `_negotiate_session_key_generate_finalize`) -
+            # then take ONLY the 16-byte ciphertext portion (drop the IV
+            # that would otherwise prefix it, drop the GCM tag) as the
+            # session key. Not ECB, not the same shape as 3.4's derivation
+            # despite both starting from the same nonce XOR.
+            iv = self._local_nonce[:12]
+            ciphertext, _tag = self._gcm_encrypt(self.real_local_key, iv, xored)
+            self.local_key = ciphertext
+        _LOGGER.debug("%s: %s session key negotiated successfully", self.device_id, self.protocol_version)
         return True
+
+    # -- protocol 3.5 (AES-GCM, 0x6699 framing) ----------------------------------
+    @staticmethod
+    def _gcm_encrypt(key: bytes, iv: bytes, data: bytes, aad: bytes = b"") -> tuple[bytes, bytes]:
+        cipher = AES.new(key, AES.MODE_GCM, nonce=iv)
+        if aad:
+            cipher.update(aad)
+        return cipher.encrypt_and_digest(data)
+
+    @staticmethod
+    def _gcm_decrypt(key: bytes, iv: bytes, ciphertext: bytes, tag: bytes, aad: bytes = b"") -> bytes:
+        cipher = AES.new(key, AES.MODE_GCM, nonce=iv)
+        if aad:
+            cipher.update(aad)
+        return cipher.decrypt_and_verify(ciphertext, tag)
+
+    def _pack_6699(self, seq: int, command: int, plaintext: bytes) -> bytes:
+        """Build one complete 0x6699 frame -- unlike `_pack` (0x55AA), this
+        does its own header+encrypt+footer in one shot, because the GCM
+        Additional Authenticated Data (AAD) is the header itself (bytes
+        4:18, i.e. everything except the prefix - ported exactly from the
+        reference's `pack_message`, `header=data[4:]`), so the header has
+        to exist BEFORE encryption can happen, not after like the ECB/CRC
+        path. A fresh random 12-byte IV per message (never reused - GCM
+        security depends on that), matching the reference's `os.urandom(12)`."""
+        length = GCM_IV_SIZE + len(plaintext) + GCM_TAG_SIZE
+        header = struct.pack(">IHIII", PREFIX_6699, 0, seq, command, length)
+        iv = os.urandom(GCM_IV_SIZE)
+        ciphertext, tag = self._gcm_encrypt(self.local_key, iv, plaintext, aad=header[4:])
+        return header + iv + ciphertext + tag + struct.pack(">I", SUFFIX_6699)
+
+    def _try_parse_6699(self, buf: bytes) -> tuple["_RawFrame | None", int]:
+        """Parse+decrypt ONE incoming 0x6699 frame. Unlike `_try_parse`
+        (0x55AA), decryption happens HERE, not later in
+        `_decode_frame_payload` - GCM verification needs the tag, which is
+        only available once the whole frame (header+iv+ciphertext+tag) is
+        buffered, so there is no way to defer it the way ECB/CRC can. This
+        is a METHOD, not a module-level function like `_try_parse`, because
+        it needs `self.local_key` (real_local_key during the handshake,
+        the negotiated session key afterward - see `_negotiate_session_key`)."""
+        if len(buf) < HEADER_SIZE_6699:
+            return None, 0
+        prefix, _unknown, seq, command, length = struct.unpack(">IHIII", buf[:HEADER_SIZE_6699])
+        if prefix != PREFIX_6699:
+            raise TuyaProtocolError("bad packet prefix (6699)")
+        # 6699's `length` covers iv+ciphertext+tag but NOT the 4-byte
+        # suffix (ported from the reference's parse_header: `total_length =
+        # payload_len + header_len + len(SUFFIX_6699_BIN)`) - a bit more
+        # headroom than 55AA's MAX_PAYLOAD_LEN since every 6699 frame always
+        # carries the extra iv(12)+tag(16) overhead on top of the payload.
+        if length > MAX_PAYLOAD_LEN + GCM_IV_SIZE + GCM_TAG_SIZE:
+            raise TuyaProtocolError(f"header claims a {length}-byte packet (6699) - almost certainly corrupt")
+        total = HEADER_SIZE_6699 + length + 4
+        if len(buf) < total:
+            return None, 0
+
+        body = buf[HEADER_SIZE_6699:total]
+        iv = body[:GCM_IV_SIZE]
+        tag = body[-(GCM_TAG_SIZE + 4):-4]
+        suffix = body[-4:]
+        ciphertext = body[GCM_IV_SIZE:-(GCM_TAG_SIZE + 4)]
+        if struct.unpack(">I", suffix)[0] != SUFFIX_6699:
+            _LOGGER.debug("Frame suffix wrong (6699): got %s", suffix.hex())
+
+        aad = buf[4:HEADER_SIZE_6699]
+        try:
+            plaintext = self._gcm_decrypt(self.local_key, iv, ciphertext, tag, aad)
+        except ValueError as err:
+            raise TuyaProtocolError(f"GCM decrypt/verify failed (6699): {err}")
+
+        # Real devices prepend a 4-byte retcode to (almost) every reply,
+        # same convention as 0x55AA's RETCODE_SIZE - ported from the
+        # reference, whose own version-conditional heuristic for this is
+        # dead code in the version actually shipped (`no_retcode = False`
+        # unconditionally, the `None`-based per-payload heuristic is
+        # commented out) - so this always strips it too, matching what
+        # tinytuya actually does today, not what its comments describe.
+        payload = plaintext[4:] if len(plaintext) >= 4 else plaintext
+        return _RawFrame(seq, command, payload), total
 
     # -- wire-level helpers -------------------------------------------------------
     def _cipher(self) -> AES:
@@ -679,6 +825,16 @@ class TuyaLocalDevice:
         hmac_key: bytes | None = None
         payload = raw_payload
 
+        if self.protocol_version == "3.5":
+            # Own framing entirely (see _pack_6699) - header/encrypt/footer
+            # all happen together there because the GCM AAD is the header
+            # itself, so there is no separate "_pack" step to call into
+            # like the other versions use.
+            if command not in _NO_HEADER_CMDS:
+                payload = self.version_header + payload
+            self._seq += 1
+            seq = self._seq
+            return self._pack_6699(seq, command, payload), seq, self.local_key
         if self.protocol_version == "3.4":
             hmac_key = self.local_key
             if command not in _NO_HEADER_CMDS:
@@ -809,12 +965,21 @@ class TuyaLocalDevice:
                     # error anywhere pointing at the cause. Resynchronize on
                     # the next frame boundary instead of dying.
                     try:
-                        frame, consumed = _try_parse(
-                            buf, hmac_framed=self.protocol_version == "3.4"
-                        )
+                        if self.protocol_version == "3.5":
+                            # Own parser: GCM decrypt happens INSIDE here
+                            # (needs self.local_key), unlike _try_parse's
+                            # pure/stateless header-only parse for the
+                            # other versions - see _try_parse_6699's
+                            # docstring.
+                            frame, consumed = self._try_parse_6699(buf)
+                        else:
+                            frame, consumed = _try_parse(
+                                buf, hmac_framed=self.protocol_version == "3.4"
+                            )
                     except TuyaProtocolError as err:
                         self._trace_add("rx", -1, 0, buf[:48], f"UNPARSEABLE: {err}")
-                        nxt = buf.find(PREFIX_BYTES, 1)
+                        prefix_bytes = PREFIX_6699_BYTES if self.protocol_version == "3.5" else PREFIX_BYTES
+                        nxt = buf.find(prefix_bytes, 1)
                         _LOGGER.debug(
                             "%s: %s - %s",
                             self.device_id,
@@ -940,7 +1105,15 @@ class TuyaLocalDevice:
         if not raw:
             return None
         try:
-            if self.protocol_version == "3.4":
+            if self.protocol_version == "3.5":
+                # Already plaintext by this point - _try_parse_6699 did the
+                # GCM decrypt+verify at parse time (see its docstring for
+                # why that can't be deferred here like 3.4's ECB can).
+                decrypted = raw
+                if decrypted.startswith(self.version_bytes):
+                    decrypted = decrypted[len(self.version_header) :]
+                text = decrypted.decode("utf-8")
+            elif self.protocol_version == "3.4":
                 decrypted = self._decrypt_raw(raw)
                 if decrypted.startswith(self.version_bytes):
                     decrypted = decrypted[len(self.version_header) :]

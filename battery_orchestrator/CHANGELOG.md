@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.14.0
+**Nuevo plugin: Lighting Orchestrator (`lighting`)** -- iluminación adaptativa por zona, tercer plugin de zonas tras Climate. Mismo espíritu "sin caja negra" de todo el proyecto:
+
+- **Color y brillo atados a la posición real del sol**, nunca a una hora fija tecleada por el usuario -- puerto directo del cálculo de "Adaptive Lighting" (integración de referencia de HA, github.com/basnijholt/adaptive-lighting: `SunEvents.sun_position`/`SunLightSettings.brightness_pct`/`color_temp_kelvin`, verificado línea a línea contra su código real), pero leyendo los 4 eventos del día (amanecer/atardecer/mediodía solar/medianoche solar) de los atributos que la propia entidad núcleo `sun.sun` de HA ya calcula (`next_rising`/`next_setting`/`next_noon`/`next_midnight`, confirmados contra la instancia real) en vez de depender de la librería `astral` del original -- evita añadir una dependencia nueva a la imagen del addon. Verificado contra datos reales de `sun.sun` de producción: mediodía solar -> brillo 100%/~5000K, medianoche -> brillo mínimo/2200K, justo antes del atardecer -> brillo aún al máximo pero ya virando a cálido (~2265K), tal como hace el original.
+- **Encendido/apagado por presencia**, con margen de gracia configurable antes de apagar (evita parpadeos de un sensor de movimiento) y reaplicación periódica de la curva mientras la zona sigue ocupada (para que el color/brillo se mantengan "vivos" según pasa el día, no solo al entrar).
+- **Reglas condicionales por zona, primera que coincide gana** -- una zona puede controlar varias bombillas con un mismo sensor de presencia, y decidir QUÉ grupo de luces encender según otras condiciones (p.ej. "si la TV del salón está en `playing`, enciende los laterales; si no, el techo" son dos reglas, la segunda sin condición hace de reserva por defecto). Declaradas en texto simple (`Nombre; si entidad=valor; luces=light.a,light.b`, una por línea), mismo patrón ya probado en producción que los presets de Climate.
+- **Detección de cambios manuales** (heurística simple, sin ML): si el brillo/color real de una luz ya no coincide con lo último que le mandamos, se marca como "tocada a mano" y se deja de reajustar hasta que la zona la vuelva a encender desde cero -- para no pelearse con quien acaba de atenuarla o cambiarla de color por su cuenta.
+- No controla dispositivos directamente (nada de Tuya-por-LAN aquí): actúa siempre sobre entidades `light.*` YA expuestas en HA (nativas o publicadas por otro plugin, Tuya incluido) vía los servicios estándar `light.turn_on`/`light.turn_off`.
+
+Verificado con una simulación completa del escenario real que motivó el plugin (presencia -> techo; TV encendida -> laterales en vez de techo, apagando el techo en la transición; detección de override manual respetando una luz atenuada a mano mientras sigue reajustando las demás; apagado total al perder la presencia) antes de desplegar.
+
 ## 0.13.9
 Sha256 de Tuya re-pineado al tag `v0.13.8` (fix real: _status_once petaba tras el fix de v0.13.6) — verificado con una descarga real antes de fijarlo.
 

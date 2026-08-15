@@ -56,8 +56,14 @@ def _tuya():
     return TuyaPlugin()
 
 
+def _lighting():
+    _prefer_downloaded("lighting")
+    from lighting_plugin import LightingPlugin
+    return LightingPlugin()
+
+
 # Slug -> constructor.
-PLUGIN_REGISTRY = {"battery": _battery, "climate": _climate, "tuya": _tuya}
+PLUGIN_REGISTRY = {"battery": _battery, "climate": _climate, "tuya": _tuya, "lighting": _lighting}
 
 # Metadatos + procedencia verificada para la tienda de plugins de la
 # interfaz -- deliberadamente SIN instanciar nada aqui (un plugin no
@@ -110,6 +116,15 @@ PLUGIN_CATALOG = {
         "tag": "v0.13.8",
         "sha256": "e40b69f05e9b73510620d1df0a518b911ef19b87591d0f380c471dbac9f0fe70",  # sha256 real del tarball de v0.13.8, verificado contra una descarga real antes de fijarlo aqui (fix real de 3.5: _status_once petaba tras el fix de v0.13.6, payload sin decodificar en el emparejador por comando)
         "files": ["tuya_plugin.py", "tuya", "tuya_templates"],
+    },
+    "lighting": {
+        "name": "Lighting Orchestrator",
+        "description": "Iluminación adaptativa por zona — color y brillo por hora, encendido/apagado por presencia y reglas condicionales (p.ej. TV encendida -> luces laterales en vez del techo)",
+        "version": "0.1.0",
+        "downloadable": True,
+        "tag": "PENDING",  # se rellena en el primer despliegue real (ver deploy)
+        "sha256": "PENDING",
+        "files": ["lighting_plugin.py", "lighting", "lighting_templates"],
     },
 }
 

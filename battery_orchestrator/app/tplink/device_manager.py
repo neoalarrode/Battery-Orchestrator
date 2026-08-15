@@ -189,8 +189,14 @@ class TplinkDeviceManager:
     # del mismo), asi que un pequeño reintento aqui basta -- es
     # exactamente lo que ya hacia perder comandos en silencio antes de
     # esto.
+    # A peticion expresa del usuario (reaccion a presencia en menos de
+    # 1s): 1.0s de espera entre reintentos era, de por si, mas de lo que
+    # se pide como presupuesto TOTAL de principio a fin. Una colision de
+    # sesion KLAP se libera casi siempre en milisegundos (es el OTRO
+    # cliente terminando su propio sondeo, no un problema de red) -- no
+    # hace falta esperar un segundo entero para darle la vuelta.
     RETRY_ATTEMPTS = 3
-    RETRY_DELAY_SECONDS = 1.0
+    RETRY_DELAY_SECONDS = 0.15
 
     async def _with_retry(self, coro_factory) -> None:
         last_exc: Exception | None = None

@@ -51,15 +51,24 @@ def all_lights(rules: list[dict]) -> set[str]:
     return out
 
 
-def _parse_light_entry(raw: str) -> tuple[str, bool]:
-    """«light.x» o «light.x:solo_brillo» -> (entity_id, solo_brillo).
-    El sufijo «:solo_brillo» excluye esa luz en concreto del cambio de
-    color/temperatura de color de la curva solar de la zona -- sigue
-    encendiendose/apagandose y ajustando BRILLO con normalidad, solo se
-    le deja de mandar color. Pensado para una luz que no soporta color,
-    o que el usuario prefiere dejar siempre en un tono fijo (p.ej. una
-    lampara de lectura) dentro de una zona que por lo demas si varia de
-    color -- sin tener que sacarla a su propia regla/zona aparte.
+def _parse_light_entry(raw: str) -> tuple[str, bool, bool]:
+    """«light.x», «light.x:solo_brillo» o «light.x:solo_encendido» ->
+    (entity_id, solo_brillo, solo_encendido). El sufijo «:solo_brillo»
+    excluye esa luz en concreto del cambio de color/temperatura de color
+    de la curva solar de la zona -- sigue encendiendose/apagandose y
+    ajustando BRILLO con normalidad, solo se le deja de mandar color.
+    Pensado para una luz que no soporta color, o que el usuario prefiere
+    dejar siempre en un tono fijo (p.ej. una lampara de lectura) dentro
+    de una zona que por lo demas si varia de color -- sin tener que
+    sacarla a su propia regla/zona aparte.
+
+    «:solo_encendido» (a peticion expresa del usuario, para las lamparas
+    del Salon) va un paso mas alla: la excluye TANTO del color como del
+    brillo -- la curva solar de la zona solo la enciende/apaga, nunca le
+    toca ningun valor. Pensado para una lampara que el usuario quiere
+    ajustar siempre a mano (con su propio dimmer, o porque no tiene
+    sentido variarla con el sol) pero que aun asi quiere que seleccione
+    la propia zona segun la regla activa/presencia.
 
     BUG REAL, confirmado en produccion: la version anterior partia por
     el PRIMER «:» sin mas («if ":" in raw: entity_id, flag = raw.split
@@ -72,11 +81,13 @@ def _parse_light_entry(raw: str) -> tuple[str, bool]:
     tal cual en produccion: las bombillas de Cocina se quedaban
     encendidas para siempre, `all_lights()` ni siquiera las reconocia
     como las luces reales que son. Fix: el sufijo SOLO cuenta si el
-    texto entero TERMINA en ":solo_brillo" -- una referencia de bridge
-    nunca termina asi, asi que nunca coincide por error."""
+    texto entero TERMINA en el sufijo esperado -- una referencia de
+    bridge nunca termina asi, asi que nunca coincide por error."""
+    if raw.lower().endswith(":solo_encendido"):
+        return raw[: -len(":solo_encendido")].strip(), False, True
     if raw.lower().endswith(":solo_brillo"):
-        return raw[: -len(":solo_brillo")].strip(), True
-    return raw.strip(), False
+        return raw[: -len(":solo_brillo")].strip(), True, False
+    return raw.strip(), False, False
 
 
 def parse_rules_text(text: str) -> list[dict]:
@@ -129,6 +140,7 @@ def parse_rules_text(text: str) -> list[dict]:
         conditions: list[dict] = []
         lights: list[str] = []
         brightness_only: list[str] = []
+        on_off_only: list[str] = []
         for chunk in chunks[1:]:
             low = chunk.lower()
             if low.startswith("si "):
@@ -145,19 +157,25 @@ def parse_rules_text(text: str) -> list[dict]:
                 entries = [e.strip() for e in chunk[len("luces="):].split(",") if e.strip()]
                 lights = []
                 brightness_only = []
+                on_off_only = []
                 for entry in entries:
-                    entity_id, only_brightness = _parse_light_entry(entry)
+                    entity_id, only_brightness, only_on_off = _parse_light_entry(entry)
                     if entity_id:
                         lights.append(entity_id)
                         if only_brightness:
                             brightness_only.append(entity_id)
+                        elif only_on_off:
+                            on_off_only.append(entity_id)
             else:
                 raise ValueError(
                     f"«{chunk}» no se reconoce en la regla «{name}» (usa «si entidad=valor» o «luces=...»)"
                 )
         if not lights:
             raise ValueError(f"la regla «{name}» no declara ninguna luz («luces=...»)")
-        parsed.append({"name": name, "conditions": conditions, "lights": lights, "brightness_only": brightness_only})
+        parsed.append({
+            "name": name, "conditions": conditions, "lights": lights,
+            "brightness_only": brightness_only, "on_off_only": on_off_only,
+        })
     if not parsed:
         raise ValueError("declara al menos una regla (una sin «si...» sirve de reserva por defecto)")
     return parsed
@@ -174,10 +192,15 @@ def rules_to_text(rule_list: list[dict]) -> str:
             state_str = ",".join(state) if isinstance(state, list) else (state or "")
             chunks.append(f"si {c.get('entity_id', '')}={state_str}")
         brightness_only = set(r.get("brightness_only") or [])
-        light_entries = [
-            f"{e}:solo_brillo" if e in brightness_only else e
-            for e in (r.get("lights") or [])
-        ]
+        on_off_only = set(r.get("on_off_only") or [])
+        light_entries = []
+        for e in (r.get("lights") or []):
+            if e in brightness_only:
+                light_entries.append(f"{e}:solo_brillo")
+            elif e in on_off_only:
+                light_entries.append(f"{e}:solo_encendido")
+            else:
+                light_entries.append(e)
         chunks.append("luces=" + ",".join(light_entries))
         lines.append("; ".join(chunks))
     return "\n".join(lines)

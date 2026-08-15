@@ -44,7 +44,7 @@ DEFAULT_REAPPLY_MINUTES = 5
 class LightingPlugin(Plugin):
     slug = "lighting"
     name = "Lighting Orchestrator"
-    version = "0.5.3"
+    version = "0.5.4"
 
     def __init__(self) -> None:
         self._runners: dict[str, ZoneRunner] = {}
@@ -299,11 +299,19 @@ class LightingPlugin(Plugin):
         # evento disparaba 7 lecturas completas seguidas por WebSocket.
         # Una unica lectura aqui, compartida por las 7 zonas del ciclo,
         # en vez de que cada una pida lo mismo por su cuenta.
+        # Medicion real de tiempos -- a peticion expresa del usuario
+        # (objetivo: menos de 1s de principio a fin), en vez de seguir
+        # ajustando a ciegas. INFO, no DEBUG: es la unica forma de saber
+        # de verdad donde se va el tiempo en produccion sin tener que
+        # cronometrar a mano desde fuera cada vez que se sospecha una
+        # regresion.
+        cycle_start = time.monotonic()
         try:
             states = {s.get("entity_id"): s for s in self._ws.get_states() if s.get("entity_id")}
         except Exception:
             log.exception("Fallo leyendo estados de HA para el ciclo reactivo de Lighting")
             states = None
+        states_elapsed = time.monotonic() - cycle_start
         for zone_id, runner in list(self._runners.items()):
             try:
                 runner.handle_reactive_event(states)
@@ -313,6 +321,11 @@ class LightingPlugin(Plugin):
                     mqtt_zone.publish_state(runner)
             except Exception:
                 log.exception("Fallo en ciclo reactivo de zona lighting %s", zone_id)
+        total_elapsed = time.monotonic() - cycle_start
+        log.info(
+            "Ciclo reactivo de Lighting: %.3fs total (lectura de HA: %.3fs, %d zona(s))",
+            total_elapsed, states_elapsed, len(self._runners),
+        )
 
     # ------------------------------------------------------------ periodo -
 

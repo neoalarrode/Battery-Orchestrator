@@ -87,6 +87,20 @@ class HAWebSocketClient:
         self._next_id = 0
         self._send_lock = threading.Lock()
         self._pending: dict[int, queue.Queue] = {}
+        # BUG REAL, confirmado por el usuario: incluso con la latencia de
+        # zonas/luces ya arreglada, el encendido seguia tardando 3-5s en
+        # TODAS las zonas por igual (Tapo, Tuya, o luces nativas de HA sin
+        # ningun bridge de por medio) -- la causa comun era esta: `get_
+        # states()` trae el volcado COMPLETO de estados de HA (1770
+        # entidades, ~870KB en esta instalacion) por WebSocket, y Lighting
+        # lo pedia de nuevo en CADA ciclo reactivo. Ahora se mantiene una
+        # copia local (`_states_cache`), sembrada UNA vez al conectar y
+        # actualizada en vivo con cada evento `state_changed` que ya nos
+        # llega de todos modos (la suscripcion es a TODOS los cambios,
+        # filtrados aqui) -- `get_states()`/`get_state()` pasan a ser
+        # lecturas locales instantaneas, sin ningun viaje de red.
+        self._states_lock = threading.Lock()
+        self._states_cache: dict[str, dict] = {}
 
     def _next_msg_id(self) -> int:
         with self._id_lock:
@@ -121,13 +135,19 @@ class HAWebSocketClient:
     # ---------------------------------------------------- atajos comunes --
 
     def get_states(self) -> list[dict]:
-        return self.call("get_states") or []
+        """Lectura LOCAL de la copia mantenida en vivo (ver `_states_
+        cache` en `__init__` y `_connect_and_listen`) -- ya NO pide el
+        volcado completo a HA en cada llamada (bug real de latencia,
+        confirmado por el usuario). Si el WebSocket aun no ha terminado
+        de conectar/sembrar la copia (arranque en frio), devuelve lo que
+        haya ahora mismo (vacio -- los llamantes ya manejan bien "sin
+        datos todavia", igual que manejaban un fallo de `call()`)."""
+        with self._states_lock:
+            return list(self._states_cache.values())
 
     def get_state(self, entity_id: str) -> dict | None:
-        for s in self.get_states():
-            if s.get("entity_id") == entity_id:
-                return s
-        return None
+        with self._states_lock:
+            return self._states_cache.get(entity_id)
 
     def call_service(self, domain: str, service: str, service_data: dict | None = None,
                       target: dict | None = None, return_response: bool = False):
@@ -230,8 +250,29 @@ class HAWebSocketClient:
             if not sub_ack.get("success"):
                 raise RuntimeError(f"No se pudo suscribir a state_changed: {sub_ack}")
 
+            # Siembra UNA vez la copia local completa -- directo por
+            # `recv()`, NO via `call()` (que esperaria la respuesta desde
+            # ESTE MISMO hilo lector, un interbloqueo seguro: nadie mas
+            # va a leer el socket para entregarsela). En este punto de la
+            # conexion (justo tras el ack de suscripcion, antes de que
+            # ningun otro hilo haya podido mandar nada) el SIGUIENTE
+            # mensaje que llegue solo puede ser esta respuesta.
+            states_id = self._next_msg_id()
+            self._ws.send(json.dumps({"id": states_id, "type": "get_states"}))
+            states_resp = json.loads(self._ws.recv())
+            if states_resp.get("success"):
+                with self._states_lock:
+                    self._states_cache = {
+                        s["entity_id"]: s for s in (states_resp.get("result") or []) if s.get("entity_id")
+                    }
+            else:
+                log.warning("WebSocket de HA: fallo sembrando la copia local de estados: %s", states_resp.get("error"))
+
             self.connected = True
-            log.info("WebSocket de HA conectado y suscrito a state_changed")
+            log.info(
+                "WebSocket de HA conectado y suscrito a state_changed (%d entidades sembradas)",
+                len(self._states_cache),
+            )
 
             while not self._stop:
                 raw = self._ws.recv()
@@ -259,10 +300,26 @@ class HAWebSocketClient:
                     continue
                 data = event.get("data") or {}
                 entity_id = data.get("entity_id")
-                if not entity_id or not self._is_watched(entity_id):
+                if not entity_id:
+                    continue
+                new_state_obj = data.get("new_state")
+                # La copia local se mantiene con TODOS los cambios, no
+                # solo los "vigilados" -- seguimos suscritos a TODO
+                # `state_changed` (HA no permite filtrar por entidad en
+                # la suscripcion, ver docstring de la clase), asi que
+                # esto no cuesta ninguna llamada de red extra, solo
+                # actualizar el dict local. El filtro "vigilado o no"
+                # (mas abajo) sigue existiendo tal cual -- decide si esto
+                # dispara un ciclo reactivo, nunca si se guarda o no.
+                with self._states_lock:
+                    if new_state_obj is None:
+                        self._states_cache.pop(entity_id, None)
+                    else:
+                        self._states_cache[entity_id] = new_state_obj
+                if not self._is_watched(entity_id):
                     continue
                 old_state = (data.get("old_state") or {}).get("state")
-                new_state = (data.get("new_state") or {}).get("state")
+                new_state = new_state_obj.get("state") if new_state_obj else None
                 if old_state == new_state:
                     # Solo el ATRIBUTO cambio (p.ej. jitter interno de otra
                     # integracion) — no es una lectura nueva de verdad,

@@ -209,7 +209,7 @@ class ZoneRunner:
             log.exception("Zona lighting %s: fallo apagando %s", self.zone_id, entity_id)
 
     def _apply_values(self, entity_id: str, values: dict | None, turning_on: bool, brightness_only: bool = False,
-                       hs: tuple[float, float] | None = None) -> None:
+                       hs: tuple[float, float] | None = None, on_off_only: bool = False) -> None:
         """Enciende/ajusta segun la curva solar (`values`, puede ser None
         si `sun.sun` no esta disponible ahora mismo -- en ese caso solo
         se enciende, sin tocar color/brillo). Registra lo mandado en
@@ -218,11 +218,19 @@ class ZoneRunner:
         (luz marcada «:solo_brillo» en la regla, ver rules.py) excluye
         esta luz en concreto del color/temperatura de color -- se ajusta
         el brillo igual que cualquier otra, simplemente nunca se le manda
-        color. `hs` (color manual, ver `manual_command`) tiene PRIORIDAD
-        sobre `color_temp_kelvin` de la curva -- nunca se mandan los dos a
-        la vez, el color HS explicito siempre gana."""
-        brightness_pct = values.get("brightness_pct") if values else None
-        color_temp_kelvin = None if (brightness_only or hs is not None) else (values.get("color_temp_kelvin") if values else None)
+        color. `on_off_only` (luz marcada «:solo_encendido», a peticion
+        expresa del usuario para las lamparas del Salon) va un paso mas
+        alla -- ni brillo ni color, la curva solar de la zona SOLO
+        enciende/apaga esta luz, el resto lo controla el usuario a mano
+        (su propio dimmer, un mando aparte, lo que sea). `hs` (color
+        manual, ver `manual_command`) tiene PRIORIDAD sobre `color_temp_
+        kelvin` de la curva -- nunca se mandan los dos a la vez, el color
+        HS explicito siempre gana (salvo en una luz «:solo_encendido»,
+        que tampoco recibe hs -- es exactamente el mismo "no le toques
+        nada mas que el interruptor" pedido por el usuario)."""
+        brightness_pct = None if on_off_only else (values.get("brightness_pct") if values else None)
+        hs = None if on_off_only else hs
+        color_temp_kelvin = None if (brightness_only or on_off_only or hs is not None) else (values.get("color_temp_kelvin") if values else None)
         try:
             if self._is_bridge_ref(entity_id):
                 handle = self._resolve_bridge_handle(entity_id)
@@ -351,6 +359,7 @@ class ZoneRunner:
         selected_name = selected.get("name") if selected else None
         selected_lights = set(selected.get("lights") or []) if selected else set()
         selected_brightness_only = set(selected.get("brightness_only") or []) if selected else set()
+        selected_on_off_only = set(selected.get("on_off_only") or []) if selected else set()
 
         transitioned = (not was_occupied) or (selected_name != self.active_rule)
         self.active_rule = selected_name
@@ -393,18 +402,25 @@ class ZoneRunner:
         pending: list[tuple] = []
         for entity_id in selected_lights:
             only_brightness = entity_id in selected_brightness_only
+            only_on_off = entity_id in selected_on_off_only
             if self._is_on(states, entity_id):
+                # Una luz «:solo_encendido» no tiene NADA que reajustar
+                # una vez encendida (ni brillo ni color) -- a diferencia
+                # de «:solo_brillo» (que si sigue reajustando brillo),
+                # aqui ni se molesta en llamar: nada que mandar.
+                if only_on_off:
+                    continue
                 if not overrides.get(entity_id):
-                    pending.append((entity_id, values, False, only_brightness, None))
+                    pending.append((entity_id, values, False, only_brightness, None, False))
             elif auto_on and transitioned:
-                pending.append((entity_id, values, True, only_brightness, None))
+                pending.append((entity_id, values, True, only_brightness, None, only_on_off))
         if len(pending) == 1:
             self._apply_values(*pending[0])
         elif pending:
             with concurrent.futures.ThreadPoolExecutor(max_workers=len(pending)) as pool:
                 futures = [
-                    pool.submit(self._apply_values, entity_id, vals, turning_on, brightness_only, hs)
-                    for entity_id, vals, turning_on, brightness_only, hs in pending
+                    pool.submit(self._apply_values, entity_id, vals, turning_on, brightness_only, hs, on_off_only)
+                    for entity_id, vals, turning_on, brightness_only, hs, on_off_only in pending
                 ]
                 concurrent.futures.wait(futures)
 
@@ -423,18 +439,22 @@ class ZoneRunner:
     # Ver lighting/mqtt_lighting.py -- una luz de conjunto por zona, para
     # HomeKit/Matter/Lovelace, en vez de exponer cada bombilla suelta.
 
-    def _target_lights(self) -> tuple[set[str], set[str]]:
-        """(luces objetivo, cuales de ellas son «:solo_brillo») para la
-        luz dummy -- las de la regla activa si hay una ocupacion/regla
-        resuelta ahora mismo, o TODAS las de la zona si no (zona vacia,
-        o presencia real pero ninguna regla coincide): sin nada mas
-        concreto que ofrecer, mejor representar el conjunto entero que no
-        representar nada."""
+    def _target_lights(self) -> tuple[set[str], set[str], set[str]]:
+        """(luces objetivo, cuales «:solo_brillo», cuales «:solo_
+        encendido») para la luz dummy -- las de la regla activa si hay
+        una ocupacion/regla resuelta ahora mismo, o TODAS las de la zona
+        si no (zona vacia, o presencia real pero ninguna regla coincide):
+        sin nada mas concreto que ofrecer, mejor representar el conjunto
+        entero que no representar nada."""
         if self.occupied and self.active_rule:
             for rule in self._rules:
                 if rule.get("name") == self.active_rule:
-                    return set(rule.get("lights") or []), set(rule.get("brightness_only") or [])
-        return rules.all_lights(self._rules), set()
+                    return (
+                        set(rule.get("lights") or []),
+                        set(rule.get("brightness_only") or []),
+                        set(rule.get("on_off_only") or []),
+                    )
+        return rules.all_lights(self._rules), set(), set()
 
     def group_state(self) -> dict:
         """Estado agregado para la luz dummy: ON si CUALQUIERA de las
@@ -447,7 +467,7 @@ class ZoneRunner:
         vez, igual que nunca se mandan los dos a la vez (ver
         `_apply_values`)."""
         states = self._snapshot_states()
-        target, _brightness_only = self._target_lights()
+        target, _brightness_only, _on_off_only = self._target_lights()
         on = any(self._is_on(states, e) for e in target)
         vals = self.current_values or {}
         out = {"on": on, "brightness_pct": vals.get("brightness_pct") if on else None}
@@ -476,13 +496,21 @@ class ZoneRunner:
         `turning_on=True` limpia la marca de nuevo). Un comando SIN `hs`
         (o `on=False`) vuelve a dejar la zona en manos de la curva
         automatica de blancos."""
-        target, brightness_only = self._target_lights()
+        target, brightness_only, on_off_only = self._target_lights()
         for entity_id in target:
             if on:
                 only_brightness = entity_id in brightness_only
-                entity_hs = None if only_brightness else hs
+                only_on_off = entity_id in on_off_only
+                # Una luz «:solo_encendido» tampoco recibe brillo/color a
+                # mano desde la luz de conjunto -- es el mismo "no le
+                # toques nada mas que el interruptor" que ya aplica a la
+                # curva automatica (ver _apply_values), no solo a ella.
+                entity_hs = None if (only_brightness or only_on_off) else hs
                 values = {"brightness_pct": brightness_pct, "color_temp_kelvin": color_temp_kelvin}
-                self._apply_values(entity_id, values, turning_on=True, brightness_only=only_brightness, hs=entity_hs)
+                self._apply_values(
+                    entity_id, values, turning_on=True,
+                    brightness_only=only_brightness, hs=entity_hs, on_off_only=only_on_off,
+                )
                 if entity_hs is not None:
                     self._state.setdefault("manual_override", {})[entity_id] = True
             else:

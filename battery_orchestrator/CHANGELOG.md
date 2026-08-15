@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.21.7
+Sha256 de Lighting/TP-Link re-pineados al tag `v0.21.6` (copia local de estados de HA + reintento TP-Link mas corto + exclusion total de brillo/color para luces `:solo_encendido`) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`ha_websocket.py`, ademas de `plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
+## 0.21.6
+**Bug real, confirmado por el usuario en produccion tras probar la v0.21.4/v0.21.5 (encendido en paralelo): TODAS las zonas seguian tardando 3-5s por igual, incluso con luces nativas de HA sin ningun bridge TP-Link/Tuya de por medio.** Causa real, comun a Lighting y Climate: `HAWebSocketClient.get_states()` pedia el volcado COMPLETO de estados de HA (1770 entidades, ~870KB en esta instalacion) por WebSocket cada vez que se llamaba -- ninguna de las dos optimizaciones anteriores (lectura compartida entre zonas, encendido en paralelo) tocaba este coste de fondo, que estaba presente en CADA ciclo reactivo independientemente de cuantas zonas o que tipo de luz.
+
+Arreglo de raiz: `HAWebSocketClient` mantiene ahora una copia LOCAL de estados (`_states_cache`), sembrada una vez al conectar y actualizada en vivo con cada evento `state_changed` que de todos modos ya nos llega (la suscripcion es a TODOS los cambios, se filtraba en memoria). `get_states()`/`get_state()` pasan a ser lecturas LOCALES instantaneas, sin ningun viaje de red -- beneficia a Lighting Y a Climate por igual (mismo cliente WebSocket compartido), sin tocar ninguna linea de ninguno de los dos plugins.
+
+Ademas, a peticion expresa del usuario (objetivo: reaccion en menos de 1s):
+- TP-Link: `RETRY_DELAY_SECONDS` (colision de sesion KLAP con la integracion nativa de HA) bajado de 1.0s a 0.15s -- una colision se libera casi siempre en milisegundos, no hacia falta esperar un segundo entero.
+- Instrumentacion: el ciclo reactivo de Lighting registra ahora su tiempo real (lectura de HA + zonas) en el log, para medir en vez de adivinar.
+
+**Lighting**: nuevo sufijo de luz `:solo_encendido` (a peticion expresa del usuario, para las lamparas del Salón) -- excluye esa luz TANTO de brillo como de color de la curva solar de la zona (a diferencia de `:solo_brillo`, que solo excluye color); la zona solo la enciende/apaga, el resto lo controla el usuario a mano.
+
 ## 0.21.5
 Sha256 de Lighting re-pineado al tag `v0.21.4` (encendido de varias luces de una zona en paralelo, no en serie) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

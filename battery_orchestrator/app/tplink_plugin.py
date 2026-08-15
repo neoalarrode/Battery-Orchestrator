@@ -42,7 +42,7 @@ log = logging.getLogger("tplink_plugin")
 class TplinkPlugin(Plugin):
     slug = "tplink"
     name = "TP-Link Orchestrator"
-    version = "0.1.2"
+    version = "0.1.3"
 
     def __init__(self) -> None:
         self._manager = TplinkDeviceManager(on_any_change=self._on_device_change)

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.16.6
+**Bug real, confirmado en producción sobre una red con más de una decena de dispositivos TP-Link:** el escaneo describía cada dispositivo detectado UNO A UNO (`update()`+`disconnect()` secuencial) -- con 13 dispositivos reales el tiempo total superaba de sobra el timeout de la llamada (`TimeoutError`, escaneo entero perdido pese a que cada dispositivo individual responde en menos de 1s). Fix: describir todos los dispositivos EN PARALELO (`asyncio.gather`), el tiempo total pasa a ser el del más lento, no la suma de todos. Verificado contra la red real del usuario: 13 dispositivos (bombillas L630, enchufes P110) descubiertos y descritos correctamente, cámaras Tapo excluidas.
+
 ## 0.16.5
 Sha256 de TP-Link re-pineado al tag `v0.16.4` (fix real del flag color_temp_kelvin) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

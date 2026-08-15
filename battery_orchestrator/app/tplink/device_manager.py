@@ -93,8 +93,7 @@ class TplinkDeviceManager:
 
     async def _discover(self, credentials: Credentials | None) -> dict[str, dict]:
         found = await Discover.discover(credentials=credentials, discovery_timeout=8)
-        out: dict[str, dict] = {}
-        for host, device in found.items():
+        async def _describe(host: str, device) -> tuple[str, dict | None]:
             try:
                 # BUG REAL, confirmado en produccion: el objeto que
                 # devuelve el broadcast SOLO trae `_discovery_info` (el
@@ -108,7 +107,7 @@ class TplinkDeviceManager:
                 # que se sabia soportado (verificado contra la bombilla
                 # real del usuario).
                 await device.update()
-                out[host] = {
+                return host, {
                     "alias": device.alias,
                     "model": device.model,
                     "device_type": str(device.device_type),
@@ -122,15 +121,25 @@ class TplinkDeviceManager:
                 # por un solo dispositivo que nunca iba a poder añadirse
                 # de todos modos.
                 log.debug("TP-Link: dispositivo en %s no soportado (¿camara Tapo?), se omite del escaneo", host, exc_info=True)
+                return host, None
             finally:
                 try:
                     await device.disconnect()
                 except Exception:
                     pass
-        return out
+
+        # BUG REAL, confirmado en produccion: describir cada dispositivo
+        # UNO A UNO (update+disconnect secuencial) sobre una red con mas
+        # de una decena de respuestas superaba de sobra el timeout total
+        # de `_run_coro` (`TimeoutError`, escaneo entero perdido pese a
+        # que cada dispositivo individual responde en menos de 1s) -- en
+        # paralelo, con `asyncio.gather`, el tiempo total es el del MAS
+        # LENTO, no la suma de todos.
+        results = await asyncio.gather(*(_describe(host, device) for host, device in found.items()))
+        return {host: info for host, info in results if info is not None}
 
     def discover(self, credentials: Credentials | None) -> dict[str, dict]:
-        return self._run_coro(self._discover(credentials), timeout=12)
+        return self._run_coro(self._discover(credentials), timeout=30)
 
     # --------------------------------------------------------- dispositivos
 

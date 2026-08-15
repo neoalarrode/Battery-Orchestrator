@@ -6,12 +6,19 @@ conexion WebSocket para eventos reactivos y consultas puntuales, zonas
 persistidas en `lighting/zone_store.py`, un `ZoneRunner` por zona (ver
 `lighting/zone_runner.py`).
 
-A diferencia de Climate, este plugin NO controla dispositivos directamente
-(nada de Tuya-por-LAN aqui): actua siempre sobre entidades `light.*` YA
-expuestas en HA (nativas o publicadas por otro plugin, Tuya incluido, ver
-tuya/mqtt_tuya.py) llamando a los servicios estandar `light.turn_on`/
-`light.turn_off` por WebSocket -- cualquier bombilla que ya aparezca como
-`light.*` en HA sirve, sin que este plugin necesite saber de que marca es.
+DOS vias de control, no una sola -- una regla puede referenciar:
+  - Un `light.*` YA expuesto en HA (nativo, o publicado por otro plugin
+    via MQTT Discovery, Tuya incluido) -- se controla con los servicios
+    estandar `light.turn_on`/`light.turn_off` por WebSocket. Sirve
+    cualquier bombilla que ya aparezca como `light.*` en HA, sin que este
+    plugin necesite saber de que marca es.
+  - Un actuador de OTRO plugin cargado (hoy Tuya) referenciado como
+    `tuya:<device_id>[:<indice>]`, controlado DIRECTAMENTE en el mismo
+    proceso sin pasar por HA/MQTT -- mismo patron de "proveedor de
+    actuadores" que ya usa Climate (ver `register_actuator_provider`,
+    `TuyaPlugin.light_handle`). No son excluyentes: el mismo dispositivo
+    Tuya puede seguir viendose como `light.*` en HA (voz, Lovelace, otras
+    automatizaciones) mientras Lighting lo controla por la via directa.
 """
 
 from __future__ import annotations
@@ -36,14 +43,42 @@ REACTIVE_MIN_INTERVAL_SECONDS = 5
 class LightingPlugin(Plugin):
     slug = "lighting"
     name = "Lighting Orchestrator"
-    version = "0.1.0"
+    version = "0.2.0"
 
     def __init__(self) -> None:
         self._runners: dict[str, ZoneRunner] = {}
         self._ws = ha_websocket.HAWebSocketClient(self._on_entity_change)
         self._reactive = ha_websocket.ReactiveTrigger(self._run_reactive_cycle)
         self._app = flask.Flask("lighting_plugin", template_folder="lighting_templates")
+        # Registro GENERICO de "proveedores de actuadores" -- mismo
+        # mecanismo que ya usa ClimatePlugin (ver su propio comentario):
+        # cualquier plugin que ofrezca `light_handle` (Tuya hoy, otra
+        # marca mañana) se registra aqui solo, sin que este fichero
+        # necesite conocer nada especifico de esa marca.
+        self._actuator_providers: dict[str, object] = {}
         self._register_routes()
+
+    def register_actuator_provider(self, prefix: str, provider) -> None:
+        """`provider` debe exponer `.light_handle(device_id, index) ->
+        handle | None` y, si quiere aparecer en la referencia de luces de
+        la interfaz, `.list_light_actuators() -> list[dict]`."""
+        self._actuator_providers[prefix] = provider
+        log.info("Registrado proveedor de actuadores '%s'", prefix)
+
+    def is_bridge_ref(self, ref: str) -> bool:
+        return ":" in ref and ref.split(":", 1)[0] in self._actuator_providers
+
+    def resolve_bridge_handle(self, ref: str):
+        """`ref` = '<prefijo>:<device_id>[:<indice>]' -> handle, o None
+        si el prefijo no tiene proveedor registrado ahora mismo."""
+        prefix, rest = ref.split(":", 1)
+        provider = self._actuator_providers.get(prefix)
+        if provider is None:
+            return None
+        parts = rest.split(":", 1)
+        device_id = parts[0]
+        index = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
+        return provider.light_handle(device_id, index)
 
     # --------------------------------------------------------------- Flask -
 
@@ -77,6 +112,24 @@ class LightingPlugin(Plugin):
                 if s.get("entity_id", "").startswith("light.")
             ]
             out.sort(key=lambda x: x["name"].lower())
+            return flask.jsonify(out)
+
+        @app.get("/api/light-actuators")
+        def _list_light_actuators():
+            """Actuadores de luz que OTROS plugins ofrecen (Tuya hoy,
+            otra marca mañana) para control DIRECTO -- agregado de todos
+            los proveedores registrados, mismo patron que Climate usa en
+            `/api/actuators`. `ref` es lo que se escribe en `luces=...`
+            de una regla para usar esta via en vez de un `light.*`."""
+            out = []
+            for prefix, provider in self._actuator_providers.items():
+                lister = getattr(provider, "list_light_actuators", None)
+                if lister is None:
+                    continue
+                try:
+                    out.extend(lister())
+                except Exception:
+                    log.exception("Fallo listando actuadores de luz del proveedor '%s'", prefix)
             return flask.jsonify(out)
 
         @app.get("/api/zones")
@@ -161,7 +214,7 @@ class LightingPlugin(Plugin):
         cfg = zone["config"]
         state = zone.get("state") or None
 
-        runner = ZoneRunner(zone_id, cfg, self._ws, state=state)
+        runner = ZoneRunner(zone_id, cfg, self._ws, state=state, bridges=self)
         self._runners[zone_id] = runner
 
         # Una decision inicial ya al arrancar la zona -- si no, el panel

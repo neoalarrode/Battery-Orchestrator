@@ -185,6 +185,59 @@ class LightMapping:
     icon: str | None = None
 
 
+# Conversion mireds<->escala cruda del DP de temperatura de color de un
+# `LightMapping` -- UN SOLO SITIO para esta cuenta, usada tanto por
+# mqtt_tuya.py (bombilla expuesta como light.* de HA) como por
+# device_manager.py:TuyaLightHandle (control directo desde Lighting, sin
+# pasar por HA/MQTT) -- antes de esto la version MQTT ni siquiera
+# convertia: trataba el valor crudo del DP (una escala 0..color_temp_max
+# especifica del fabricante, NO mireds) como si YA fuera mireds, lo que
+# producia limites `min_mireds=1/max_mireds=1000` sin sentido fisico
+# (HA los traduce a min/max_color_temp_kelvin = 1.000.000K/1000K) y un
+# color real completamente distinto al pedido -- bug real, confirmado
+# contra el DP en vivo de una bombilla de produccion (se pidieron 4995K,
+# el DP de temperatura de color acabo en 200 sobre 1000, el numero de
+# mireds SIN CONVERTIR, no el punto de la escala del fabricante que
+# corresponde a ese Kelvin).
+#
+# Rango de blanco asumido para una bombilla RGBCW generica (2700K calido
+# - 6500K frio, gama habitual de una bombilla domestica) -- Tuya no
+# expone el Kelvin real de cada modelo por LAN, solo el 0..color_temp_max
+# especifico del fabricante (ver arriba), asi que esto es una SUPOSICION,
+# no una calibracion contra el hardware exacto de cada dispositivo. La
+# POLARIDAD asumida aqui (DP bajo = calido, DP alto = frio) tampoco esta
+# verificada visualmente contra cada modelo -- si el color sale al
+# reves en una bombilla concreta, invierte `color_temp_min`/
+# `color_temp_max` en su `profile_yaml`.
+LIGHT_WHITE_MIN_KELVIN = 2700
+LIGHT_WHITE_MAX_KELVIN = 6500
+LIGHT_MIN_MIREDS = round(1_000_000 / LIGHT_WHITE_MAX_KELVIN)  # ~154, extremo FRIO
+LIGHT_MAX_MIREDS = round(1_000_000 / LIGHT_WHITE_MIN_KELVIN)  # ~370, extremo CALIDO
+
+
+def mireds_to_light_dp(mireds: float, lt: "LightMapping") -> int:
+    """mireds (min=frio..max=calido) -> escala cruda del DP de
+    temperatura de color (`color_temp_min`=calido..`color_temp_max`=frio,
+    misma polaridad asumida que `light_dp_to_mireds`)."""
+    span_mireds = LIGHT_MAX_MIREDS - LIGHT_MIN_MIREDS
+    span_dp = lt.color_temp_max - lt.color_temp_min
+    if span_mireds <= 0 or span_dp == 0:
+        return int(lt.color_temp_min)
+    t = (LIGHT_MAX_MIREDS - mireds) / span_mireds  # 0=calido(dp bajo), 1=frio(dp alto)
+    t = max(0.0, min(1.0, t))
+    return round(lt.color_temp_min + t * span_dp)
+
+
+def light_dp_to_mireds(dp_value: float, lt: "LightMapping") -> int:
+    """Inverso de `mireds_to_light_dp`."""
+    span_dp = lt.color_temp_max - lt.color_temp_min
+    if span_dp == 0:
+        return LIGHT_MAX_MIREDS
+    t = (dp_value - lt.color_temp_min) / span_dp  # 0=calido, 1=frio
+    t = max(0.0, min(1.0, t))
+    return round(LIGHT_MAX_MIREDS - t * (LIGHT_MAX_MIREDS - LIGHT_MIN_MIREDS))
+
+
 @dataclass
 class ClimateMapping:
     """Composite entity for a real `climate.*` entity - this is the answer

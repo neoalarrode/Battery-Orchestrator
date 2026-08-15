@@ -48,6 +48,17 @@ def main() -> None:
                 continue
             climate_plugin.register_actuator_provider(p.slug, p)
 
+    # Mismo mecanismo, ahora para Lighting -- cualquier plugin cargado
+    # que ofrezca `light_handle` (Tuya hoy, otra marca mañana) se
+    # registra en Lighting sin que este fichero necesite conocer nada
+    # especifico de esa marca.
+    lighting_plugin = by_slug.get("lighting")
+    if lighting_plugin is not None:
+        for p in plugins:
+            if p is lighting_plugin or not hasattr(p, "light_handle"):
+                continue
+            lighting_plugin.register_actuator_provider(p.slug, p)
+
     for p in plugins:
         p.start_background_threads()
 

@@ -23,7 +23,7 @@ import time
 from typing import Any, Callable
 
 from .discovery import DiscoveredDevice, PersistentDiscovery
-from .profile import ClimateMapping, DeviceProfile, parse_profile
+from .profile import ClimateMapping, DeviceProfile, LightMapping, light_dp_to_mireds, mireds_to_light_dp, parse_profile
 from .tuya_lan import TuyaLocalDevice
 
 log = logging.getLogger("tuya.device_manager")
@@ -243,6 +243,14 @@ class TuyaDeviceManager:
             return None
         return TuyaClimateHandle(self, device_id, profile.climates[climate_index])
 
+    # ------------------------------------------------------- fachada light
+
+    def light_handle(self, device_id: str, light_index: int = 0) -> "TuyaLightHandle | None":
+        profile = self._profiles.get(device_id)
+        if profile is None or light_index >= len(profile.lights):
+            return None
+        return TuyaLightHandle(self, device_id, profile.lights[light_index])
+
 
 class TuyaClimateHandle:
     """Fachada minima para que ZoneRunner controle un `climates:` de un
@@ -357,3 +365,78 @@ class TuyaClimateHandle:
         raw = reverse.get(fan_mode)
         if raw is not None:
             self._manager.set_dp(self._device_id, m.fan_dp, raw)
+
+
+class TuyaLightHandle:
+    """Fachada minima para que Lighting controle una luz de un perfil
+    Tuya EN EL MISMO PROCESO, sin pasar por HA/MQTT -- mismo patron que
+    `TuyaClimateHandle` para Climate (control directo, resuelto contra
+    `TuyaDeviceManager`). Va por aqui cuando una regla de una zona de
+    Lighting referencia `tuya:<device_id>[:<indice>]` en vez de un
+    `light.*` de HA -- evita el viaje de ida y vuelta MQTT/HA (y, de
+    paso, la conversion mireds<->DP se hace UNA vez, la misma que usa
+    mqtt_tuya.py, ver tuya/profile.py).
+
+    Home Assistant sigue viendo la MISMA bombilla como `light.*` si el
+    dispositivo tambien tiene `expose_mqtt` activado -- las dos vias no
+    son excluyentes, son dos caminos hacia el mismo Tuya real: uno para
+    exponerlo a HA (voz, Lovelace, otras automatizaciones), otro directo
+    para que Lighting no dependa de que ese camino este bien configurado.
+    """
+
+    def __init__(self, manager: "TuyaDeviceManager", device_id: str, mapping: LightMapping) -> None:
+        self._manager = manager
+        self._device_id = device_id
+        self._mapping = mapping
+
+    @property
+    def available(self) -> bool:
+        return self._manager.connected(self._device_id)
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self._manager.get_decoded(self._device_id, self._mapping.switch_dp))
+
+    @property
+    def brightness_pct(self) -> float | None:
+        m = self._mapping
+        if m.brightness_dp is None:
+            return None
+        raw = self._manager.get_decoded(self._device_id, m.brightness_dp)
+        if raw is None:
+            return None
+        span = m.brightness_max - m.brightness_min
+        if span <= 0:
+            return None
+        return max(0.0, min(100.0, (raw - m.brightness_min) / span * 100))
+
+    @property
+    def color_temp_kelvin(self) -> int | None:
+        m = self._mapping
+        if m.color_temp_dp is None:
+            return None
+        raw = self._manager.get_decoded(self._device_id, m.color_temp_dp)
+        if raw is None:
+            return None
+        mireds = light_dp_to_mireds(raw, m)
+        return round(1_000_000 / mireds) if mireds else None
+
+    def turn_on(self, brightness_pct: float | None = None, color_temp_kelvin: float | None = None) -> None:
+        m = self._mapping
+        self._manager.set_dp(self._device_id, m.switch_dp, True)
+        if m.work_mode_dp is not None and (brightness_pct is not None or color_temp_kelvin is not None):
+            # Igual que mqtt_tuya.py: forzar modo "blanco" ANTES de tocar
+            # brillo/color -- si el dispositivo esta en modo color, un
+            # cambio del lado blanco no se veria hasta cambiar de modo.
+            self._manager.set_dp(self._device_id, m.work_mode_dp, m.work_mode_white)
+        if brightness_pct is not None and m.brightness_dp is not None:
+            span = m.brightness_max - m.brightness_min
+            raw = round(m.brightness_min + max(0.0, min(100.0, brightness_pct)) / 100 * span)
+            self._manager.set_dp(self._device_id, m.brightness_dp, raw)
+        if color_temp_kelvin is not None and m.color_temp_dp is not None and color_temp_kelvin > 0:
+            mireds = 1_000_000 / color_temp_kelvin
+            raw = mireds_to_light_dp(mireds, m)
+            self._manager.set_dp(self._device_id, m.color_temp_dp, raw)
+
+    def turn_off(self) -> None:
+        self._manager.set_dp(self._device_id, self._mapping.switch_dp, False)

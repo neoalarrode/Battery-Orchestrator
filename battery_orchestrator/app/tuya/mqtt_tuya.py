@@ -20,6 +20,8 @@ import json
 import logging
 from functools import partial
 
+from tuya.profile import LIGHT_MAX_MIREDS, LIGHT_MIN_MIREDS, light_dp_to_mireds, mireds_to_light_dp
+
 log = logging.getLogger("tuya.mqtt")
 
 DISCOVERY_PREFIX = "homeassistant"
@@ -163,10 +165,20 @@ class MqttTuyaDevice:
             )
             self._mqtt.subscribe(f"{base}/brightness/set", partial(self._on_light_brightness, index))
         if lt.color_temp_dp is not None:
+            # BUG FIXED HERE: esto declaraba `min_mireds=1,
+            # max_mireds=color_temp_max` -- tratando la escala CRUDA del
+            # DP (0..color_temp_max, especifica del fabricante, NUNCA
+            # mireds de verdad) como si YA fuera mireds. HA lo traducia a
+            # limites sin sentido fisico (min/max_color_temp_kelvin =
+            # 1.000.000K/1000K, confirmado en produccion) y el color real
+            # aplicado no correspondia al pedido. Los limites correctos
+            # (y la conversion de ida y vuelta, ver `_on_light_color_temp`/
+            # `_publish_light_state`) viven en tuya/profile.py, en un solo
+            # sitio para no divergir del control directo (TuyaLightHandle).
             payload.update(
                 color_temp_state_topic=f"{base}/color_temp/state",
                 color_temp_command_topic=f"{base}/color_temp/set",
-                min_mireds=1, max_mireds=max(int(lt.color_temp_max), 1),
+                min_mireds=LIGHT_MIN_MIREDS, max_mireds=LIGHT_MAX_MIREDS,
             )
             self._mqtt.subscribe(f"{base}/color_temp/set", partial(self._on_light_color_temp, index))
         if lt.color_dp is not None:
@@ -222,11 +234,27 @@ class MqttTuyaDevice:
             b = self._manager.get_decoded(self.device_id, lt.brightness_dp)
             if b is not None:
                 self._mqtt.publish(f"{base}/brightness/state", int(b), retain=True)
-        if lt.color_temp_dp is not None:
+
+        # BUG FIXED HERE: se publicaban `color_temp/state` Y `hs/state` a
+        # la vez, sin mirar el `work_mode_dp` real del dispositivo -- el
+        # esquema MQTT "legacy" de HA infiere el `color_mode` activo de
+        # CUAL topic recibio valor mas recientemente, no del dispositivo,
+        # asi que publicar los dos siempre dejaba a HA adivinando (visto
+        # en produccion: color_mode="hs" con un color que no era el
+        # pedido, mientras el DP real `work_mode` seguia en "white").
+        # Ahora solo se publica el topic del modo REALMENTE activo.
+        work_mode = self._manager.get_decoded(self.device_id, lt.work_mode_dp) if lt.work_mode_dp is not None else None
+        publish_color_temp = lt.color_temp_dp is not None and (work_mode is None or work_mode == lt.work_mode_white)
+        publish_hs = lt.color_dp is not None and (work_mode is None or work_mode == lt.work_mode_colour)
+
+        if publish_color_temp:
             ct = self._manager.get_decoded(self.device_id, lt.color_temp_dp)
             if ct is not None:
-                self._mqtt.publish(f"{base}/color_temp/state", int(ct), retain=True)
-        if lt.color_dp is not None:
+                # BUG FIXED HERE: se publicaba el valor CRUDO del DP
+                # (escala 0..color_temp_max del fabricante) como si ya
+                # fueran mireds -- ver el aviso en `_publish_light`.
+                self._mqtt.publish(f"{base}/color_temp/state", light_dp_to_mireds(ct, lt), retain=True)
+        if publish_hs:
             raw = self._manager.get_decoded(self.device_id, lt.color_dp)
             hs = _decode_color_hs(lt, raw)
             if hs is not None:
@@ -329,7 +357,12 @@ class MqttTuyaDevice:
         if lt is None or lt.color_temp_dp is None:
             return
         try:
-            val = max(0, min(int(lt.color_temp_max), round(float(msg.payload.decode()))))
+            # BUG FIXED HERE: esto clampaba el valor RECIBIDO (mireds de
+            # verdad, ver `_publish_light`) directo al rango del DP
+            # (0..color_temp_max, escala del fabricante) sin convertir --
+            # ver el aviso de arriba y `tuya/profile.py:mireds_to_light_dp`.
+            mireds = max(LIGHT_MIN_MIREDS, min(LIGHT_MAX_MIREDS, round(float(msg.payload.decode()))))
+            val = mireds_to_light_dp(mireds, lt)
             if lt.work_mode_dp is not None:
                 self._manager.set_dp(self.device_id, lt.work_mode_dp, lt.work_mode_white)
             self._manager.set_dp(self.device_id, lt.color_temp_dp, val)

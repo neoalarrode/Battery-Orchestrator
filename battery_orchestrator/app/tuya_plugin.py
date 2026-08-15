@@ -35,7 +35,7 @@ log = logging.getLogger("tuya_plugin")
 class TuyaPlugin(Plugin):
     slug = "tuya"
     name = "Tuya Orchestrator"
-    version = "0.3.5"
+    version = "0.4.0"
 
     def __init__(self) -> None:
         self._manager = TuyaDeviceManager(on_any_change=self._on_device_change)
@@ -292,6 +292,40 @@ class TuyaPlugin(Plugin):
                 out.append({
                     "ref": ref,
                     "name": f"{cfg.get('name') or device_id} — {cm.name}",
+                    "brand": "Tuya",
+                })
+        return out
+
+    def light_handle(self, device_id: str, light_index: int = 0):
+        """Punto de entrada para consumo INTERNO desde otro plugin (hoy
+        Lighting) -- control DIRECTO de una bombilla Tuya, sin pasar por
+        HA/MQTT (ver tuya/device_manager.py:TuyaLightHandle). No es
+        excluyente con `expose_mqtt`: el mismo dispositivo puede seguir
+        viendose como `light.*` en HA para todo lo demas (voz, Lovelace,
+        otras automatizaciones) mientras Lighting lo controla por aqui."""
+        return self._manager.light_handle(device_id, light_index)
+
+    def list_light_actuators(self) -> list[dict]:
+        """Un `{"ref", "name", "brand"}` por cada bloque `lights:` de
+        cada dispositivo dado de alta -- lo que LightingPlugin agrega
+        para que el selector de la interfaz de Lighting los ofrezca sin
+        que el usuario tenga que escribir `tuya:<id>` a mano en las
+        reglas. `ref` es exactamente lo que las reglas de una zona de
+        Lighting esperan como identificador de luz."""
+        out = []
+        for device in tuya_store.load_devices():
+            cfg = device["config"]
+            device_id = cfg.get("device_id")
+            if not device_id:
+                continue
+            profile = self._manager.profile(device_id)
+            if profile is None:
+                continue
+            for i, lt in enumerate(profile.lights):
+                ref = f"tuya:{device_id}" if len(profile.lights) == 1 else f"tuya:{device_id}:{i}"
+                out.append({
+                    "ref": ref,
+                    "name": f"{cfg.get('name') or device_id} — {lt.name}",
                     "brand": "Tuya",
                 })
         return out

@@ -48,15 +48,20 @@ log = logging.getLogger("lighting.zone_runner")
 # cada ciclo.
 BRIGHTNESS_TOLERANCE_PCT = 4
 COLOR_TEMP_TOLERANCE_KELVIN = 150
-RGB_TOLERANCE = 12
 
 
 class ZoneRunner:
-    def __init__(self, zone_id: str, cfg: dict, ws, mqtt_zone=None, state: dict | None = None) -> None:
+    def __init__(self, zone_id: str, cfg: dict, ws, mqtt_zone=None, state: dict | None = None, bridges=None) -> None:
         self.zone_id = zone_id
         self.zone = cfg
         self.ws = ws
         self.mqtt = mqtt_zone  # reservado para exponer estado a HA mas adelante, no usado todavia
+        # `bridges` (el propio LightingPlugin) resuelve refs
+        # "tuya:<device_id>[:<indice>]" a un handle de control DIRECTO --
+        # mismo patron que ZoneRunner.bridges de Climate. None en tests
+        # aislados (sin bridges no se puede resolver ninguna ref con
+        # prefijo, se tratan como si no existiera ese proveedor).
+        self.bridges = bridges
         self._state = dict(state or {})
 
         # El texto de reglas se parsea UNA vez al arrancar la zona (se
@@ -127,38 +132,88 @@ class ZoneRunner:
         return (now - last) < delay
 
     # -------------------------------------------------------------- luz --
+    #
+    # Cada "luz" de una regla es o bien un `light.*` de HA (via `self.ws`,
+    # WebSocket) o bien una ref con prefijo `<proveedor>:<device_id>
+    # [:indice]` (hoy solo `tuya:`, resuelta por `self.bridges` a un
+    # handle de control DIRECTO en el mismo proceso -- ver
+    # `LightingPlugin.resolve_bridge_handle`). Los metodos de aqui abajo
+    # son el UNICO sitio que decide por cual via ir; el resto de
+    # `decide_and_act` no sabe ni le importa cual es cual.
 
-    def _light_state(self, states: dict[str, dict], entity_id: str) -> dict:
-        return states.get(entity_id) or {}
+    def _is_bridge_ref(self, entity_id: str) -> bool:
+        return self.bridges is not None and self.bridges.is_bridge_ref(entity_id)
+
+    def _resolve_bridge_handle(self, entity_id: str):
+        if self.bridges is None:
+            return None
+        try:
+            return self.bridges.resolve_bridge_handle(entity_id)
+        except Exception:
+            log.exception("Zona lighting %s: fallo resolviendo bridge %s", self.zone_id, entity_id)
+            return None
+
+    def _current_light_values(self, states: dict[str, dict], entity_id: str) -> dict | None:
+        """`{"on", "brightness_pct", "color_temp_kelvin"}` en la MISMA
+        forma venga de donde venga -- HA o un bridge directo -- para que
+        `_detect_manual_overrides` no tenga que saber cual es cual."""
+        if self._is_bridge_ref(entity_id):
+            handle = self._resolve_bridge_handle(entity_id)
+            if handle is None or not handle.available:
+                return None
+            return {
+                "on": handle.is_on,
+                "brightness_pct": handle.brightness_pct,
+                "color_temp_kelvin": handle.color_temp_kelvin,
+            }
+        st = states.get(entity_id) or {}
+        attrs = st.get("attributes") or {}
+        brightness = attrs.get("brightness")
+        return {
+            "on": st.get("state") == "on",
+            "brightness_pct": round(brightness / 255 * 100) if brightness is not None else None,
+            "color_temp_kelvin": attrs.get("color_temp_kelvin"),
+        }
 
     def _is_on(self, states: dict[str, dict], entity_id: str) -> bool:
-        return self._light_state(states, entity_id).get("state") == "on"
+        vals = self._current_light_values(states, entity_id)
+        return bool(vals and vals["on"])
 
     def _turn_off(self, entity_id: str) -> None:
         try:
+            if self._is_bridge_ref(entity_id):
+                handle = self._resolve_bridge_handle(entity_id)
+                if handle is not None:
+                    handle.turn_off()
+                return
             self.ws.call_service("light", "turn_off", target={"entity_id": entity_id})
         except Exception:
             log.exception("Zona lighting %s: fallo apagando %s", self.zone_id, entity_id)
 
     def _apply_values(self, entity_id: str, values: dict | None, turning_on: bool) -> None:
-        """Manda `light.turn_on` con lo que toque segun la curva solar
-        (`values`, puede ser None si `sun.sun` no esta disponible ahora
-        mismo -- en ese caso solo se enciende, sin tocar color/brillo).
-        Registra lo mandado en `_state["commanded"]` para poder detectar
-        despues si alguien lo cambio a mano (ver
-        `_detect_manual_overrides`)."""
-        service_data: dict = {}
-        if values:
-            service_data["brightness_pct"] = values["brightness_pct"]
-            if "color_temp_kelvin" in values:
-                service_data["color_temp_kelvin"] = values["color_temp_kelvin"]
-            elif "rgb_color" in values:
-                service_data["rgb_color"] = values["rgb_color"]
-        transition = self.zone.get("transition_seconds")
-        if transition is not None:
-            service_data["transition"] = float(transition)
+        """Enciende/ajusta segun la curva solar (`values`, puede ser None
+        si `sun.sun` no esta disponible ahora mismo -- en ese caso solo
+        se enciende, sin tocar color/brillo). Registra lo mandado en
+        `_state["commanded"]` para poder detectar despues si alguien lo
+        cambio a mano (ver `_detect_manual_overrides`)."""
+        brightness_pct = values.get("brightness_pct") if values else None
+        color_temp_kelvin = values.get("color_temp_kelvin") if values else None
         try:
-            self.ws.call_service("light", "turn_on", service_data=service_data, target={"entity_id": entity_id})
+            if self._is_bridge_ref(entity_id):
+                handle = self._resolve_bridge_handle(entity_id)
+                if handle is None:
+                    return
+                handle.turn_on(brightness_pct=brightness_pct, color_temp_kelvin=color_temp_kelvin)
+            else:
+                service_data: dict = {}
+                if brightness_pct is not None:
+                    service_data["brightness_pct"] = brightness_pct
+                if color_temp_kelvin is not None:
+                    service_data["color_temp_kelvin"] = color_temp_kelvin
+                transition = self.zone.get("transition_seconds")
+                if transition is not None:
+                    service_data["transition"] = float(transition)
+                self.ws.call_service("light", "turn_on", service_data=service_data, target={"entity_id": entity_id})
         except Exception:
             log.exception("Zona lighting %s: fallo encendiendo/ajustando %s", self.zone_id, entity_id)
             return
@@ -187,23 +242,15 @@ class ZoneRunner:
         overrides = self._state.setdefault("manual_override", {})
         for entity_id in entity_ids:
             cmd = commanded.get(entity_id)
-            st = self._light_state(states, entity_id)
-            if not cmd or st.get("state") != "on":
+            vals = self._current_light_values(states, entity_id)
+            if not cmd or not vals or not vals["on"]:
                 continue
-            attrs = st.get("attributes") or {}
             mismatch = False
-            if "brightness_pct" in cmd and attrs.get("brightness") is not None:
-                real_pct = round(attrs["brightness"] / 255 * 100)
-                if abs(real_pct - cmd["brightness_pct"]) > BRIGHTNESS_TOLERANCE_PCT:
+            if "brightness_pct" in cmd and vals["brightness_pct"] is not None:
+                if abs(vals["brightness_pct"] - cmd["brightness_pct"]) > BRIGHTNESS_TOLERANCE_PCT:
                     mismatch = True
-            if not mismatch and "color_temp_kelvin" in cmd and attrs.get("color_temp_kelvin") is not None:
-                if abs(attrs["color_temp_kelvin"] - cmd["color_temp_kelvin"]) > COLOR_TEMP_TOLERANCE_KELVIN:
-                    mismatch = True
-            if not mismatch and "rgb_color" in cmd and attrs.get("rgb_color") is not None:
-                real_rgb = attrs["rgb_color"]
-                if len(real_rgb) == 3 and any(
-                    abs(real_rgb[i] - cmd["rgb_color"][i]) > RGB_TOLERANCE for i in range(3)
-                ):
+            if not mismatch and "color_temp_kelvin" in cmd and vals["color_temp_kelvin"] is not None:
+                if abs(vals["color_temp_kelvin"] - cmd["color_temp_kelvin"]) > COLOR_TEMP_TOLERANCE_KELVIN:
                     mismatch = True
             if mismatch:
                 overrides[entity_id] = True

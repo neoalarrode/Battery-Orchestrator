@@ -343,11 +343,16 @@
       <p class="help" style="margin-top:14px">
         Reglas — qué luces controlar según presencia y condiciones, una por línea, la primera que coincide gana:
         <code>Nombre; si entidad=valor[,valor2]; luces=light.a,light.b</code>. Una regla sin <code>si...</code> es la reserva por defecto.
+        Cada luz puede ser un <code>light.*</code> de Home Assistant (vía servicios, la más compatible) o, si el dispositivo viene de otro plugin instalado como Tuya, una referencia <code>tuya:device_id</code> para controlarlo directamente sin pasar por HA/MQTT.
       </p>
       <textarea id="zf-rules" required placeholder="TV encendida; si media_player.salon_tv=playing; luces=light.lateral_izq,light.lateral_der&#10;Normal; luces=light.techo_salon"></textarea>
       <details class="lights-ref">
         <summary>Ver luces (light.*) conocidas por Home Assistant ahora mismo</summary>
         <div id="lights-ref-list" class="lights-ref-list"></div>
+      </details>
+      <details class="lights-ref" id="tuya-ref-details">
+        <summary>Ver luces Tuya controlables directamente (sin pasar por HA)</summary>
+        <div id="tuya-ref-list" class="lights-ref-list"></div>
       </details>
 
       <div class="actions">
@@ -545,6 +550,19 @@ async function loadLightsRef() {
       </div>`).join("");
   } catch (e) { box.innerHTML = '<div class="lights-ref-row"><span class="nm">Fallo al listar luces</span></div>'; }
 }
+async function loadTuyaRef() {
+  const box = document.getElementById("tuya-ref-list");
+  try {
+    const actuators = await (await fetch(`${API}/light-actuators`)).json();
+    if (!actuators.length) { box.innerHTML = '<div class="lights-ref-row"><span class="nm">Ningún dispositivo Tuya con luces dado de alta todavía</span></div>'; return; }
+    box.innerHTML = actuators.map(a => `
+      <div class="lights-ref-row" onclick="insertLightRef('${esc(a.ref)}')">
+        <span class="nm">${esc(a.name)}</span><span class="eid">${esc(a.ref)}</span>
+      </div>`).join("");
+  } catch (e) { box.innerHTML = '<div class="lights-ref-row"><span class="nm">Fallo al listar actuadores Tuya</span></div>'; }
+}
+document.getElementById("tuya-ref-details").addEventListener("toggle", (e) => { if (e.target.open) loadTuyaRef(); });
+
 function insertLightRef(entityId) {
   const ta = document.getElementById("zf-rules");
   ta.value = ta.value + (ta.value && !ta.value.endsWith("\n") ? "" : "") + entityId;

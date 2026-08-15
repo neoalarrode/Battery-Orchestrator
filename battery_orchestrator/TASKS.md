@@ -276,14 +276,52 @@ verificado al leer las plantillas: termómetro/bombilla/nube/ondas WiFi/
 rayo) -- eso ya cubre "logo por plugin" dentro de lo que la arquitectura
 de HA permite.
 
-### 8. Plugin de Starlink -- NO EMPEZADO
+### 8. Plugin de Starlink -- HECHO Y DESPLEGADO (v0.24.1)
 
-Referencia dada por el usuario: https://github.com/DaveyHert/dishylink
-(hay que integrar esa app/lógica en nuestro sistema, no enlazarla suelta
--- mismo patrón "plugin propio" que Tuya/TP-Link, no una redirección).
-Falta: leer el repo de referencia para entender su protocolo real hacia
-la antena Starlink (gRPC local del dish, normalmente `192.168.100.1:9200`)
-antes de diseñar nada.
+A petición expresa del usuario ("no quiero que construyas un plugin nuevo
+quiero que integres el proyecto que te he mandado que lo adaptes
+mínimamente"): NO es una reimplementación como el resto de plugins --
+sirve tal cual el build web oficial de Dishylink (MIT), compilado en esta
+sesión desde el repo real (`npm install && npx tsc -b && npx vite build
+--base=./` -- Node.js instalado con Homebrew, no estaba disponible antes).
+
+Backend nuevo mínimo: `app/starlink_plugin.py` sirve el build vendorizado
+(`app/starlink_dist/`, ~3MB, sin tocar su código React/TS) y expone un
+proxy `/dishy/<resto>` -> `http://192.168.100.1:9201/<resto>`, espejo
+exacto del proxy de desarrollo real del proyecto (Vite, ver su
+`vite.config.ts`) -- necesario porque el dish solo responde CORS/Referer
+a su propio origen, así que un origen ajeno no puede llamarlo directo
+desde el navegador salvo con este proxy same-origin. La app original,
+sin configurar otro host, YA usa por defecto esa misma ruta relativa
+`/dishy/...` -- cero cambios en su código.
+
+**Verificado con evidencia real contra el dish del usuario** (no solo
+"despliega y ya"): tanto el host HAOS como el contenedor del addon
+alcanzan `192.168.100.1:9201` directamente (confirmado por el propio
+usuario antes de empezar), y una petición de prueba a través del proxy
+devolvió el MISMO error de protocolo grpc-web que devuelve el dish real
+directamente -- confirma ida y vuelta real a través de nuestro backend,
+no solo que el proxy no revienta.
+
+**Limitación conocida, documentada, no arreglada**: sin proxy de router
+(lista de dispositivos/uso por wifi) -- la IP por defecto del router
+Starlink (`192.168.1.1`) coincide muy probablemente con la del propio
+router de esta instalación (misma LAN `192.168.1.0/24`). El dashboard
+del dish en sí (rendimiento, latencia, obstrucción, alineación, consumo)
+funciona igual sin esto.
+
+**Pendiente de verificación real por el usuario**: abrir la página
+(`/plugins/starlink/` vía el selector de plugins) desde su propio
+navegador y confirmar que el dashboard carga datos en vivo -- esto no se
+ha podido comprobar visualmente desde esta sesión (sin acceso al
+navegador del usuario).
+
+**Nota suelta encontrada de paso**: `.dockerignore` ya excluía Climate/
+Energy/Tuya (y ahora Starlink) de la imagen base, pero NO excluye
+Lighting ni TP-Link pese a ser descargables igual que los demás -- se
+están horneando en la imagen del núcleo sin necesidad. No corregido
+(fuera del alcance de esta tarea, riesgo de tocar el build de otros
+plugins sin que se haya pedido).
 
 ### 9. Actualizar todo el repositorio -- NO EMPEZADO
 

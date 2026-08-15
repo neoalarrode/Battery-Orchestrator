@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.13.1
+Sha256 de Tuya re-pineado al tag `v0.13.0` (descubrimiento 0x6699 + entidad light.* real) — verificado con una descarga real antes de fijarlo.
+
 ## 0.13.0
 Dos piezas más para dejar el soporte de bombillas Tuya completo:
 

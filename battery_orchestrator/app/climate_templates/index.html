@@ -53,6 +53,21 @@
   .zone-actions { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
   .zone-actions button { padding: 6px 11px; font-size: .76rem; }
 
+  /* --- Tarjeta de termostato interactiva -- el trozo que faltaba para
+     que esta pagina fuera un Dashboard de verdad (control real, no solo
+     lectura) en vez de una configuracion con estado pintado encima. Las
+     ordenes van al MISMO mecanismo que ya usa la orden MQTT real del
+     climate.* expuesto a HA (ver climate_plugin.py:_zone_command), asi
+     que tocar aqui es exactamente como tocar el termostato en HomeKit. --- */
+  .zone-thermostat { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 12px 0; padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); }
+  .zone-thermostat.disabled { opacity: .5; pointer-events: none; }
+  .therm-stepper { display: flex; align-items: center; gap: 8px; }
+  .therm-stepper button { width: 30px; height: 30px; padding: 0; border-radius: 50%; font-size: 1rem; line-height: 1; font-weight: 700; background: var(--card); color: var(--accent); box-shadow: 0 0 0 1px var(--glass-border); }
+  .therm-stepper button:hover { background: var(--accent); color: var(--accent-ink); }
+  .therm-stepper .therm-val { font-family: var(--font-mono); font-size: 1.05rem; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 3.2em; text-align: center; }
+  .therm-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .therm-controls select { width: auto; padding: 6px 9px; font-size: .78rem; }
+
   /* --- Grafico de previsión 24h por zona -- mismo lenguaje visual que la
      grafica de SOC de Energy (ver templates/index.html), adaptado a
      temperatura: banda gris = zona historicamente sin ocupar a esa hora
@@ -297,6 +312,7 @@ function renderZones(zones) {
         <span class="pill pill-idle" style="text-transform:capitalize">${esc(live.hvac_mode || "—")}</span>
         ${cfg.simulate ? '<span class="pill pill-sim">simulación</span>' : ""}
       </div>
+      ${renderThermostat(z.id, live)}
       <div class="zone-reason">${esc(live.reason || "")}</div>
       <div class="zone-actions">
         <button class="secondary" onclick="refreshZone('${z.id}')">Forzar decisión</button>
@@ -348,6 +364,89 @@ async function loadStatus() {
     document.getElementById("conn-ws").classList.toggle("ok", !!s.ws_connected);
     document.getElementById("conn-mqtt").classList.toggle("ok", !!s.mqtt_connected);
   } catch (e) { /* idem */ }
+}
+
+// -------------------------------------------------- tarjeta interactiva --
+// Optimista (repinta con el valor pedido antes de esperar respuesta del
+// servidor) para que el stepper se sienta inmediato como cualquier
+// termostato real -- `loadZones()` (cada 8s, o al momento tras el
+// comando) ya corrige cualquier discrepancia real con lo que decida el
+// motor (p.ej. limites min/max de la zona).
+
+const TEMP_STEP = 0.5;
+
+function renderThermostat(id, live) {
+  if (live.available === false || !live.hvac_modes) return "";
+  const modes = live.hvac_modes.length ? live.hvac_modes : [live.hvac_mode].filter(Boolean);
+  const modeLabel = {off: "Apagado", heat: "Calor", cool: "Frío", heat_cool: "Auto", fan_only: "Ventilador", dry: "Seco"};
+  const modeOptions = modes.map(m => `<option value="${esc(m)}" ${m === live.hvac_mode ? "selected" : ""}>${esc(modeLabel[m] || m)}</option>`).join("");
+  const presetOptions = (live.preset_modes || []).map(p => `<option value="${esc(p)}" ${p === live.preset_mode ? "selected" : ""}>${esc(p)}</option>`).join("");
+
+  const disabledCls = live.hvac_mode === "off" ? " disabled" : "";
+  let stepperHtml;
+  if (live.hvac_mode === "heat_cool") {
+    stepperHtml = `
+      <div class="therm-stepper">
+        <button type="button" onclick="stepTemperature('${id}','low',-${TEMP_STEP})">−</button>
+        <span class="therm-val" id="therm-low-${id}">${fmtTemp(live.target_temperature_low)}</span>
+        <button type="button" onclick="stepTemperature('${id}','low',${TEMP_STEP})">+</button>
+      </div>
+      <div class="therm-stepper">
+        <button type="button" onclick="stepTemperature('${id}','high',-${TEMP_STEP})">−</button>
+        <span class="therm-val" id="therm-high-${id}">${fmtTemp(live.target_temperature_high)}</span>
+        <button type="button" onclick="stepTemperature('${id}','high',${TEMP_STEP})">+</button>
+      </div>`;
+  } else {
+    stepperHtml = `
+      <div class="therm-stepper">
+        <button type="button" onclick="stepTemperature('${id}','single',-${TEMP_STEP})">−</button>
+        <span class="therm-val" id="therm-single-${id}">${fmtTemp(live.target_temperature)}</span>
+        <button type="button" onclick="stepTemperature('${id}','single',${TEMP_STEP})">+</button>
+      </div>`;
+  }
+
+  return `
+  <div class="zone-thermostat${disabledCls}">
+    ${stepperHtml}
+    <div class="therm-controls">
+      <select onchange="setHvacMode('${id}', this.value)" aria-label="Modo">${modeOptions}</select>
+      ${presetOptions ? `<select onchange="setPresetMode('${id}', this.value)" aria-label="Preset">${presetOptions}</select>` : ""}
+    </div>
+  </div>`;
+}
+
+async function sendZoneCommand(id, path, body, errMsg) {
+  try {
+    const r = await fetch(`${API}/zones/${id}/${path}`, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+    if (!r.ok) { toast(errMsg); return; }
+    loadZones();
+  } catch (e) { toast(errMsg); }
+}
+
+function stepTemperature(id, which, delta) {
+  const z = lastZones.find(x => x.id === id);
+  if (!z) return;
+  const live = z.live || {};
+  const current = which === "low" ? live.target_temperature_low
+    : which === "high" ? live.target_temperature_high
+    : live.target_temperature;
+  if (current === null || current === undefined) return;
+  const next = Math.round((current + delta) * 10) / 10;
+  // Repintado optimista inmediato -- ver comentario de mas arriba.
+  const el = document.getElementById(`therm-${which}-${id}`);
+  if (el) el.textContent = fmtTemp(next);
+  const body = which === "low" ? {target_temp_low: next, target_temp_high: live.target_temperature_high}
+    : which === "high" ? {target_temp_low: live.target_temperature_low, target_temp_high: next}
+    : {temperature: next};
+  sendZoneCommand(id, "set_temperature", body, "Fallo al ajustar la temperatura");
+}
+
+function setHvacMode(id, mode) {
+  sendZoneCommand(id, "set_hvac_mode", {hvac_mode: mode}, "Fallo al cambiar de modo");
+}
+
+function setPresetMode(id, preset) {
+  sendZoneCommand(id, "set_preset_mode", {preset_mode: preset}, "Fallo al cambiar de preset");
 }
 
 async function refreshZone(id) {

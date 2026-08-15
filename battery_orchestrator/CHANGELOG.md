@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.22.1
+Sha256 de Climate re-pineado al tag `v0.22.0` (tarjeta de termostato interactiva) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
+## 0.22.0
+**Climate: primer paso del Dashboard real** (revisión de arquitectura de páginas pedida por el usuario -- "deberíamos diseñar una página donde... una tarjeta de climatización que se pueda modificar como si fuera el termostato"). El gráfico de previsión de 24h ya existía; lo que faltaba era la interacción real. Nuevos endpoints `POST /api/zones/<id>/set_temperature`, `/set_hvac_mode`, `/set_preset_mode` -- llaman DIRECTO a `ZoneRunner.set_temperature`/`set_hvac_mode`/`set_preset_mode` (el mismo mecanismo que ya usa la orden MQTT real del `climate.*` expuesto a HA, ver `mqtt_climate.py`), así que tocar la tarjeta del dashboard es exactamente como tocar el termostato en HomeKit -- no depende de resolver ningún entity_id desde el frontend. `GET /api/zones` expone además `hvac_modes`/`preset_mode`/`preset_modes` por zona para que la tarjeta sepa qué opciones ofrecer (no todas las zonas soportan los mismos modos). Cada tarjeta de zona tiene ahora un stepper de temperatura objetivo (o dos, en `heat_cool`) y selectores de modo/preset, con repintado optimista para que se sienta inmediato.
+
 ## 0.21.9
 Sha256 de Lighting re-pineado al tag `v0.21.8` (una sola escritura de config por ciclo reactivo, no 7) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

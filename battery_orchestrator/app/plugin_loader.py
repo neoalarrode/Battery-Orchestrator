@@ -153,10 +153,10 @@ PLUGIN_CATALOG = {
     "starlink": {
         "name": "Starlink Orchestrator",
         "description": "Monitorización de tu Starlink (rendimiento, latencia, obstrucción, alineación, consumo) — build oficial de Dishylink, servido tal cual, con un proxy local al dish",
-        "version": "0.1.1",
+        "version": "0.2.0",
         "downloadable": True,
-        "tag": "v0.24.2",
-        "sha256": "ef914495748867852b4980757c604c7ac63d85785af38907c46e279fb930f1cf",  # sha256 real del tarball de v0.24.2, verificado contra una descarga real antes de fijarlo aqui (FIX GRAVE: el dish nunca se contactaba, rutas absolutas de raiz de dominio)
+        "tag": "v0.25.0",
+        "sha256": "a59ddc6a9918a93b0bfa69c1cda3729456d3fcf39488cac41fc25060e114f363",  # sha256 real del tarball de v0.25.0, verificado contra una descarga real antes de fijarlo aqui (historian y cuenta reales, IP de router manual)
         "files": ["starlink_plugin.py", "starlink_store.py", "starlink_dist", "starlink_node"],
     },
 }

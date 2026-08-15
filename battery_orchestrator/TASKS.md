@@ -310,11 +310,13 @@ router de esta instalación (misma LAN `192.168.1.0/24`). El dashboard
 del dish en sí (rendimiento, latencia, obstrucción, alineación, consumo)
 funciona igual sin esto.
 
-**Pendiente de verificación real por el usuario**: abrir la página
-(`/plugins/starlink/` vía el selector de plugins) desde su propio
-navegador y confirmar que el dashboard carga datos en vivo -- esto no se
-ha podido comprobar visualmente desde esta sesión (sin acceso al
-navegador del usuario).
+**Confirmado funcionando por el usuario** (v0.24.3) tras un segundo bug
+real encontrado y arreglado: el bundle vendorizado de Dishylink usaba
+rutas ABSOLUTAS de raíz de dominio (`/dishy/...`, `/dish.protoset`) que
+resolvían contra la raíz de HA, no contra `/plugins/starlink/` -- cero
+peticiones llegaban al proxy. Arreglado con UN parche de código fuente
+(`setDishHost` con rutas relativas, ver `app/starlink_dist/PATCH.md`),
+recompilado y desplegado como v0.24.3.
 
 **Nota suelta encontrada de paso**: `.dockerignore` ya excluía Climate/
 Energy/Tuya (y ahora Starlink) de la imagen base, pero NO excluye
@@ -338,6 +340,94 @@ solo Energy, referencias a la navegación de HA actualizadas.
 (Climate/Lighting/Tuya/TP-Link/Starlink solo tienen la tabla resumen del
 README, no una guía paso a paso como Energy en DOCS.md) -- razonable
 para una sesión futura si el usuario la pide.
+
+## Nueva tanda de tareas (sesión del 2026-08-16, tras confirmar Starlink funcionando)
+
+### 10. Starlink: IP de router manual -- NO EMPEZADO
+
+Permitir especificar la IP del router Starlink a mano si no se alcanza
+automáticamente (ver limitación conocida documentada en la tarea 8: la
+IP por defecto 192.168.1.1 probablemente colisiona con el router propio
+del usuario). Necesita: campo de configuración en el plugin (nueva
+página/formulario, ya que hoy `starlink_plugin.py` no tiene ningún
+`GET/POST` de configuración) + implementar el proxy `/router/...` que se
+dejó fuera deliberadamente, ahora condicionado a esa IP configurada.
+
+### 11. Starlink: mensaje "historian" confuso -- NO EMPEZADO
+
+"Data usage needs the history recorder running. Start it with npm run
+historian..." -- mensaje literal de Dishylink (pensado para su propio
+dev workflow) que no aplica aquí y confunde. Decidir: ¿ocultar esa
+sección de la UI con otro parche mínimo (mismo patrón que el de
+`setDishHost`), o dejarlo y más adelante portar un historian real
+server-side? Revisar `collector/README.md` del proyecto original antes
+de decidir.
+
+### 12. Starlink: botón de salida -- NO EMPEZADO
+
+Añadir un botón/enlace para volver a Home Orchestrator desde dentro de
+la app de Dishylink (que no tiene nuestro topbar/plugin-switch, ver nota
+de diseño en la tarea 8 de más arriba). Requiere otro pequeño parche de
+UI en el código fuente (mismo patrón que `setDishHost`) ya que es su
+propio layout React, no una plantilla nuestra.
+
+### 13. Tuya/TP-Link siguen apareciendo en el menú desde Energy -- NO EMPEZADO
+
+El usuario reporta que desde Energy todavía se ven Tuya y TP-Link en el
+menú, pese a que `PLUGIN_SWITCH_VISIBLE` en `core_static/plugin-switch.js`
+ya las excluye. Revisar: Energy (`app/templates/index.html`) tiene su
+PROPIA copia del selector de plugins (nunca migrada al sistema
+compartido, ver nota en la sección "Otras notas sueltas" más abajo) --
+su propia lista de "Selector de plugins" probablemente no tiene el mismo
+filtro `PLUGIN_SWITCH_VISIBLE`. Revisar `renderPluginSwitch()` dentro de
+`app/templates/index.html` (busca `PLUGIN_SWITCH_LABEL`/`plugins.filter`).
+
+### 14. Sacar "Configuración" del menú de Energy al menú principal -- NO EMPEZADO
+
+Pendiente de entender exactamente qué pide el usuario -- revisar la
+estructura de pestañas actual de Energy (`app/templates/index.html`,
+`switchTab`/`.tab-panel`) antes de tocar nada.
+
+### 15. Iconos de la tienda de plugins -- NO EMPEZADO
+
+`core_shell.py:_CATALOG_PAGE` (el catálogo que se muestra en la raíz
+cuando Energy no está instalado) usa un icono hardcodeado (`⚡` para
+battery, `◐` genérico para TODO lo demás) -- debería usar los mismos
+iconos SVG por plugin que ya existen en `core_static/plugin-switch.js`
+(`PLUGIN_ICONS`).
+
+### 16. Verificar estética consistente en todas las pestañas -- NO EMPEZADO
+
+Repasar Climate/Lighting/Tuya/TP-Link/Energy visualmente (Starlink
+queda fuera a propósito, es la app de terceros). Dado que ya se migraron
+al sistema de diseño compartido esta sesión, probablemente ya esté bien
+-- pero no se ha hecho una revisión visual final, solo funcional.
+
+### 17. Identidad del repositorio: estructura de carpetas -- NO EMPEZADO
+
+El directorio principal todavía se llama `battery_orchestrator/` (ver
+ruta local de este mismo repo) pese a que el proyecto es "Home
+Orchestrator" -- revisar si merece la pena renombrar carpetas
+(`battery_orchestrator/` -> algo como `home_orchestrator/` o similar) y
+qué tocaría actualizar (Dockerfile, referencias internas, build.yaml...)
+antes de decidir si es buena idea (riesgo de romper el build si se hace
+mal).
+
+### 18. Releases faltantes / plugins.json incompleto -- NO EMPEZADO
+
+El usuario reporta que faltan plugins en "el archivo json del repo" --
+localizar ese fichero (posiblemente `plugins.json` en la raíz,
+mencionado en un comentario de `plugin_loader.py` como algo a mantener
+"en sincronía a mano" pero nunca visto/tocado esta sesión) y comparar
+contra `PLUGIN_CATALOG` real. Revisar también qué tags SÍ tienen GitHub
+Release vs cuáles no (política: solo los que tocan fichero núcleo) --
+confirmar que esa política se cumplió de verdad en todos los tags de
+esta sesión.
+
+### 19. Alertas de seguridad de GitHub (Dependabot) -- NO EMPEZADO
+
+Revisar con `gh` qué alertas de seguridad tiene el repo abiertas y
+decidir cómo resolverlas.
 
 ## Otras notas sueltas
 

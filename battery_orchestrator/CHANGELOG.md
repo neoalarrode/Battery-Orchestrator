@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.21.1
+Sha256 de Battery/Climate/Tuya/Lighting/TP-Link re-pineados al tag `v0.21.0` (sistema de diseño compartido + reacción inmediata de Lighting) — verificado con una descarga real antes de fijarlo. Son ficheros núcleo (`plugin_loader.py`, `core_app.py`, `core_shell.py`, `core_static/`) los que cambian, así que esta versión SÍ lleva Release en GitHub.
+
+## 0.21.0
+**Bug real, confirmado por el usuario: Lighting tardaba varios segundos en encender al detectar presencia, cuando con Node-RED era inmediato.** Causa: `ReactiveTrigger` (`ha_websocket.py`) — compartido entre Battery, Climate y Lighting — imponía un margen fijo de 5s entre ejecuciones reactivas, pensado para Battery (llamadas caras a EcoFlow/forecast). Si cualquier entidad vigilada de Lighting (de cualquier zona) cambiaba justo antes de detectarse presencia, el encendido real quedaba esperando el resto de ese margen. Ahora `min_interval_seconds` es configurable por instancia — Battery y Climate mantienen 5s (comportamiento sin cambios), Lighting baja a 0.2s (solo lo justo para agrupar eventos simultáneos, imperceptible).
+
+**Sistema de diseño compartido** (primera fase de la revisión de arquitectura de páginas pedida por el usuario): `core_static/design-system.css` y `core_static/plugin-switch.js` — ficheros núcleo, servidos en `/shared/*` vía un nuevo blueprint (`core_shell.core_static_bp`) — sustituyen el CSS/JS que cada plantilla (Battery, Climate, Tuya, Lighting, TP-Link) llevaba pegado y ligeramente desincronizado entre sí. Climate, Tuya, Lighting y TP-Link quedan enlazados al 100% al sistema compartido (solo conservan sus estilos realmente específicos); Battery, por tamaño, queda enlazado de forma aditiva por ahora (dedup completo pendiente, fuera del alcance de esta pasada).
+
 ## 0.20.1
 Sha256 de Lighting/TP-Link/Tuya re-pineados al tag `v0.20.0` (color manual HS) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

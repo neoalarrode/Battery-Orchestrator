@@ -66,6 +66,7 @@ def main() -> None:
         log.info("Home Orchestrator arrancando con el plugin '%s' v%s en la raiz", primary.name, primary.version)
         root_app = primary.flask_app()
         root_app.register_blueprint(core_shell.core_api_bp)
+        root_app.register_blueprint(core_shell.core_static_bp)
     else:
         log.info("Home Orchestrator arrancando SIN ningun plugin que sirva la raiz -- catalogo/tienda del nucleo")
         root_app = core_shell.build_shell_app()

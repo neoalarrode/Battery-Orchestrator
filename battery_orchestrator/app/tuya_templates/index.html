@@ -5,75 +5,23 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Home Orchestrator — Tuya</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%3E%3Cdefs%3E%3ClinearGradient%20id%3D%27g%27%20x1%3D%270%27%20y1%3D%270%27%20x2%3D%2724%27%20y2%3D%2724%27%20gradientUnits%3D%27userSpaceOnUse%27%3E%3Cstop%20offset%3D%270%27%20stop-color%3D%27%238b5cf6%27%2F%3E%3Cstop%20offset%3D%271%27%20stop-color%3D%27%2322d3ee%27%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%2724%27%20height%3D%2724%27%20rx%3D%276%27%20fill%3D%27url%28%23g%29%27%2F%3E%3Cpath%20d%3D%27M6%204h9a2%202%200%200%201%202%202v9l-7%207-9-9V6a2%202%200%200%201%202-2Zm2.5%202.5a1.5%201.5%200%201%200%200%203%201.5%201.5%200%200%200%200-3Z%27%20fill%3D%27%230b0a16%27%2F%3E%3C%2Fsvg%3E">
+<link rel="stylesheet" href="/shared/design-system.css">
 <style>
-  :root {
-    color-scheme: dark light;
-    --bg: #0b0a16; --bg-alt: #131226; --card: #14132a; --text: #eae8f7; --muted: #8b87ab;
-    --border: #2a2850; --accent: #8b5cf6; --accent-2: #22d3ee; --accent-soft: #8b5cf626; --accent-ink: #0b0a16;
-    --glow: 0 0 0 1px #8b5cf64d, 0 0 24px -6px #8b5cf673;
-    --green: #34d399; --amber: #fbbf24; --red: #fb7185;
-    --green-soft: #34d39920; --amber-soft: #fbbf2420; --red-soft: #fb718520;
-    --radius: 12px; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 28px -8px rgba(139,92,246,.18);
-    --glass-bg: rgba(20, 19, 42, .48); --glass-border: rgba(255, 255, 255, .1);
-    --glass-blur: blur(22px) saturate(170%); --glass-blur-soft: blur(14px) saturate(150%);
-    --font-display: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-    --font-body: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-    --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  /* Mismo lenguaje visual que el resto de Home Orchestrator, via el
+     sistema de diseño compartido (ver /shared/design-system.css) --
+     aquí solo lo especifico de esta página. */
+  textarea {
+    width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--glass-border);
+    background: var(--glass-bg); color: var(--text); font-family: var(--font-mono); font-size: .8rem;
+    min-height: 140px; resize: vertical; transition: border-color .15s;
   }
-  @media (prefers-color-scheme: light) {
-    :root { --bg:#f2f1fa; --bg-alt:#e7e5f6; --card:#ffffff; --text:#1c1a2e; --muted:#68648c;
-      --border:#dcd9f2; --accent:#7c3aed; --accent-2:#0891b2; --accent-soft:#7c3aed15; --accent-ink:#ffffff;
-      --glow: 0 0 0 1px #7c3aed33, 0 0 20px -8px #7c3aed4d;
-      --green:#159a67; --amber:#b3790a; --red:#e0475f;
-      --green-soft:#159a6715; --amber-soft:#b3790a15; --red-soft:#e0475f15;
-      --glass-bg: rgba(255, 255, 255, .52); --glass-border: rgba(255, 255, 255, .75); }
-  }
-  * { box-sizing: border-box; }
-  html, body { overflow-x: hidden; }
-  body {
-    font-family: var(--font-body);
-    background: linear-gradient(var(--bg-alt) 1px, transparent 1px) 0 0 / 100% 34px,
-      linear-gradient(90deg, var(--bg-alt) 1px, transparent 1px) 0 0 / 34px 100%, var(--bg);
-    background-attachment: fixed; color: var(--text);
-    max-width: 1080px; margin: 0 auto; padding: 28px 20px 90px; line-height: 1.5;
-  }
-  a { color: var(--accent); }
-  .topbar { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 22px; padding-bottom: 20px; border-bottom: 1px solid var(--border); gap: 12px; flex-wrap: wrap; }
-  .topbar h1 { font-family: var(--font-display); font-size: 1.6rem; font-weight: 700; margin: 0; }
-  .brand-mark { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: var(--accent-ink); box-shadow: var(--glow); margin-right: 10px; vertical-align: middle; position: relative; top: -2px; }
-  .eyebrow { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .12em; font-size: .68rem; font-weight: 600; color: var(--accent-2); margin: 0 0 6px; }
-  .subtitle { color: var(--muted); font-size: 0.92rem; margin-top: 6px; max-width: 56ch; }
-  .plugin-switch { display: inline-flex; gap: 3px; padding: 3px; border-radius: 24px; background: var(--glass-bg); border: 1px solid var(--glass-border); }
-  .plugin-switch a { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; font-size: 0.78rem; font-weight: 700; font-family: var(--font-mono); text-decoration: none; color: var(--muted); }
-  .plugin-switch a.current { background: var(--accent); color: var(--accent-ink); box-shadow: var(--glow); }
-  .card { background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius); backdrop-filter: var(--glass-blur); box-shadow: var(--shadow); padding: 22px 24px; margin-bottom: 16px; position: relative; overflow: hidden; }
-  .card::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--accent) 30%, var(--accent-2) 70%, transparent); opacity: .55; }
-  .card h2 { font-family: var(--font-display); font-size: .95rem; font-weight: 700; margin: 0 0 16px; display: flex; align-items: center; gap: 8px; }
-  .card h2 .hint { font-weight: 400; color: var(--muted); font-size: 0.78rem; margin-left: auto; font-family: var(--font-body); }
-  .help { font-size: 0.78rem; color: var(--muted); margin-top: 5px; }
-  label { font-size: 0.76rem; font-weight: 600; color: var(--muted); display: block; margin: 10px 0 4px; }
-  input, select, textarea { width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--glass-border); background: var(--glass-bg); color: var(--text); font-size: 0.9rem; font-family: var(--font-body); }
-  textarea { font-family: var(--font-mono); font-size: .8rem; min-height: 140px; resize: vertical; }
-  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
-  input[type=checkbox] { width: auto; accent-color: var(--accent); }
-  .checkline { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 0.85rem; }
-  .checkline label { margin: 0; }
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
-  @media (max-width: 700px) { .grid2 { grid-template-columns: 1fr; } }
-  button { padding: 9px 16px; border-radius: 8px; border: none; cursor: pointer; background: var(--accent); color: var(--accent-ink); font-size: 0.85rem; font-weight: 600; }
-  button.secondary { background: var(--accent-soft); color: var(--accent); }
-  button.danger { background: var(--red-soft); color: var(--red); }
-  button.ghost { background: var(--glass-bg); color: var(--muted); border: 1px solid var(--glass-border); }
-  .actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
-  summary { list-style: none; cursor: pointer; }
-  summary::-webkit-details-marker { display: none; }
-  .add-toggle { cursor: pointer; font-size: 0.82rem; color: var(--accent); font-weight: 600; margin-top: 10px; display: inline-flex; align-items: center; gap: 5px; }
-  .empty { color: var(--muted); font-size: 0.85rem; padding: 10px 0; }
-  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px; border-radius: 20px; font-size: 0.76rem; font-weight: 700; font-family: var(--font-mono); }
-  .pill-ok { background: var(--green-soft); color: var(--green); }
-  .pill-off { background: var(--glass-bg); color: var(--muted); box-shadow: 0 0 0 1px var(--border); }
+  textarea:hover { border-color: var(--muted); }
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+
+  /* Variante de .pill propia de esta pagina -- el resto viene del
+     sistema compartido. */
   .pill-mqtt { background: var(--accent-soft); color: var(--accent); }
-  .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
   .device-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
   .device-card { border: 1px solid var(--glass-border); border-radius: var(--radius); padding: 16px 18px; background: var(--glass-bg); box-shadow: var(--shadow); }
   .device-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
@@ -210,6 +158,7 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="/shared/plugin-switch.js"></script>
 <script>
 const API = "api";
 
@@ -422,37 +371,11 @@ async function submitDeviceForm(ev) {
   return false;
 }
 
-// Selector de plugins de la cabecera -- dinamico, a partir de
-// /api/core/plugins (solo lo instalado). "/api/core/*" solo existe en la
-// app raiz -- esta pagina cuelga de "plugins/tuya/", asi que hay que
-// subir dos niveles para llegar a ella (una ruta relativa "api/core/..."
-// aqui pegaria contra la app de Tuya, que no tiene esas rutas).
-const PLUGIN_SWITCH_ICONS = {
-  battery: '<path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="currentColor"/>',
-  climate: '<path d="M12 3a3 3 0 0 0-3 3v7.1a4 4 0 1 0 6 0V6a3 3 0 0 0-3-3Zm0 2a1 1 0 0 1 1 1v7.6l.6.5a2 2 0 1 1-3.2 0l.6-.5V6a1 1 0 0 1 1-1Z" fill="currentColor"/>',
-  tuya: '<path d="M6 4h9a2 2 0 0 1 2 2v9l-7 7-9-9V6a2 2 0 0 1 2-2Zm2.5 2.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z" fill="currentColor"/>',
-  lighting: '<path d="M12 2a7 7 0 0 0-4 12.74V17a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-2.26A7 7 0 0 0 12 2Zm-2 17h4v1a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-1Z" fill="currentColor"/>',
-  tplink: '<path d="M12 5a7 7 0 0 0-4.95 11.95l1.41-1.41a5 5 0 1 1 7.08 0l1.41 1.41A7 7 0 0 0 12 5Zm0 4a3 3 0 0 0-2.12 5.12l1.41-1.41a1 1 0 1 1 1.42 0l1.41 1.41A3 3 0 0 0 12 9Z" fill="currentColor"/>',
-};
-const PLUGIN_SWITCH_LABEL = { battery: 'Energy', climate: 'Climate', tuya: 'Tuya', lighting: 'Lighting', tplink: 'TP-Link' };
-async function renderPluginSwitch() {
-  try {
-    const plugins = await (await fetch('../../api/core/plugins')).json();
-    const nav = document.getElementById('plugin-switch-nav');
-    nav.innerHTML = plugins.filter(p => p.installed).map(p => {
-      const href = p.slug === 'battery' ? '../../' : (p.slug === 'tuya' ? './' : `../${p.slug}/`);
-      const current = p.slug === 'tuya' ? ' class="current"' : '';
-      const icon = PLUGIN_SWITCH_ICONS[p.slug] || '';
-      return `<a href="${href}"${current}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">${icon}</svg>${PLUGIN_SWITCH_LABEL[p.slug] || p.name}</a>`;
-    }).join('');
-  } catch (e) { /* no bloquea el resto de la pagina */ }
-}
-
 loadDevices();
 loadStatus();
 loadAccount();
 loadDiscovered();
-renderPluginSwitch();
+renderPluginSwitch("tuya");
 setInterval(loadDevices, 8000);
 setInterval(loadStatus, 8000);
 // El descubrimiento LAN acumula lo que se va oyendo -- un dispositivo

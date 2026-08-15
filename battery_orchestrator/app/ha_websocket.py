@@ -294,10 +294,25 @@ class ReactiveTrigger:
     reducen a UNA sola ejecucion mas, justo despues del margen minimo — ni
     se pierde ningun cambio real (si algo cambio durante la espera, se
     vuelve a ejecutar), ni se satura `run_cycle` con ejecuciones
-    superpuestas."""
+    superpuestas.
 
-    def __init__(self, run_once) -> None:
+    `min_interval_seconds` es configurable por instancia (antes era un
+    valor fijo global, `REACTIVE_MIN_INTERVAL_SECONDS`) -- BUG REAL,
+    confirmado por el usuario: Lighting comparte esta misma clase con
+    Battery, cuyo `run_cycle` SI hace llamadas externas caras (EcoFlow,
+    forecast) y necesita ese margen de 5s para no saturar nada. Lighting
+    no tiene ese coste (decidir y encender una zona es barato, todo en
+    proceso/LAN) y el usuario esperaba una reaccion inmediata a la
+    presencia, igual que tenia con Node-RED -- con el margen de 5s
+    heredado de Battery, si CUALQUIER otra entidad vigilada (de
+    cualquier zona) cambiaba justo antes de detectarse presencia, el
+    encendido real quedaba esperando el resto de ese margen antes de
+    poder procesarse. Battery/Climate mantienen el margen por defecto
+    (comportamiento sin cambios); Lighting pasa uno mucho mas bajo."""
+
+    def __init__(self, run_once, min_interval_seconds: float = REACTIVE_MIN_INTERVAL_SECONDS) -> None:
         self._run_once = run_once
+        self._min_interval_seconds = min_interval_seconds
         self._event = threading.Event()
         self._lock = threading.Lock()
 
@@ -313,4 +328,4 @@ class ReactiveTrigger:
                     self._run_once()
                 except Exception:
                     log.exception("Fallo en la ejecucion reactiva del ciclo de planificacion")
-            time.sleep(REACTIVE_MIN_INTERVAL_SECONDS)
+            time.sleep(self._min_interval_seconds)

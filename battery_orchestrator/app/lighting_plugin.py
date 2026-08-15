@@ -39,20 +39,24 @@ from plugin_base import Plugin
 log = logging.getLogger("lighting_plugin")
 
 DEFAULT_REAPPLY_MINUTES = 5
-REACTIVE_MIN_INTERVAL_SECONDS = 5
 
 
 class LightingPlugin(Plugin):
     slug = "lighting"
     name = "Lighting Orchestrator"
-    version = "0.5.0"
+    version = "0.5.1"
 
     def __init__(self) -> None:
         self._runners: dict[str, ZoneRunner] = {}
         self._mqtt_zones: dict[str, MqttLightingZone] = {}
         self._ws = ha_websocket.HAWebSocketClient(self._on_entity_change)
         self._mqtt = ha_mqtt.HAMqttClient(client_id="home_orchestrator_lighting")
-        self._reactive = ha_websocket.ReactiveTrigger(self._run_reactive_cycle)
+        # margen minimo casi nulo (no cero -- sigue haciendo falta un
+        # pelin de coalescencia si varias entidades cambian a la vez, p.
+        # ej. una zona entera de sensores en el mismo evento de HA) a
+        # proposito: encender la luz debe sentirse inmediato, igual que
+        # con Node-RED -- ver docstring de ReactiveTrigger.
+        self._reactive = ha_websocket.ReactiveTrigger(self._run_reactive_cycle, min_interval_seconds=0.2)
         self._app = flask.Flask("lighting_plugin", template_folder="lighting_templates")
         # Registro GENERICO de "proveedores de actuadores" -- mismo
         # mecanismo que ya usa ClimatePlugin (ver su propio comentario):

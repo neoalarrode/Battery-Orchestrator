@@ -23,6 +23,7 @@ Expone dos cosas:
 from __future__ import annotations
 
 import logging
+import os
 
 import flask
 from flask import Blueprint, jsonify, request
@@ -30,6 +31,19 @@ from flask import Blueprint, jsonify, request
 log = logging.getLogger("core_shell")
 
 core_api_bp = Blueprint("core_api", __name__)
+
+# Sistema de diseño compartido (CSS/JS reusado por TODAS las paginas de
+# plugin, ver core_static/design-system.css) -- fichero del NUCLEO, nunca
+# descargable por plugin, servido en una ruta estable ("/shared/...")
+# para que valga igual este quien este instalado en la raiz. Un
+# Blueprint con `static_folder` es la forma normal de Flask de servir un
+# directorio de ficheros estaticos sin tener que escribir una vista por
+# fichero.
+core_static_bp = Blueprint(
+    "core_static", __name__,
+    static_folder=os.path.join(os.path.dirname(__file__), "core_static"),
+    static_url_path="/shared",
+)
 
 
 @core_api_bp.get("/api/core/plugins")
@@ -235,6 +249,7 @@ def build_shell_app():
     declara `serves_root` -- catalogo + restaurar copia de seguridad."""
     app = flask.Flask("core_shell")
     app.register_blueprint(core_api_bp)
+    app.register_blueprint(core_static_bp)
 
     @app.get("/")
     def _catalog_page():

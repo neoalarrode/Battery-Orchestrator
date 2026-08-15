@@ -577,7 +577,15 @@ class TuyaLocalDevice:
         return dps
 
     async def _status_once(self) -> dict[int, Any]:
-        if self.dev_type == DEV_TYPE_0D and self.protocol_version != "3.4":
+        # BUG FIXED HERE (found while wiring up a real light through MQTT
+        # against a real 3.5 device: writes silently timed out, reads
+        # worked "by accident" because the device happens to still answer
+        # the OLD-style DP_QUERY/CONTROL commands even when it does not
+        # implement them for real -- see set_dps() below for the write-
+        # side symptom). tinytuya's own payload_dict confirms this
+        # explicitly, its own comment: "v3.5 is just a copy of v3.4" -
+        # SAME override to DP_QUERY_NEW/CONTROL_NEW, not a 3.4-only thing.
+        if self.dev_type == DEV_TYPE_0D and self.protocol_version not in ("3.4", "3.5"):
             # type_0d: DP_QUERY is overridden to CONTROL_NEW and must carry
             # the explicit DP list. `dps_to_request` deliberately goes out
             # even if empty - matches the reference, and an empty list is
@@ -590,9 +598,10 @@ class TuyaLocalDevice:
             }
             reply = await self._send_receive_json(CMD_CONTROL_NEW, obj)
             return _extract_dps(reply)
-        if self.protocol_version == "3.4":
-            # 3.4 uses DP_QUERY_NEW with a 3-field payload (no gwId) -
-            # ported from the reference's "v3.4" payload_dict override.
+        if self.protocol_version in ("3.4", "3.5"):
+            # 3.4/3.5 use DP_QUERY_NEW with a 3-field payload (no gwId) -
+            # ported from the reference's "v3.4"/"v3.5" payload_dict
+            # override (identical for both).
             obj = {"devId": self.device_id, "uid": self.device_id, "t": int(time.time())}
             reply = await self._send_receive_json(CMD_DP_QUERY_NEW, obj)
         else:
@@ -613,10 +622,20 @@ class TuyaLocalDevice:
     async def set_dps(self, dps: dict[int, Any]) -> dict[int, Any]:
         """Set one or more datapoints."""
         dps_str_keyed = {str(k): v for k, v in dps.items()}
-        if self.protocol_version == "3.4":
-            # 3.4 uses CONTROL_NEW: dps nested under "data", "t" as a real
-            # int (not a string) - ported from the reference's "v3.4"
-            # payload_dict override, distinct from 3.1/3.3's flat shape.
+        if self.protocol_version in ("3.4", "3.5"):
+            # 3.4/3.5 use CONTROL_NEW: dps nested under "data", "t" as a
+            # real int (not a string) - ported from the reference's
+            # "v3.4"/"v3.5" payload_dict override (identical for both, its
+            # own comment: "v3.5 is just a copy of v3.4"), distinct from
+            # 3.1/3.3's flat shape.
+            #
+            # BUG FIXED HERE, a real one: this only checked `== "3.4"`,
+            # so a 3.5 device fell through to the OLD CMD_CONTROL (0x07)
+            # shape below - which the device never replies to (found live:
+            # every set_dps() against a real 3.5 bulb timed out after
+            # 10s, while status()/DP_QUERY somehow still worked - see
+            # _status_once's identical fix for why the read side looked
+            # deceptively fine while every WRITE silently failed).
             obj: dict[str, Any] = {"protocol": 5, "t": int(time.time()), "data": {"dps": dps_str_keyed}}
             reply = await self._send_receive_json(CMD_CONTROL_NEW, obj)
         else:

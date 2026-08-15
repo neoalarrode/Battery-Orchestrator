@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.13.4
+**Bug real, propio de la implementación de 3.5 (v0.12.8): `set_dps()` y `_status_once()` solo comprobaban `protocol_version == "3.4"` para usar el diálogo `CONTROL_NEW`/`DP_QUERY_NEW` — al añadir "3.5" a la lista de versiones soportadas se quedó fuera de esa condición.** Resultado: cualquier comando de escritura real (encender, brillo, color) contra un dispositivo 3.5 se mandaba con el formato antiguo (`CONTROL`, 0x07), que el dispositivo simplemente no responde — timeout de 10s en cada intento. La lectura (`status()`) funcionaba "por casualidad": el dispositivo real sí contesta al `DP_QUERY` (0x0A) clásico aunque no lo declare, lo que ocultó el bug en la primera verificación (solo se probó lectura, nunca escritura). Confirmado contra `tinytuya`: su propio comentario dice literalmente "v3.5 is just a copy of v3.4" para esta tabla de comandos — mismo diccionario, no una excepción de 3.4. Fix: `in ("3.4", "3.5")` en ambos sitios. Verificado con escritura real contra la bombilla: `set_dps({20: True})` responde con éxito, usando de verdad `CONTROL_NEW` (0x0D) por el wire.
+
 ## 0.13.3
 Sha256 de Tuya re-pineado al tag `v0.13.2` (fix: entidad recién expuesta se quedaba en unknown) — verificado con una descarga real antes de fijarlo.
 

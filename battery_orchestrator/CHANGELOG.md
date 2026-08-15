@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.19.2
+**Bug real, CRÍTICO, confirmado en producción: el addon entero entraba en bucle de reinicio infinito.** `core_app.py` llamaba a `start_background_threads()` de cada plugin ANTES de `root_app.register_blueprint(core_shell.core_api_bp)`. `start_background_threads()` de Battery arranca un segundo servidor HTTP real (el "wallpanel" de solo lectura, puerto 8098) sirviendo el MISMO objeto Flask que un momento después se convierte en `root_app` -- si una petición cualquiera llegaba al wallpanel en ese hueco (más probable cuantos más plugins hay que cargar antes de llegar ahí), Flask marca el app como "ya sirvió su primera petición" y `register_blueprint` revienta con `AssertionError`, tirando el proceso entero abajo en bucle. Fix: arrancar los hilos de fondo de todos los plugins (wallpanel incluido) SOLO cuando el blueprint del núcleo y el montaje de plugins ya están completos -- elimina la ventana de carrera por completo.
+
 ## 0.19.1
 Sha256 de Lighting re-pineado al tag `v0.19.0` (luz dummy por zona vía MQTT) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

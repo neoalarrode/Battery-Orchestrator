@@ -59,9 +59,6 @@ def main() -> None:
                 continue
             lighting_plugin.register_actuator_provider(p.slug, p)
 
-    for p in plugins:
-        p.start_background_threads()
-
     primary = next((p for p in plugins if getattr(p, "serves_root", False)), None)
     rest = [p for p in plugins if p is not primary]
 
@@ -80,6 +77,25 @@ def main() -> None:
 
     if mounts:
         root_app.wsgi_app = DispatcherMiddleware(root_app.wsgi_app, mounts)
+
+    # BUG REAL, confirmado en produccion (crash-loop entero del addon):
+    # `start_background_threads()` de Battery arranca ademas un SEGUNDO
+    # servidor HTTP de verdad (el "wallpanel" de solo lectura, puerto
+    # 8098, ver `_run_wallpanel_server` en main.py) sirviendo el MISMO
+    # objeto Flask que un momento despues se convierte en `root_app`. Si
+    # esto se llamaba ANTES de `register_blueprint` (como estaba aqui) y
+    # una peticion cualquiera llegaba al wallpanel en ese hueco --
+    # bastante mas probable cuantos mas plugins haya que cargar antes de
+    # llegar aqui, ver el numero creciente de plugins de este addon --
+    # Flask marca el app como "ya sirvio su primera peticion" y
+    # `register_blueprint` revienta con `AssertionError`, tirando el
+    # proceso entero abajo en un bucle de reinicio infinito. Arrancar los
+    # hilos de fondo (wallpanel incluido) SOLO cuando el blueprint del
+    # nucleo y el montaje de plugins ya estan completos elimina la
+    # ventana de carrera por completo -- ninguna peticion puede llegar a
+    # nada antes de que el app este totalmente armado.
+    for p in plugins:
+        p.start_background_threads()
 
     run_simple("0.0.0.0", 8099, root_app, threaded=True)
 

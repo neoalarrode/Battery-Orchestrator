@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.21.3
+Sha256 de Lighting re-pineado al tag `v0.21.2` (fix real de latencia de encendido, 7 lecturas de HA por evento -> 1) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
+## 0.21.2
+**Bug real, confirmado por el usuario en producción: el encendido de luces al detectar presencia seguía tardando 5-10s tras la v0.21.1 (que solo arregló el margen de reactividad, insuficiente).** Causa real: `ZoneRunner.decide_and_act()` pedía su PROPIA lectura completa de estados de HA (`ws.get_states()`, TODAS las entidades por WebSocket) en cada llamada — y `LightingPlugin._run_reactive_cycle` la invoca una vez por cada zona del ciclo reactivo. Con 7 zonas en producción, un solo evento de presencia disparaba 7 lecturas completas de HA en serie por el mismo WebSocket, cada una con su propio round-trip. `decide_and_act`/`handle_reactive_event` aceptan ahora un `states` ya leído de antemano; `_run_reactive_cycle` lee HA UNA sola vez para el ciclo entero y la comparte entre las 7 zonas, en vez de que cada una pida lo mismo por su cuenta. Arranque de zona, refresco manual y reaplicación periódica (todos casos de una sola zona) siguen leyendo por su cuenta, sin cambios.
+
 ## 0.21.1
 Sha256 de Battery/Climate/Tuya/Lighting/TP-Link re-pineados al tag `v0.21.0` (sistema de diseño compartido + reacción inmediata de Lighting) — verificado con una descarga real antes de fijarlo. Son ficheros núcleo (`plugin_loader.py`, `core_app.py`, `core_shell.py`, `core_static/`) los que cambian, así que esta versión SÍ lleva Release en GitHub.
 

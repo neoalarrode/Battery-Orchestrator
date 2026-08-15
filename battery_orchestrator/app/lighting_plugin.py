@@ -44,7 +44,7 @@ DEFAULT_REAPPLY_MINUTES = 5
 class LightingPlugin(Plugin):
     slug = "lighting"
     name = "Lighting Orchestrator"
-    version = "0.5.1"
+    version = "0.5.2"
 
     def __init__(self) -> None:
         self._runners: dict[str, ZoneRunner] = {}
@@ -292,9 +292,21 @@ class LightingPlugin(Plugin):
         self._reactive.trigger()
 
     def _run_reactive_cycle(self) -> None:
+        # BUG REAL, confirmado por el usuario: el encendido al detectar
+        # presencia tardaba 5-10s (con Node-RED era instantaneo). Causa
+        # real: cada `ZoneRunner.decide_and_act()` pedia su PROPIA lectura
+        # completa de HA (`ws.get_states()`) -- con 7 zonas, un solo
+        # evento disparaba 7 lecturas completas seguidas por WebSocket.
+        # Una unica lectura aqui, compartida por las 7 zonas del ciclo,
+        # en vez de que cada una pida lo mismo por su cuenta.
+        try:
+            states = {s.get("entity_id"): s for s in self._ws.get_states() if s.get("entity_id")}
+        except Exception:
+            log.exception("Fallo leyendo estados de HA para el ciclo reactivo de Lighting")
+            states = None
         for zone_id, runner in list(self._runners.items()):
             try:
-                runner.handle_reactive_event()
+                runner.handle_reactive_event(states)
                 zone_store.update_zone_state(zone_id, runner.to_persisted_state())
                 mqtt_zone = self._mqtt_zones.get(zone_id)
                 if mqtt_zone:

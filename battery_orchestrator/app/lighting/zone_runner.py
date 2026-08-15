@@ -11,6 +11,15 @@ lo mismo, en este orden:
   1. `_snapshot_states()`: UNA sola lectura de HA (`ws.get_states()`) para
      todo el ciclo -- evita N llamadas sueltas (una por sensor de
      presencia + una por condicion + una por luz) contra el WebSocket.
+     BUG REAL, confirmado por el usuario (encendido tardando 5-10s en
+     vez de instantaneo, igual que Node-RED): esto solo era cierto POR
+     ZONA -- `LightingPlugin._run_reactive_cycle` llama a esto una vez
+     por cada una de las zonas del ciclo reactivo, así que un evento
+     cualquiera disparaba tantas lecturas COMPLETAS de HA por WebSocket
+     como zonas hubiera (7 en produccion), en serie. `decide_and_act`
+     ahora acepta un `states` ya leido de antemano -- `_run_reactive_
+     cycle` lee HA UNA sola vez para el ciclo entero y se lo pasa a las
+     7 zonas, en vez de que cada zona pida lo mismo por su cuenta.
   2. `_is_occupied()`: OR de todos los sensores de presencia de la zona,
      comparando su estado contra `occupied_states` (config).
   3. Margen de apagado (`off_delay_seconds`): la zona no se considera
@@ -290,10 +299,17 @@ class ZoneRunner:
 
     # --------------------------------------------------------- decision --
 
-    def decide_and_act(self) -> None:
+    def decide_and_act(self, states: dict[str, dict] | None = None) -> None:
+        """`states`, si se da, es una lectura de HA YA HECHA por quien
+        llama (ver `LightingPlugin._run_reactive_cycle`) -- compartida
+        entre varias zonas del mismo ciclo en vez de que cada una pida lo
+        mismo por su cuenta (ver bug real documentado en el docstring del
+        modulo). Si no se da (arranque de zona, refresco manual desde la
+        interfaz, reaplicacion periodica -- todos casos de UNA sola zona,
+        sin nada que compartir), se lee aqui mismo, igual que siempre."""
         cfg = self.zone
         now = time.time()
-        states = self._snapshot_states()
+        states = states if states is not None else self._snapshot_states()
 
         raw_occupied = self._is_occupied(states)
         occupied = self._occupied_with_delay(raw_occupied, now)
@@ -372,8 +388,8 @@ class ZoneRunner:
 
     # -------------------------------------------------------- reactivo/periodico -
 
-    def handle_reactive_event(self) -> None:
-        self.decide_and_act()
+    def handle_reactive_event(self, states: dict[str, dict] | None = None) -> None:
+        self.decide_and_act(states)
 
     def handle_periodic_reapply(self) -> None:
         self.decide_and_act()

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.13.9
+Sha256 de Tuya re-pineado al tag `v0.13.8` (fix real: _status_once petaba tras el fix de v0.13.6) — verificado con una descarga real antes de fijarlo.
+
 ## 0.13.8
 **Bug real, propio del fix de v0.13.6, encontrado desplegando ese mismo fix en producción: la bombilla dejó de poder ARRANCAR.** `_status_once()` (la consulta inicial de estado al conectar) reventaba con `AttributeError: 'bytes' object has no attribute 'get'`. Causa: al enrutar TODOS los comandos normales de 3.5 por el emparejador de comando (`_pending_cmd`, fix de v0.13.6), el código de `_listen()` que resuelve ese tipo de espera seguía entregando el payload SIN DECODIFICAR (`frame.payload`, bytes crudos) — correcto para el negociado de sesión (que no es JSON y hace su propio descifrado aparte), pero ahora ese mismo camino también recibía las respuestas de `DP_QUERY_NEW`/`CONTROL_NEW`, que sí son JSON y que el resto del código espera ya decodificado como diccionario. Fix: usar el payload YA decodificado (`obj`) cuando existe, y solo caer al crudo cuando no lo hay (el caso real del negociado). Verificado con `status()` + `set_dps()` reales contra la bombilla: la consulta de estado inicial que antes petaba ahora devuelve los DPs correctamente, y los cambios de encendido/brillo se reflejan en la siguiente consulta.
 

@@ -114,12 +114,32 @@ class MqttClimateZone:
             self._mqtt.publish(f"{t}/current_temp/state", runner.current_temperature, retain=True)
         if runner.current_humidity is not None:
             self._mqtt.publish(f"{t}/current_humidity/state", runner.current_humidity, retain=True)
+        # Bug real, confirmado en produccion: estos tres topics son
+        # RETAIN=True (asi HA conoce el ultimo valor nada mas suscribirse,
+        # sin esperar al proximo ciclo) -- pero antes esto solo publicaba
+        # cuando el atributo correspondiente NO era None, sin limpiar
+        # nunca el topic contrario. Resultado: una zona que alguna vez
+        # estuvo en modo unico (heat/cool, con "temperature") y luego pasa
+        # a heat_cool (con "temp_low"/"temp_high") se queda con el valor
+        # RETENIDO antiguo de "temp/state" en el broker para siempre --
+        # HA seguia mostrando un unico mando de temperatura en vez del par
+        # calor/frio, aunque el backend ya llevase rato en heat_cool de
+        # verdad. Publicar payload vacio con retain=True es la forma
+        # estandar de MQTT de borrar un mensaje retenido -- se hace en el
+        # "else" de cada uno de los tres, para que el topic que no aplica
+        # al modo actual quede siempre limpio.
         if runner.target_temperature is not None:
             self._mqtt.publish(f"{t}/temp/state", runner.target_temperature, retain=True)
+        else:
+            self._mqtt.publish(f"{t}/temp/state", "", retain=True)
         if runner.target_temperature_low is not None:
             self._mqtt.publish(f"{t}/temp_low/state", runner.target_temperature_low, retain=True)
+        else:
+            self._mqtt.publish(f"{t}/temp_low/state", "", retain=True)
         if runner.target_temperature_high is not None:
             self._mqtt.publish(f"{t}/temp_high/state", runner.target_temperature_high, retain=True)
+        else:
+            self._mqtt.publish(f"{t}/temp_high/state", "", retain=True)
         self._mqtt.publish(f"{t}/target_humidity/state", runner.target_humidity, retain=True)
         self._mqtt.publish(f"{t}/preset_mode/state", runner._preset_mode, retain=True)
         if runner._fan_mode:

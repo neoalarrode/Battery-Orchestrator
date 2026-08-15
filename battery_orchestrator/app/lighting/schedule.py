@@ -24,13 +24,15 @@ positivo de dia (hasta +1 en el mediodia solar) -- una curva de coseno a
 trozos, no un tramo recto, para que la transicion se sienta suave al
 entrar/salir del crepusculo en vez de un cambio de pendiente brusco.
 
-Brillo (modo "default" del original): a pleno dia se queda en el maximo
-declarado sin seguir subiendo -- toda la variacion real pasa por la
-noche, entre el minimo (medianoche solar) y el maximo (en cuanto sale el
-sol). Color: SI seguimos variando en pleno dia (mas calido cerca del
-amanecer/atardecer, mas frio en el mediodia solar) -- no implementamos el
-modo "sleep" del original (no aplica a este proyecto, no hay caja negra
-de "modo dormir" que decidir).
+Brillo: CORREGIDO a peticion expresa del usuario -- el modo "default" del
+original (a pleno dia se queda fijo en el maximo, toda la variacion pasa
+por la noche) no es lo que se queria aqui. En su lugar, el brillo sube
+desde el amanecer hasta el maximo en el mediodia solar y vuelve a bajar
+hasta el atardecer -- la MISMA forma que ya usaba el color (ver
+`_color_temp_kelvin` mas abajo, formula identica con brillo en vez de
+temperatura de color), aplicada tambien al brillo. De noche se queda fijo
+en el minimo (no tiene sentido que "suba" de madrugada sin que nadie lo
+vea) -- solo el tramo de dia (`sun_position > 0`) sigue la curva.
 """
 
 from __future__ import annotations
@@ -86,9 +88,13 @@ def _sun_position(attrs: dict, now: datetime) -> float | None:
 
 
 def _brightness_pct(sun_position: float, min_b: float, max_b: float) -> float:
+    """Sube desde el amanecer (min_b) hasta el mediodia solar (max_b) y
+    vuelve a bajar hacia el atardecer -- misma forma que
+    `_color_temp_kelvin`, aplicada al brillo. De noche se queda fijo en
+    el minimo."""
     if sun_position > 0:
-        return max_b
-    return (max_b - min_b) * (1 + sun_position) + min_b
+        return (max_b - min_b) * sun_position + min_b
+    return min_b
 
 
 def _color_temp_kelvin(sun_position: float, min_k: float, max_k: float) -> int:

@@ -58,11 +58,27 @@ class MqttClimateZone:
             "modes": modes,
             "mode_state_topic": f"{t}/mode/state",
             "mode_command_topic": f"{t}/mode/set",
+            # `_state_template`: SIN esto, un payload vacio (lo que
+            # publish_state manda para "no aplica a este modo", ver ahi)
+            # no limpia nada -- HA simplemente no consigue convertirlo a
+            # numero y se queda con el ULTIMO valor valido en memoria para
+            # siempre, ignorando el mensaje (comportamiento de fondo de
+            # MQTT climate, no algo que se pueda arreglar solo publicando
+            # distinto). Bug real, confirmado en produccion: una zona que
+            # alguna vez tuvo modo unico y luego pasa a heat_cool se
+            # quedaba con el termostato mostrando un solo mando de
+            # temperatura para siempre, aunque el backend llevase rato en
+            # heat_cool real. Con la plantilla, un payload vacio se
+            # traduce a `None` explicito -- eso SI limpia el atributo de
+            # verdad en HA.
             "temperature_state_topic": f"{t}/temp/state",
+            "temperature_state_template": "{{ value if value not in (None, '') else None }}",
             "temperature_command_topic": f"{t}/temp/set",
             "temperature_low_state_topic": f"{t}/temp_low/state",
+            "temperature_low_state_template": "{{ value if value not in (None, '') else None }}",
             "temperature_low_command_topic": f"{t}/temp_low/set",
             "temperature_high_state_topic": f"{t}/temp_high/state",
+            "temperature_high_state_template": "{{ value if value not in (None, '') else None }}",
             "temperature_high_command_topic": f"{t}/temp_high/set",
             "current_temperature_topic": f"{t}/current_temp/state",
             "current_humidity_topic": f"{t}/current_humidity/state",

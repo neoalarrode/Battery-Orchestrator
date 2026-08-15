@@ -129,10 +129,10 @@ PLUGIN_CATALOG = {
     "lighting": {
         "name": "Lighting Orchestrator",
         "description": "Iluminación adaptativa por zona — color y brillo por hora, encendido/apagado por presencia y reglas condicionales (p.ej. TV encendida -> luces laterales en vez del techo)",
-        "version": "0.6.0",
+        "version": "0.6.1",
         "downloadable": True,
-        "tag": "v0.22.2",
-        "sha256": "4a7f783d1f9fd5552fa3f91ff0fb5a2505f0f9e0a35ec43333b2b92f53b2f5a7",  # sha256 real del tarball de v0.22.2, verificado contra una descarga real antes de fijarlo aqui (dashboard interactivo: encender/apagar, brillo, color)
+        "tag": "v0.22.4",
+        "sha256": "75544ccb3cc6dd00d85566ebcb9510163a39053b53cd44f10166de5838d7e91e",  # sha256 real del tarball de v0.22.4, verificado contra una descarga real antes de fijarlo aqui (fix group_state brillo manual)
         "files": ["lighting_plugin.py", "lighting", "lighting_templates"],
     },
     "tplink": {

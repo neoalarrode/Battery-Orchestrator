@@ -174,6 +174,36 @@ class TplinkDeviceManager:
         return device_id in self._devices
 
     # ------------------------------------------------------------ escritura
+    #
+    # BUG REAL, confirmado en produccion contra hardware real: un
+    # dispositivo Tapo/KLAP solo admite UNA sesion autenticada a la vez.
+    # Si el usuario tiene el mismo dispositivo TAMBIEN integrado de forma
+    # nativa en HA (esperable -- ver docstring del modulo, las dos vias
+    # NO son excluyentes a proposito), los sondeos periodicos de ambos
+    # clientes compiten por esa unica sesion y un comando de escritura
+    # puede caer justo en el hueco en el que la sesion la tiene el OTRO
+    # cliente -- visto tal cual con `.trace()`: `set_device_info` con
+    # `{"color_temp":4975,...}` devolvio 403 "despues de autenticacion
+    # correcta" pese a que el color pedido nunca llego a aplicarse.
+    # `python-kasa` reautentica solo en el SIGUIENTE intento (no dentro
+    # del mismo), asi que un pequeño reintento aqui basta -- es
+    # exactamente lo que ya hacia perder comandos en silencio antes de
+    # esto.
+    RETRY_ATTEMPTS = 3
+    RETRY_DELAY_SECONDS = 1.0
+
+    async def _with_retry(self, coro_factory) -> None:
+        last_exc: Exception | None = None
+        for attempt in range(self.RETRY_ATTEMPTS):
+            try:
+                await coro_factory()
+                return
+            except KasaException as exc:
+                last_exc = exc
+                if attempt < self.RETRY_ATTEMPTS - 1:
+                    await asyncio.sleep(self.RETRY_DELAY_SECONDS)
+        if last_exc is not None:
+            raise last_exc
 
     async def _turn_on(self, device_id: str, brightness_pct: float | None, color_temp_kelvin: float | None, hs: tuple[float, float] | None) -> None:
         device = self._devices.get(device_id)
@@ -181,7 +211,7 @@ class TplinkDeviceManager:
             raise KeyError(f"dispositivo TP-Link desconocido: {device_id}")
         light = device.modules.get(Module.Light)
         if light is None:
-            await device.turn_on()
+            await self._with_retry(device.turn_on)
             return
         # Mismo orden de prioridad que `light.py` real de HA
         # (`async_turn_on`): color_temp o hsv PRIMERO (ya incluyen el
@@ -190,20 +220,20 @@ class TplinkDeviceManager:
         if color_temp_kelvin is not None and light.is_variable_color_temp:
             lo, hi = light.valid_temperature_range
             clamped = max(lo, min(hi, round(color_temp_kelvin)))
-            await light.set_color_temp(clamped, brightness=_pct(brightness_pct))
+            await self._with_retry(lambda: light.set_color_temp(clamped, brightness=_pct(brightness_pct)))
         elif hs is not None and light.is_color:
             hue, sat = round(hs[0]), round(hs[1])
-            await light.set_hsv(hue, sat, _pct(brightness_pct))
+            await self._with_retry(lambda: light.set_hsv(hue, sat, _pct(brightness_pct)))
         elif brightness_pct is not None and light.is_dimmable:
-            await light.set_brightness(_pct(brightness_pct))
+            await self._with_retry(lambda: light.set_brightness(_pct(brightness_pct)))
         else:
-            await device.turn_on()
+            await self._with_retry(device.turn_on)
 
     async def _turn_off(self, device_id: str) -> None:
         device = self._devices.get(device_id)
         if device is None:
             raise KeyError(f"dispositivo TP-Link desconocido: {device_id}")
-        await device.turn_off()
+        await self._with_retry(device.turn_off)
 
     def turn_on(self, device_id: str, brightness_pct: float | None = None,
                 color_temp_kelvin: float | None = None, hs: tuple[float, float] | None = None) -> None:

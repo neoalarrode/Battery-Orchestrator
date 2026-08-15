@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.16.8
+**Bug real, confirmado con `.trace()` contra hardware real: un dispositivo Tapo/KLAP solo admite UNA sesión autenticada a la vez.** Si el mismo dispositivo está TAMBIÉN integrado de forma nativa en Home Assistant (esperable -- las dos vías no son excluyentes a propósito, ver docstring de `tplink_plugin.py`), los sondeos periódicos de ambos clientes compiten por esa única sesión: un comando de escritura puede caer justo en el hueco en el que la sesión la tiene el otro cliente y perderse en silencio. Visto tal cual con 15 dispositivos reales dados de alta a la vez: `set_device_info` con `{"color_temp":4975,...}` devolvió 403 "después de autenticación correcta" y el color pedido nunca se aplicó. Fix: reintento (3 intentos, 1s de margen) en toda escritura (`turn_on`/`turn_off`/brillo/color/hs) -- `python-kasa` reautentica solo en el intento SIGUIENTE, no dentro del mismo, así que un pequeño reintento basta.
+
 ## 0.16.7
 Sha256 de TP-Link re-pineado al tag `v0.16.6` (fix real de timeout en descubrimiento) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

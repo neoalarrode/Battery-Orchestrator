@@ -1,8 +1,11 @@
 <p align="center">
-  <img src="logo.png" width="72" alt="Battery Orchestrator">
+  <img src="logo.png" width="72" alt="Home Orchestrator">
 </p>
 
-<h1 align="center">Battery Orchestrator — documentation</h1>
+<h1 align="center">Home Orchestrator — Energy — documentation</h1>
+
+<p align="center"><em>This guide covers the Energy plugin. Climate, Lighting, Tuya, TP-Link and
+Starlink are configured from their own page after installing them — see <a href="README.en.md#plugins">README.en.md</a>.</em></p>
 
 <p align="center">
   🇬🇧 English · <a href="DOCS.md">🇪🇸 Leer en español</a>
@@ -105,7 +108,7 @@ Appliances with a controllable switch/plug (washing machine, dishwasher, electri
 
 ## Read-only panel (wallpanel)
 
-Besides Ingress, the add-on exposes its own port (**8098** by default, configurable like any other add-on port from **Settings → Add-ons → Battery Orchestrator → Network**) so you can reach the panel directly by IP without going through Home Assistant's login — meant for pinning it on a wall-mounted tablet with an app like [WallPanel](https://github.com/thanksmister/wallpanel-android) or Fully Kiosk Browser, pointed at `http://<your-ha-ip>:8098`.
+Besides Ingress, the add-on exposes its own port (**8098** by default, configurable like any other add-on port from **Settings → Add-ons → Home Orchestrator — Energy → Network**) so you can reach the panel directly by IP without going through Home Assistant's login — meant for pinning it on a wall-mounted tablet with an app like [WallPanel](https://github.com/thanksmister/wallpanel-android) or Fully Kiosk Browser, pointed at `http://<your-ha-ip>:8098`.
 
 Through that port the panel is **read-only**: "Current status", "Forecast" and "Battery health" show the same live data as always, but the "Settings" tab doesn't appear and neither does the "Run cycle now" button. This isn't just cosmetic — the server itself rejects (with a 403) any attempt to read or change the configuration, add/edit/delete batteries, panels or deferrable loads, or force a cycle, if the request comes in through that port, even if you bypass the UI and call the API directly. The reason is that, unlike Ingress, this port has no Home Assistant login in front of it, so it must not be able to touch anything.
 

@@ -1,8 +1,11 @@
 <p align="center">
-  <img src="logo.png" width="72" alt="Battery Orchestrator">
+  <img src="logo.png" width="72" alt="Home Orchestrator">
 </p>
 
-<h1 align="center">Battery Orchestrator — documentación</h1>
+<h1 align="center">Home Orchestrator — Energy — documentación</h1>
+
+<p align="center"><em>Esta guía cubre el plugin Energy. Climate, Lighting, Tuya, TP-Link y
+Starlink se configuran desde su propia página tras instalarlos — ver <a href="README.md#plugins">README.md</a>.</em></p>
 
 <p align="center">
   🇪🇸 Español · <a href="DOCS.en.md">🇬🇧 Read in English</a>
@@ -105,7 +108,7 @@ Electrodomésticos con un enchufe/switch controlable (lavadora, lavavajillas, te
 
 ## Panel de solo lectura (wallpanel)
 
-El add-on expone, además de Ingress, un puerto propio (por defecto el **8098**, configurable como cualquier otro puerto de add-on desde **Ajustes → Add-ons → Battery Orchestrator → Red**) para poder acceder al panel directamente por IP sin pasar por el inicio de sesión de Home Assistant — pensado para dejarlo fijo en una tablet de pared con una app tipo [WallPanel](https://github.com/thanksmister/wallpanel-android) o Fully Kiosk Browser, apuntando a `http://<ip-de-tu-ha>:8098`.
+El add-on expone, además de Ingress, un puerto propio (por defecto el **8098**, configurable como cualquier otro puerto de add-on desde **Ajustes → Add-ons → Home Orchestrator — Energy → Red**) para poder acceder al panel directamente por IP sin pasar por el inicio de sesión de Home Assistant — pensado para dejarlo fijo en una tablet de pared con una app tipo [WallPanel](https://github.com/thanksmister/wallpanel-android) o Fully Kiosk Browser, apuntando a `http://<ip-de-tu-ha>:8098`.
 
 Por ese puerto el panel es **de solo lectura**: se ven "Estado actual", "Previsión" y "Salud de batería" con los mismos datos en vivo de siempre, pero la pestaña "Configuración" no aparece y el botón "Ejecutar ciclo ahora" tampoco. Esto no es solo cosmético — el propio servidor rechaza (con un error 403) cualquier intento de leer o modificar la configuración, añadir/editar/eliminar baterías, paneles o cargas diferibles, o forzar un ciclo, si la petición llega por ese puerto, aunque se salte la interfaz y se llame a la API directamente. La razón es que, a diferencia de Ingress, este puerto no lleva delante el inicio de sesión de Home Assistant, así que no debe poder tocar nada.
 

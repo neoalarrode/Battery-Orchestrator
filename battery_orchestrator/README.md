@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="logo.png" width="120" alt="Battery Orchestrator">
+  <img src="logo.png" width="120" alt="Home Orchestrator">
 </p>
 
-<h1 align="center">Battery Orchestrator</h1>
+<h1 align="center">Home Orchestrator</h1>
 
 <p align="center">
-  Carga y descarga adaptativa de baterías domésticas — por precio de la luz,<br>
-  producción solar y consumo real. Sin cajas negras.
+  Plataforma de automatización doméstica para Home Assistant — baterías, clima,<br>
+  iluminación y más, cada una con su propio motor determinista. Sin cajas negras.
 </p>
 
 <p align="center">
@@ -22,9 +22,36 @@
 ---
 
 <p align="center">
-  <img src="screenshots/estado-actual.png" alt="Pestaña Estado actual: SOC agregado, tramo tarifario, ahorro acumulado y cuenta atrás a la próxima punta" width="100%">
+  <img src="screenshots/estado-actual.png" alt="Pestaña Estado actual del plugin Energy: SOC agregado, tramo tarifario, ahorro acumulado y cuenta atrás a la próxima punta" width="100%">
 </p>
 <p align="center"><em>Datos de ejemplo — no son de una instalación real.</em></p>
+
+Un solo add-on de Home Assistant, varios plugins independientes que
+instalas solo si los necesitas — cada uno con su propia lógica de
+decisión legible de arriba a abajo, nunca un solver opaco ni una caja
+negra. Empezó como un planificador de baterías (Energy); hoy cubre
+también climatización, iluminación adaptativa, la integración de
+dispositivos Tuya/TP-Link sin depender de la nube, y monitorización de
+Starlink.
+
+## Plugins
+
+| Plugin | Qué hace |
+|---|---|
+| ⚡ **Energy** | Carga/descarga adaptativa de baterías domésticas por precio de la luz, producción solar y consumo real, más cargas diferibles (lavadora, lavavajillas...) — ver detalle más abajo. |
+| 🌡️ **Climate** | Termostatos adaptativos por zona, expuestos como `climate.*` nativos de HA (HomeKit/Matter incluido) — presets por presencia, previsión de 24h, tarjeta de termostato interactiva. |
+| 💡 **Lighting** | Iluminación adaptativa: color y brillo siguen la posición real del sol (nunca una hora fija), encendido/apagado por presencia, reglas condicionales por zona, control manual desde el propio dashboard. |
+| 🛰️ **Starlink** | Monitorización de tu Starlink (rendimiento, latencia, obstrucción del cielo, alineación, consumo) — integra el proyecto open-source [Dishylink](https://github.com/DaveyHert/dishylink) tal cual, con un proxy local al dish. |
+| 🔗 **Tuya** | Puente de ingesta para dispositivos Tuya por LAN — consumo interno por Climate/Lighting y/o exposición opcional a HA por MQTT, sin pasar por la nube de Tuya. |
+| 🔗 **TP-Link** | Igual que Tuya pero para Kasa/Tapo, vía `python-kasa` (la misma librería que usa el propio componente TP-Link de Home Assistant). |
+
+Instala solo lo que uses — cada plugin se descarga bajo demanda desde la
+propia interfaz, verificado por checksum contra este mismo repositorio.
+Energy es el único con un dashboard pensado para ser la app principal
+del add-on; sin él instalado, la raíz muestra un catálogo mínimo para
+elegir qué instalar.
+
+## Energy, en detalle
 
 Add-on de Home Assistant que planifica y ejecuta la carga/descarga de tus
 baterías domésticas cada minuto, en directo contra tu instalación real.
@@ -36,8 +63,8 @@ batería, precio y sensor — nada viene precargado ni oculto.
 
 Las soluciones habituales (EMHASS, programación lineal genérica) resuelven
 bien el problema pero esconden la lógica detrás de parámetros que cuesta
-razonar y de un solver que no explica sus decisiones. Battery Orchestrator
-hace lo contrario: un algoritmo de dos pasadas que puedes leer entero,
+razonar y de un solver que no explica sus decisiones. Energy hace lo
+contrario: un algoritmo de dos pasadas que puedes leer entero,
 donde cada decisión de cada hora viene con su motivo en texto plano
 ("cargando en valle para cubrir la punta siguiente", "bloqueada: llena y
 con excedente solar"...).
@@ -102,12 +129,14 @@ Más capturas (configuración, alerta de consumo anómalo) en [DOCS.md](DOCS.md)
 1. En Home Assistant: **Ajustes → Add-ons → Tienda de add-ons → ⋮ →
    Repositorios**, y añade:
    ```
-   https://github.com/neoalarrode/Battery-Orchestrator
+   https://github.com/neoalarrode/Home-Orchestrator
    ```
-2. Busca "Battery Orchestrator" en la tienda, instálalo e inícialo.
-3. Ábrelo desde el panel lateral (usa Ingress, no expone ningún puerto).
+2. Busca "Home Orchestrator" en la tienda, instálalo e inícialo.
+3. Ábrelo desde el panel lateral (usa Ingress, no expone ningún puerto) —
+   al arrancar sin nada instalado todavía verás un catálogo mínimo para
+   elegir qué plugin(s) dar de alta.
 
-Instrucciones de configuración paso a paso en [DOCS.md](DOCS.md).
+Instrucciones de configuración paso a paso (Energy) en [DOCS.md](DOCS.md).
 
 ## Estado del proyecto
 
@@ -122,3 +151,8 @@ decisiones.
 El código es visible para poder instalarlo como add-on, pero no está
 autorizado su uso, copia ni modificación fuera de este repositorio sin
 permiso expreso.
+
+El plugin Starlink vendoriza el build web oficial de
+[Dishylink](https://github.com/DaveyHert/dishylink) (© daveyhert,
+licencia MIT) sin modificaciones — ver
+`app/starlink_dist/DISHYLINK_LICENSE.txt`.

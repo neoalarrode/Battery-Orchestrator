@@ -323,12 +323,21 @@ están horneando en la imagen del núcleo sin necesidad. No corregido
 (fuera del alcance de esta tarea, riesgo de tocar el build de otros
 plugins sin que se haya pedido).
 
-### 9. Actualizar todo el repositorio -- NO EMPEZADO
+### 9. Actualizar todo el repositorio -- HECHO (README/DOCS; identidad)
 
-Identidad (README, nombre mostrado, badges), y documentación de cada
-plugin (uno por carpeta, o una sección por plugin en el README
-principal) -- revisar qué existe ya en el repo antes de escribir nada
-nuevo.
+`README.md`/`README.en.md`: hero reescrito para reflejar la plataforma
+real (antes solo hablaba de "Battery Orchestrator"), tabla con los 6
+plugins, nota de licencia MIT de Dishylink. **Bug real encontrado y
+corregido de paso**: la URL de instalación apuntaba al repo antiguo
+`neoalarrode/Battery-Orchestrator` (ya no existe con ese nombre) --
+habría roto cualquier instalación nueva que siguiera el README al pie de
+la letra. `DOCS.md`/`DOCS.en.md`: título corregido, nota de que cubren
+solo Energy, referencias a la navegación de HA actualizadas.
+
+**No hecho, fuera de esta pasada**: documentación DEDICADA por plugin
+(Climate/Lighting/Tuya/TP-Link/Starlink solo tienen la tabla resumen del
+README, no una guía paso a paso como Energy en DOCS.md) -- razonable
+para una sesión futura si el usuario la pide.
 
 ## Otras notas sueltas
 

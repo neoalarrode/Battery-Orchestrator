@@ -96,6 +96,25 @@ el detalle exacto de cada versión):
   contenido: **v0.21.8**. Plugins: battery v0.11.78, climate v0.3.4,
   tuya v0.4.2, lighting v0.5.5, tplink v0.1.7.
 
+## FIX GRAVE encontrado y corregido (v0.22.9): páginas rotas bajo Ingress
+
+Las 4 páginas migradas al sistema de diseño compartido (Climate, Lighting,
+Tuya, TP-Link) se veían SIN NINGÚN ESTILO accediendo por el Ingress real
+de HA (confirmado por el usuario con una captura de pantalla) -- causa:
+`/shared/design-system.css` y `/shared/plugin-switch.js` usaban rutas
+ABSOLUTAS, que solo funcionan accediendo directo por IP:puerto (como se
+verificaba en esta sesión, por SSH+curl) pero se rompen bajo Ingress
+(prefijo dinámico `/api/hassio_ingress/<token>/...`, una ruta que empieza
+por `/` se va al dominio raíz de HA). Corregido: rutas relativas fijas
+por plantilla (`shared/...` para Battery en raíz, `../../shared/...`
+para el resto, montadas en `/plugins/<slug>/`) + `plugin-switch.js` usa
+`ingressRoot()` (calcula el prefijo real en tiempo de ejecución mirando
+`location.pathname`, nunca hardcodeado). **Lección para el futuro: verificar
+SIEMPRE el aspecto final también por Ingress real, no solo por curl
+directo al puerto del add-on** -- todas las verificaciones de esta sesión
+se hicieron por IP:puerto, por eso no se detectó hasta que el usuario
+mandó una captura de su propio acceso real.
+
 ## Pendiente -- revisión de arquitectura de páginas (orden acordado: "base
 compartida primero", ya hecha; ahora dashboards reales)
 
@@ -198,18 +217,27 @@ Verificado en producción contra la zona Cocina (encender a 30% de
 brillo, ver el valor reflejado correctamente, apagar, confirmar que
 vuelve a "sin dato" -- con el retraso esperado de ~5s del sondeo TP-Link).
 
-### 3. Tuya/TP-Link a solo-configuración -- A MEDIAS
+### 3. Tuya/TP-Link a solo-configuración -- HECHO Y DESPLEGADO (v0.22.7)
 
-`PLUGIN_SWITCH_VISIBLE` en `core_static/plugin-switch.js` ya las excluye
-del nav superior (`Set(["battery","climate","lighting"])`). Falta:
-- Enlace real DESDE DENTRO de Climate/Lighting hacia Tuya/TP-Link (p.ej.
-  un botón/link "Gestionar dispositivos Tuya" en la sección de
-  actuadores de una zona), para que sigan siendo alcanzables sin volver
-  a meterlas en el nav principal.
-- Revisar si merece la pena quitarles cualquier resto de "Dashboard" que
-  puedan tener y dejarlas puramente como formulario de configuración.
+Enlaces cruzados reales desde Climate y Lighting hacia `/plugins/tuya/`
+y `/plugins/tplink/`, junto a los selectores de actuadores/referencias
+de luces. De paso, corregido un fallo de documentación real: el texto de
+ayuda y el docstring de `/api/light-actuators` en Lighting solo
+mencionaban Tuya, ignorando que TP-Link funciona igual desde hace
+tiempo.
 
-### 4. Root neutral, Energy no obligatorio -- NO EMPEZADO, EL MÁS DELICADO
+### 4. Root neutral, Energy no obligatorio -- YA ESTABA HECHO (sesión anterior)
+
+Verificado el código: `core_app.py`/`core_shell.py`/`plugin_base.py` YA
+implementan esto correctamente -- `Plugin.serves_root` (`battery_plugin.py`
+lo declara `True`), y si NINGÚN plugin instalado lo declara,
+`core_shell.build_shell_app()` sirve un catálogo mínimo (instalar
+plugins, restaurar copia de seguridad) en la raíz, con su propio HTML
+autocontenido. No hacía falta ningún trabajo nuevo aquí -- ya se
+construyó en una sesión anterior a esta. No se ha probado desinstalando
+Energy de verdad en producción (seria destructivo/dificil de revertir
+sobre la instalación real del usuario) pero el código es coherente y
+está bien documentado.
 
 Toca `core_app.py`/`core_shell.py` -- LOS MISMOS ficheros del crash-loop
 grave de esta sesión (bug: `start_background_threads()` antes de

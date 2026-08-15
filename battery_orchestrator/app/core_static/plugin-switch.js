@@ -44,14 +44,17 @@ const PLUGIN_ICONS = {
   tuya: '<path d="M6 4h9a2 2 0 0 1 2 2v9l-7 7-9-9V6a2 2 0 0 1 2-2Zm2.5 2.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z" fill="currentColor"/>',
   lighting: '<path d="M12 2a7 7 0 0 0-4 12.74V17a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-2.26A7 7 0 0 0 12 2Zm-2 17h4v1a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-1Z" fill="currentColor"/>',
   tplink: '<path d="M12 5a7 7 0 0 0-4.95 11.95l1.41-1.41a5 5 0 1 1 7.08 0l1.41 1.41A7 7 0 0 0 12 5Zm0 4a3 3 0 0 0-2.12 5.12l1.41-1.41a1 1 0 1 1 1.42 0l1.41 1.41A3 3 0 0 0 12 9Z" fill="currentColor"/>',
+  starlink: '<path d="M12 3a9 9 0 0 1 9 9h-2a7 7 0 0 0-7-7V3Z" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><path d="M12 14v7M9 21h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/>',
 };
-const PLUGIN_LABELS = { battery: "Energy", climate: "Climate", tuya: "Tuya", lighting: "Lighting", tplink: "TP-Link" };
+const PLUGIN_LABELS = { battery: "Energy", climate: "Climate", tuya: "Tuya", lighting: "Lighting", tplink: "TP-Link", starlink: "Starlink" };
 
 // Solo los plugins con un dashboard de verdad aparecen en el selector de
 // nivel superior (ver tarea de arquitectura de paginas) -- Tuya/TP-Link
 // son pura configuracion, se acceden desde dentro de Climate/Lighting,
-// no como una "app" mas con la que nadie interactua por si sola.
-const PLUGIN_SWITCH_VISIBLE = new Set(["battery", "climate", "lighting"]);
+// no como una "app" mas con la que nadie interactua por si sola. Starlink
+// SI es un dashboard real (build oficial de Dishylink, ver starlink_
+// plugin.py) -- va visible igual que Climate/Lighting.
+const PLUGIN_SWITCH_VISIBLE = new Set(["battery", "climate", "lighting", "starlink"]);
 
 function _pluginHref(slug) {
   const root = ingressRoot();

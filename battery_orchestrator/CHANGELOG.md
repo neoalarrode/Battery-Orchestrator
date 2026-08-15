@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.24.1
+Sha256 de Starlink re-pineado al tag `v0.24.0` (version real, tras el primer commit) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
+## 0.24.0
+**Nuevo plugin: Starlink Orchestrator.** A petición expresa del usuario, NO es una reimplementación propia como el resto de plugins -- sirve tal cual (adaptación mínima) el build web oficial de [Dishylink](https://github.com/DaveyHert/dishylink) (MIT, © daveyhert), una app de monitorización de Starlink ya hecha y muy cuidada (rendimiento, latencia, obstrucción del cielo, alineación, consumo eléctrico, mapa 3D de obstrucción, log de eventos). `app/starlink_dist/` es exactamente lo que produce su propio `npm run build` (compilado en esta sesión desde el repo real, `tsc -b && vite build`), con una única desviación de sus valores por defecto: `--base=./` en vez del `/` de su config -- su build de navegador usa rutas absolutas, que rompen bajo Ingress exactamente igual que el bug real corregido en la v0.22.8 de este mismo proyecto; rutas relativas lo evitan desde el principio. Ni una línea de su código React/TypeScript está tocada.
+
+Lo único añadido en el backend: la app original habla con el dish (`192.168.100.1:9201`, grpc-web) DIRECTO desde el navegador en su modo de desarrollo -- pero el dish solo responde CORS/Referer a su propio origen (ver `LOCAL-API.md` del proyecto original), así que un origen de terceros no puede llamarlo cross-origin de verdad. Su propio servidor de desarrollo (Vite) ya resuelve esto con un proxy same-origin en `/dishy` que reescribe la URL y quita las cabeceras `Referer`/`Origin` antes de reenviar (ver su `vite.config.ts`) -- este plugin replica EXACTAMENTE ese mismo contrato en el backend (`starlink_plugin.py:_dishy_proxy`), ya que aquí no hay ningún Vite corriendo en producción. La app, sin configurar explícitamente otro host (ver `setDishHost` de su propio `core/dishClient.ts`), ya usa por defecto esa misma ruta relativa `/dishy/...` -- cero cambios en su código hacen falta para que esto encaje.
+
+Deliberadamente SIN proxy de router (funciones de lista de dispositivos/uso por wifi de la app original): la dirección por defecto del router Starlink (`192.168.1.1`) coincide muy probablemente con la del propio router de esta instalación (misma LAN `192.168.1.0/24` que el host de HAOS) -- reenviar ahí hablaría con el router equivocado. El dashboard del DISH en sí (lo importante: rendimiento, latencia, obstrucción, alineación, consumo) funciona igual sin esto. Visible en el selector de plugins de nivel superior (es un dashboard real, no configuración).
+
 ## 0.23.3
 Sha256 de Lighting re-pineado al tag `v0.23.2` (dropdown de room-presets) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

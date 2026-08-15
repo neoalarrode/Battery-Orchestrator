@@ -68,10 +68,16 @@ def _tplink():
     return TplinkPlugin()
 
 
+def _starlink():
+    _prefer_downloaded("starlink")
+    from starlink_plugin import StarlinkPlugin
+    return StarlinkPlugin()
+
+
 # Slug -> constructor.
 PLUGIN_REGISTRY = {
     "battery": _battery, "climate": _climate, "tuya": _tuya,
-    "lighting": _lighting, "tplink": _tplink,
+    "lighting": _lighting, "tplink": _tplink, "starlink": _starlink,
 }
 
 # Metadatos + procedencia verificada para la tienda de plugins de la
@@ -143,6 +149,15 @@ PLUGIN_CATALOG = {
         "tag": "v0.22.8",
         "sha256": "44de0dd2b2a8d716a762237ee339e486af4adb5bf9341fd800ccd89036419494",  # sha256 real del tarball de v0.22.8, verificado contra una descarga real antes de fijarlo aqui (FIX GRAVE: rutas absolutas a /shared/* rotas bajo Ingress)
         "files": ["tplink_plugin.py", "tplink", "tplink_templates", "tplink_store.py"],
+    },
+    "starlink": {
+        "name": "Starlink Orchestrator",
+        "description": "Monitorización de tu Starlink (rendimiento, latencia, obstrucción, alineación, consumo) — build oficial de Dishylink, servido tal cual, con un proxy local al dish",
+        "version": "0.1.0",
+        "downloadable": True,
+        "tag": "PENDIENTE",
+        "sha256": "PENDIENTE",  # se rellena tras el primer commit/tag real de este plugin
+        "files": ["starlink_plugin.py", "starlink_dist"],
     },
 }
 

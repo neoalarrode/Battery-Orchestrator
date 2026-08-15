@@ -129,19 +129,19 @@ PLUGIN_CATALOG = {
     "lighting": {
         "name": "Lighting Orchestrator",
         "description": "Iluminación adaptativa por zona — color y brillo por hora, encendido/apagado por presencia y reglas condicionales (p.ej. TV encendida -> luces laterales en vez del techo)",
-        "version": "0.5.3",
+        "version": "0.5.4",
         "downloadable": True,
-        "tag": "v0.21.4",
-        "sha256": "b5345ff0ec657371d94a2ca68b20677078ac0d679b8ba3e1a8d3aa48615efab3",  # sha256 real del tarball de v0.21.4, verificado contra una descarga real antes de fijarlo aqui (fix real: encendido de varias luces de una zona en paralelo, no en serie)
+        "tag": "v0.21.6",
+        "sha256": "42a78acecce12a91f786d1f0210204244ca8c2145861969d13a940dcf8c65a33",  # sha256 real del tarball de v0.21.6, verificado contra una descarga real antes de fijarlo aqui (luces :solo_encendido)
         "files": ["lighting_plugin.py", "lighting", "lighting_templates"],
     },
     "tplink": {
         "name": "TP-Link Orchestrator",
         "description": "Puente de ingesta para dispositivos TP-Link (Kasa/Tapo) vía python-kasa (misma librería que usa Home Assistant) — consumo interno por Lighting y/o exposición opcional a HA por MQTT",
-        "version": "0.1.6",
+        "version": "0.1.7",
         "downloadable": True,
-        "tag": "v0.21.0",
-        "sha256": "118dda6f9cd6db70f0e6451e89aa8f63e81184c5aff6187c3ec08d7b0a6d5b2c",  # sha256 real del tarball de v0.21.0, verificado contra una descarga real antes de fijarlo aqui (sistema de diseño compartido)
+        "tag": "v0.21.6",
+        "sha256": "42a78acecce12a91f786d1f0210204244ca8c2145861969d13a940dcf8c65a33",  # sha256 real del tarball de v0.21.6, verificado contra una descarga real antes de fijarlo aqui (reintento KLAP mas corto)
         "files": ["tplink_plugin.py", "tplink", "tplink_templates", "tplink_store.py"],
     },
 }

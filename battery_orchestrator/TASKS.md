@@ -343,44 +343,58 @@ para una sesión futura si el usuario la pide.
 
 ## Nueva tanda de tareas (sesión del 2026-08-16, tras confirmar Starlink funcionando)
 
-### 10. Starlink: IP de router manual -- NO EMPEZADO
+### 10-12. Starlink: router manual, historian real, cuenta real, botón de salida -- HECHO Y DESPLEGADO (v0.25.2)
 
-Permitir especificar la IP del router Starlink a mano si no se alcanza
-automáticamente (ver limitación conocida documentada en la tarea 8: la
-IP por defecto 192.168.1.1 probablemente colisiona con el router propio
-del usuario). Necesita: campo de configuración en el plugin (nueva
-página/formulario, ya que hoy `starlink_plugin.py` no tiene ningún
-`GET/POST` de configuración) + implementar el proxy `/router/...` que se
-dejó fuera deliberadamente, ahora condicionado a esa IP configurada.
+A petición expresa del usuario ("no acepto recortar funciones, implementa
+la librería de verdad"), NO se ocultó nada -- se implementó todo de
+verdad:
 
-### 11. Starlink: mensaje "historian" confuso -- NO EMPEZADO
+- **Historian real**: `collector/historian.mts` de Dishylink vendorizado
+  tal cual en `app/starlink_node/` (nuevo directorio, ~330KB de fuente,
+  sin `node_modules`), corre como proceso Node de fondo
+  (`starlink_plugin.py:start_background_threads` -> `_start_node_services`),
+  persistiendo en `/data/starlink/historian`. Alimenta día/semana/mes.
+- **Servidor de cuenta real**: `cloud/starlinkCloudHandler.ts` de
+  Dishylink, también sin tocar, unido a un `node:http` normal por
+  `app/starlink_node/cloud-server.mts` (ÚNICO fichero nuevo de esta
+  integración, sin equivalente upstream). Sesión persistida en
+  `/data/starlink/.starlink-cookie`.
+- **IP de router manual**: `RouterSettingsTab.tsx` (parche real,
+  documentado en `app/starlink_dist/PATCH.md`) tiene un campo nuevo que
+  guarda via `/api/router-config` (`starlink_store.py`) -- reinicia
+  ambos procesos Node al guardar (las env vars solo se leen al
+  arrancar).
+- **Botón de vuelta**: parche real en `TopBar.tsx` (enlace `../../`).
+- **Dockerfile**: instala `nodejs npm` (apk) -- necesario en la imagen
+  base aunque Starlink no esté instalado (mismo compromiso que las
+  dependencias Python por plugin, ya documentado).
+- **Solo 2 dependencias npm en tiempo de ejecución** (`tsx`,
+  `@bufbuild/protobuf` -- nada de React/Vite/Electron, eso es build-time
+  del frontend) instaladas la PRIMERA vez que se activa el plugin
+  (`_ensure_node_deps`, ~1-2s, cacheado después).
 
-"Data usage needs the history recorder running. Start it with npm run
-historian..." -- mensaje literal de Dishylink (pensado para su propio
-dev workflow) que no aplica aquí y confunde. Decidir: ¿ocultar esa
-sección de la UI con otro parche mínimo (mismo patrón que el de
-`setDishHost`), o dejarlo y más adelante portar un historian real
-server-side? Revisar `collector/README.md` del proyecto original antes
-de decidir.
+Verificado en producción con los tres servicios reales respondiendo:
+`GET /api/health` (historian, `lastWrittenMinute` real), `GET
+/cloud/account` (cloud-server, estado `not_connected` correcto), `GET
+/api/router-config`. Contenedor estable, sin `AssertionError`, tras el
+rebuild completo de la imagen (Dockerfile cambiado).
 
-### 12. Starlink: botón de salida -- NO EMPEZADO
+**Pendiente de verificación real por el usuario**: probar el flujo de
+"pegar cookie de sesión" (Conectar cuenta) y el campo de IP de router
+manual desde su propio navegador -- solo se verificó a nivel de API
+desde esta sesión, no visualmente.
 
-Añadir un botón/enlace para volver a Home Orchestrator desde dentro de
-la app de Dishylink (que no tiene nuestro topbar/plugin-switch, ver nota
-de diseño en la tarea 8 de más arriba). Requiere otro pequeño parche de
-UI en el código fuente (mismo patrón que `setDishHost`) ya que es su
-propio layout React, no una plantilla nuestra.
+### 13. Tuya/TP-Link seguían apareciendo en el menú desde Energy -- HECHO Y DESPLEGADO (v0.25.2)
 
-### 13. Tuya/TP-Link siguen apareciendo en el menú desde Energy -- NO EMPEZADO
-
-El usuario reporta que desde Energy todavía se ven Tuya y TP-Link en el
-menú, pese a que `PLUGIN_SWITCH_VISIBLE` en `core_static/plugin-switch.js`
-ya las excluye. Revisar: Energy (`app/templates/index.html`) tiene su
-PROPIA copia del selector de plugins (nunca migrada al sistema
-compartido, ver nota en la sección "Otras notas sueltas" más abajo) --
-su propia lista de "Selector de plugins" probablemente no tiene el mismo
-filtro `PLUGIN_SWITCH_VISIBLE`. Revisar `renderPluginSwitch()` dentro de
-`app/templates/index.html` (busca `PLUGIN_SWITCH_LABEL`/`plugins.filter`).
+Causa real: `app/templates/index.html` (Energy) tiene su PROPIA copia
+del selector de plugins (nunca migrada al sistema compartido, ver nota
+en "Otras notas sueltas") con su propio `renderPluginSwitch()`, que
+filtraba solo por `p.installed` sin el mismo criterio
+`PLUGIN_SWITCH_VISIBLE` que ya tenían el resto de páginas. Añadido el
+mismo `Set(['battery','climate','lighting','starlink'])` ahí también.
+De paso, corregido `CONFIG_PLUGIN_HREF` (la pestaña "Configuración" de
+Energy, ver tarea 14): le faltaban `lighting`/`tplink`/`starlink`, solo
+tenía `battery`/`climate`/`tuya`.
 
 ### 14. Sacar "Configuración" del menú de Energy al menú principal -- NO EMPEZADO
 
@@ -388,13 +402,16 @@ Pendiente de entender exactamente qué pide el usuario -- revisar la
 estructura de pestañas actual de Energy (`app/templates/index.html`,
 `switchTab`/`.tab-panel`) antes de tocar nada.
 
-### 15. Iconos de la tienda de plugins -- NO EMPEZADO
+### 15. Iconos de la tienda de plugins -- HECHO (pendiente de desplegar)
 
-`core_shell.py:_CATALOG_PAGE` (el catálogo que se muestra en la raíz
-cuando Energy no está instalado) usa un icono hardcodeado (`⚡` para
-battery, `◐` genérico para TODO lo demás) -- debería usar los mismos
-iconos SVG por plugin que ya existen en `core_static/plugin-switch.js`
-(`PLUGIN_ICONS`).
+`core_shell.py:_CATALOG_PAGE` usaba un emoji generico (`⚡` solo para
+battery, `◐` para TODO lo demas) -- reemplazado por los mismos iconos
+SVG por plugin que ya usa `core_static/plugin-switch.js`. **Nota**: este
+fix vive en `core_shell.py` (fichero nucleo, va en la imagen base) --
+ya viaja en el commit/tag v0.25.0 desplegado, pero SOLO se ve de verdad
+si `build_shell_app()` sirve la raiz (instalacion sin Energy instalado,
+o recien nacida) -- no visible con Energy instalado (caso normal de esta
+instalacion), no se ha podido verificar visualmente esta sesion.
 
 ### 16. Verificar estética consistente en todas las pestañas -- NO EMPEZADO
 
@@ -424,10 +441,31 @@ Release vs cuáles no (política: solo los que tocan fichero núcleo) --
 confirmar que esa política se cumplió de verdad en todos los tags de
 esta sesión.
 
-### 19. Alertas de seguridad de GitHub (Dependabot) -- NO EMPEZADO
+### 19. Alertas de seguridad de GitHub (CodeQL) -- A MEDIAS
 
-Revisar con `gh` qué alertas de seguridad tiene el repo abiertas y
-decidir cómo resolverlas.
+Sin alertas de Dependabot. **31 alertas de CodeQL** (`gh api repos/
+neoalarrode/Home-Orchestrator/code-scanning/alerts`), por categoria:
+
+- **`py/path-injection`** (3, error, `core_backup.py`) -- **CORREGIDO Y
+  DESPLEGADO** (v0.25.0): el filtro de nombre solo comprobaba ausencia
+  de "/"/"\\", ahora se resuelve la ruta final y se comprueba que sigue
+  siendo hija real de `DATA_DIR` (`os.path.realpath`).
+- **`py/stack-trace-exposure`** (~15, error, muchos `*_plugin.py` +
+  `core_shell.py`) -- patron repetido `jsonify({"error": str(exc)}))`
+  en manejadores de error, expone detalle interno al cliente. Corregido
+  SOLO en `starlink_plugin.py` (parte del trabajo de esta sesion, ver
+  tarea 10-12) -- el resto (climate/lighting/tplink/tuya/core_shell)
+  sigue abierto, mismo patron de fix (loggear con `exc_info=True`,
+  devolver mensaje generico).
+- **`js/incomplete-sanitization`** (5, warning, varias plantillas) --
+  sin investigar todavia.
+- **`py/weak-cryptographic-algorithm`** (3, warning, `tuya/discovery.py`,
+  `tuya/tuya_lan.py`) -- probablemente INEVITABLE (el protocolo LAN real
+  de Tuya exige MD5/AES-ECB, no es eleccion nuestra) -- verificar y, si
+  es asi, marcar como "won't fix" en GitHub con la justificacion en vez
+  de dejarlas abiertas sin mas.
+- 6 alertas ya en estado `fixed` (de sesiones anteriores, no accion
+  necesaria).
 
 ## Otras notas sueltas
 

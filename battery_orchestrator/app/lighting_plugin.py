@@ -44,7 +44,7 @@ DEFAULT_REAPPLY_MINUTES = 5
 class LightingPlugin(Plugin):
     slug = "lighting"
     name = "Lighting Orchestrator"
-    version = "0.6.1"
+    version = "0.6.2"
 
     def __init__(self) -> None:
         self._runners: dict[str, ZoneRunner] = {}
@@ -124,11 +124,12 @@ class LightingPlugin(Plugin):
 
         @app.get("/api/light-actuators")
         def _list_light_actuators():
-            """Actuadores de luz que OTROS plugins ofrecen (Tuya hoy,
-            otra marca mañana) para control DIRECTO -- agregado de todos
-            los proveedores registrados, mismo patron que Climate usa en
-            `/api/actuators`. `ref` es lo que se escribe en `luces=...`
-            de una regla para usar esta via en vez de un `light.*`."""
+            """Actuadores de luz que OTROS plugins ofrecen (Tuya y
+            TP-Link hoy, otra marca mañana) para control DIRECTO --
+            agregado de todos los proveedores registrados, mismo patron
+            que Climate usa en `/api/actuators`. `ref` es lo que se
+            escribe en `luces=...` de una regla para usar esta via en vez
+            de un `light.*`."""
             out = []
             for prefix, provider in self._actuator_providers.items():
                 lister = getattr(provider, "list_light_actuators", None)

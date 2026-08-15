@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.22.7
+Sha256 de Climate/Lighting re-pineados al tag `v0.22.6` (enlaces cruzados a Tuya/TP-Link) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
+## 0.22.6
+**Tuya/TP-Link a solo-configuración** (revisión de arquitectura de páginas): enlace cruzado real desde dentro de Climate (junto al selector de actuadores) y Lighting (junto a la referencia de luces por bridge) hacia `/plugins/tuya/` y `/plugins/tplink/` -- siguen alcanzables sin volver a meterlas en el nav superior. De paso, corregido un fallo de documentación real: el texto de ayuda y el docstring de `/api/light-actuators` en Lighting solo mencionaban Tuya, ignorando que TP-Link funciona exactamente igual (`tplink:device_id`) desde hace varias versiones.
+
 ## 0.22.5
 Sha256 de Lighting re-pineado al tag `v0.22.4` (group_state reflejaba brillo manual mal) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

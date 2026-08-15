@@ -195,7 +195,7 @@
       <p class="help" style="margin-top:14px">
         Reglas — qué luces controlar según presencia y condiciones, una por línea, la primera que coincide gana:
         <code>Nombre; si entidad=valor[,valor2]; luces=light.a,light.b</code>. Una regla sin <code>si...</code> es la reserva por defecto.
-        Cada luz puede ser un <code>light.*</code> de Home Assistant (vía servicios, la más compatible) o, si el dispositivo viene de otro plugin instalado como Tuya, una referencia <code>tuya:device_id</code> para controlarlo directamente sin pasar por HA/MQTT.
+        Cada luz puede ser un <code>light.*</code> de Home Assistant (vía servicios, la más compatible) o, si el dispositivo viene de otro plugin instalado (Tuya o TP-Link), una referencia <code>tuya:device_id</code> / <code>tplink:device_id</code> para controlarlo directamente sin pasar por HA/MQTT. ¿No aparece el dispositivo que buscas? Dalo de alta primero en <a href="/plugins/tuya/" target="_blank">Tuya</a> o <a href="/plugins/tplink/" target="_blank">TP-Link</a>.
       </p>
       <textarea id="zf-rules" required placeholder="TV encendida; si media_player.salon_tv=playing; luces=light.lateral_izq,light.lateral_der&#10;Normal; luces=light.techo_salon"></textarea>
       <details class="lights-ref">
@@ -203,7 +203,7 @@
         <div id="lights-ref-list" class="lights-ref-list"></div>
       </details>
       <details class="lights-ref" id="tuya-ref-details">
-        <summary>Ver luces Tuya controlables directamente (sin pasar por HA)</summary>
+        <summary>Ver luces Tuya/TP-Link controlables directamente (sin pasar por HA)</summary>
         <div id="tuya-ref-list" class="lights-ref-list"></div>
       </details>
 

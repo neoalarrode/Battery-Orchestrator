@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.16.2
+**Bug real, confirmado en producción comparando contra la entidad NATIVA de TP-Link de Home Assistant para el mismo dispositivo físico:** `mqtt_tplink.py` publicaba `color_temp_kelvin/state` Y `hs/state` a la vez en cada sondeo, sin mirar cuál de los dos modos está REALMENTE activo -- HA (esquema MQTT "legacy") infiere el `color_mode` de cuál topic recibió valor más tarde, así que la entidad se quedaba encallada en "hs" con un color antiguo aunque el dispositivo real llevara un rato en `color_temp` (visto tal cual: `light.barra_1` nativa marcaba `color_temp`/6500K mientras la entidad de este plugin seguía en `hs`/(210,80) de un comando anterior). Fix: `_color_temp_active()`, réplica exacta de la lógica real de `_determine_color_mode` del `light.py` del componente `tplink` de Home Assistant (`has_feature("color_temp") and light.color_temp`, con fallback si la versión de `python-kasa` es demasiado vieja para tener `has_feature`). Verificado contra hardware real: ahora coincide con lo que reporta la entidad nativa.
+
 ## 0.16.1
 Sha256 de TP-Link re-pineado al tag `v0.16.0` — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

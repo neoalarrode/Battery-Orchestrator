@@ -27,6 +27,27 @@ DISCOVERY_PREFIX = "homeassistant"
 NODE_ID = "home_orchestrator_tplink"
 
 
+def _color_temp_active(light) -> bool:
+    """Replica exacta de `_determine_color_mode` real de
+    `homeassistant/components/tplink/light.py`: en un dispositivo que
+    soporta color_temp Y hs a la vez, `light.color_temp` por si solo NO
+    basta -- se queda con el ULTIMO valor conocido incluso estando en
+    modo color de verdad (confirmado contra hardware real: 6500 con el
+    dispositivo mostrando azul). `has_feature("color_temp")` es la
+    comprobacion real de que el modo color-temp esta ACTIVO ahora mismo,
+    no solo que el dispositivo lo soporte en general. Con una version de
+    `python-kasa` demasiado vieja para tener `has_feature` (no en 0.7.x,
+    si en 0.10.x -- ver Dockerfile para la version realmente instalada),
+    se cae a mirar solo `color_temp`, peor que nada pero mejor que
+    reventar."""
+    if not (light.is_variable_color_temp and light.is_color):
+        return light.is_variable_color_temp
+    has_feature = getattr(light, "has_feature", None)
+    if has_feature is not None:
+        return bool(has_feature("color_temp")) and bool(light.color_temp)
+    return bool(light.color_temp)
+
+
 class MqttTplinkDevice:
     def __init__(self, mqtt_client, manager, device_id: str, device_name: str) -> None:
         self._mqtt = mqtt_client
@@ -150,9 +171,24 @@ class MqttTplinkDevice:
             self._mqtt.publish(f"{base}/state", "ON" if device.is_on else "OFF", retain=True)
             if light.is_dimmable:
                 self._mqtt.publish(f"{base}/brightness/state", round(light.brightness), retain=True)
-            if light.is_variable_color_temp:
+            # BUG REAL, confirmado en produccion comparando contra la
+            # entidad NATIVA de HA para el mismo dispositivo fisico: esto
+            # publicaba `color_temp_kelvin/state` Y `hs/state` a la vez,
+            # sin mirar cual de los dos modos esta REALMENTE activo ahora
+            # mismo -- HA (esquema MQTT "legacy") infiere el color_mode
+            # de cual topic recibio valor mas tarde, asi que publicar
+            # siempre los dos en el MISMO orden dejaba la entidad
+            # encallada en "hs" con un color antiguo aunque el
+            # dispositivo real llevase un rato en color_temp (visto tal
+            # cual: `light.barra_1` nativa de HA marcaba color_temp/6500K
+            # mientras esta entidad seguia en hs/(210,80) del comando
+            # anterior). Mismo bug de fondo que ya se corrigio en
+            # mqtt_tuya.py, aqui con su propia causa (ver
+            # `_color_temp_active`, replica exacta de la logica real de
+            # `_determine_color_mode` del `light.py` de Home Assistant).
+            if light.is_variable_color_temp and _color_temp_active(light):
                 self._mqtt.publish(f"{base}/color_temp_kelvin/state", round(light.color_temp), retain=True)
-            if light.is_color:
+            elif light.is_color:
                 h, s, _v = light.hsv
                 self._mqtt.publish(f"{base}/hs/state", f"{h:.1f},{s:.1f}", retain=True)
         else:

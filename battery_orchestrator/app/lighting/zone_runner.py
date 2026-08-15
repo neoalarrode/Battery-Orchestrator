@@ -104,6 +104,17 @@ class ZoneRunner:
         # addon vuelve a la curva automatica de blancos, nunca se queda
         # "atascado" en un color a medias sin que nadie lo sepa.
         self._manual_hs: tuple[float, float] | None = None
+        # BUG REAL, encontrado verificando el dashboard interactivo de
+        # Lighting en produccion: `group_state()` reportaba SIEMPRE el
+        # brillo de `current_values` (la curva automatica), nunca el
+        # brillo pedido a mano -- un `manual_command(on=True,
+        # brightness_pct=X)` cambiaba la luz real, pero el estado
+        # agregado devuelto (y publicado por MQTT a la luz dummy) seguia
+        # mostrando el valor de la curva hasta el siguiente reajuste
+        # periodico (hasta `reapply_minutes`). Mismo espiritu que
+        # `_manual_hs` -- se recuerda aqui, en memoria, mientras el color
+        # SI tenia su propio campo.
+        self._manual_brightness_pct: float | None = None
 
     # ------------------------------------------------------------ estado -
 
@@ -461,16 +472,18 @@ class ZoneRunner:
         luces objetivo esta encendida ahora mismo; brillo/color = la
         curva solar ya calculada de la zona (`current_values`, ver
         decide_and_act -- se recalcula cada ciclo, este ocupada la zona
-        o no). Si hay un color manual activo (`_manual_hs`, fijado desde
-        la propia luz dummy via `manual_command`), ese GANA sobre el
-        color_temp_kelvin de la curva -- nunca se reportan los dos a la
-        vez, igual que nunca se mandan los dos a la vez (ver
-        `_apply_values`)."""
+        o no) -- SALVO que haya un brillo/color manual activo
+        (`_manual_brightness_pct`/`_manual_hs`, fijados desde la propia
+        luz dummy via `manual_command`), que GANAN sobre la curva (nunca
+        se reportan los dos a la vez, igual que nunca se mandan los dos a
+        la vez, ver `_apply_values`)."""
         states = self._snapshot_states()
         target, _brightness_only, _on_off_only = self._target_lights()
         on = any(self._is_on(states, e) for e in target)
         vals = self.current_values or {}
-        out = {"on": on, "brightness_pct": vals.get("brightness_pct") if on else None}
+        manual_brightness = self._manual_brightness_pct if on else None
+        curve_brightness = vals.get("brightness_pct") if on else None
+        out = {"on": on, "brightness_pct": manual_brightness if manual_brightness is not None else curve_brightness}
         if on and self._manual_hs is not None:
             out["hs_color"] = self._manual_hs
             out["color_temp_kelvin"] = None
@@ -516,3 +529,4 @@ class ZoneRunner:
             else:
                 self._turn_off(entity_id)
         self._manual_hs = hs if on else None
+        self._manual_brightness_pct = brightness_pct if on else None

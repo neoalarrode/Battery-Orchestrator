@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.22.5
+Sha256 de Lighting re-pineado al tag `v0.22.4` (group_state reflejaba brillo manual mal) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
+## 0.22.4
+**Bug real, encontrado verificando el dashboard interactivo (v0.22.2/0.22.3) en producción: tras ajustar el brillo a mano, el estado agregado de la zona (`group_state`, usado por el dashboard Y por la luz dummy MQTT) seguía mostrando el brillo de la curva automática, no el que se acababa de mandar** -- hasta el siguiente reajuste periódico (hasta `reapply_minutes`). `_manual_hs` (color) ya se guardaba para esto, pero el brillo no tenía su equivalente. Nuevo `_manual_brightness_pct`, mismo espíritu y mismo ciclo de vida que `_manual_hs` -- `group_state()` lo usa cuando está activo, en vez de siempre `current_values`.
+
 ## 0.22.3
 Sha256 de Lighting re-pineado al tag `v0.22.2` (dashboard interactivo: encender/apagar, brillo, color) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

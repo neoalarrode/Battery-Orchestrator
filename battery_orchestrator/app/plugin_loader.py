@@ -129,10 +129,10 @@ PLUGIN_CATALOG = {
     "lighting": {
         "name": "Lighting Orchestrator",
         "description": "Iluminación adaptativa por zona — color y brillo por hora, encendido/apagado por presencia y reglas condicionales (p.ej. TV encendida -> luces laterales en vez del techo)",
-        "version": "0.4.0",
+        "version": "0.4.1",
         "downloadable": True,
-        "tag": "v0.19.0",
-        "sha256": "e42414d1d9e23d7e920c0d5bdca9fd6a645de5b326b0f352e61734616064b3c1",  # sha256 real del tarball de v0.19.0, verificado contra una descarga real antes de fijarlo aqui (luz dummy por zona via MQTT, control de conjunto para HomeKit)
+        "tag": "v0.19.3",
+        "sha256": "914b2ddc411fe29fd78c5122bb559697089c15d190e19240e71666a6cf81b540",  # sha256 real del tarball de v0.19.3, verificado contra una descarga real antes de fijarlo aqui (fix GRAVE: solo_brillo rompia referencias de bridge tplink:/tuya:)
         "files": ["lighting_plugin.py", "lighting", "lighting_templates"],
     },
     "tplink": {

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.19.4
+Sha256 de Lighting re-pineado al tag `v0.19.3` (fix grave de `:solo_brillo` rompiendo bridges) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
 ## 0.19.3
 **Bug real, GRAVE, confirmado en producción: las bombillas TP-Link de Cocina, Entrada/Pasillo y Baño Arriba se quedaban encendidas para siempre, ignorando la presencia por completo.** Causa: `_parse_light_entry` (rules.py, sufijo `:solo_brillo` de la v0.17.0) partía por el PRIMER `:` sin más — rompía cualquier referencia de bridge (`tplink:<device_id>`, `tuya:<device_id>`), que ya usa `:` como separador propio. `tplink:76812943` se leía como luz `"tplink"` a secas, con el id del dispositivo descartado como si fuera el flag `solo_brillo`. `all_lights()` ni siquiera reconocía esas luces como las reales, así que la zona nunca las apagaba al quedarse vacía. Roto desde la v0.17.0 para toda zona con luces TP-Link/Tuya directas. Reproducido con un test aislado antes de arreglar. Fix: el sufijo solo cuenta si el texto entero TERMINA en `:solo_brillo` -- una referencia de bridge nunca termina así.
 

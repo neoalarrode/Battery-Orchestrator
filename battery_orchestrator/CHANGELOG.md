@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.19.0
+**Lighting**: nuevo `lighting/mqtt_lighting.py` -- cada zona publica ahora una única entidad `light.*` "de conjunto" vía MQTT Discovery, en vez de exponer cada bombilla suelta. Pensada para controlar la zona entera desde HomeKit/Matter/Lovelace con un solo interruptor.
+
+- Estado: ON si CUALQUIERA de las luces objetivo (las de la regla activa, o todas las de la zona si no hay presencia/regla) está encendida ahora mismo; brillo/color = la curva solar ya calculada de la zona.
+- Comandos (encender/apagar/ajustar) se reenvían tal cual a esas mismas luces objetivo (`ZoneRunner.manual_command`, nuevo), respetando `:solo_brillo` por luz.
+- Usa el flag real `color_temp_kelvin: true` del schema MQTT de HA desde el principio (evita repetir el bug ya encontrado y corregido una vez en TP-Link).
+- Verificado con un smoke test simulado antes de desplegar: transición reactiva (techo→lámpara al detectar TV), estado de la luz dummy siguiendo el conjunto correcto, y comandos manuales llegando a la luz objetivo real.
+
 ## 0.18.1
 Sha256 de Climate re-pineado al tag `v0.18.0` (fix real de `_occupancy_anticipate`) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

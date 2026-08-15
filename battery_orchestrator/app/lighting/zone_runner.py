@@ -364,3 +364,54 @@ class ZoneRunner:
 
     def handle_periodic_reapply(self) -> None:
         self.decide_and_act()
+
+    # -------------------------------------------------- luz "dummy" (MQTT) -
+    #
+    # Ver lighting/mqtt_lighting.py -- una luz de conjunto por zona, para
+    # HomeKit/Matter/Lovelace, en vez de exponer cada bombilla suelta.
+
+    def _target_lights(self) -> tuple[set[str], set[str]]:
+        """(luces objetivo, cuales de ellas son «:solo_brillo») para la
+        luz dummy -- las de la regla activa si hay una ocupacion/regla
+        resuelta ahora mismo, o TODAS las de la zona si no (zona vacia,
+        o presencia real pero ninguna regla coincide): sin nada mas
+        concreto que ofrecer, mejor representar el conjunto entero que no
+        representar nada."""
+        if self.occupied and self.active_rule:
+            for rule in self._rules:
+                if rule.get("name") == self.active_rule:
+                    return set(rule.get("lights") or []), set(rule.get("brightness_only") or [])
+        return rules.all_lights(self._rules), set()
+
+    def group_state(self) -> dict:
+        """Estado agregado para la luz dummy: ON si CUALQUIERA de las
+        luces objetivo esta encendida ahora mismo; brillo/color = la
+        curva solar ya calculada de la zona (`current_values`, ver
+        decide_and_act -- se recalcula cada ciclo, este ocupada la zona
+        o no)."""
+        states = self._snapshot_states()
+        target, _brightness_only = self._target_lights()
+        on = any(self._is_on(states, e) for e in target)
+        vals = self.current_values or {}
+        return {
+            "on": on,
+            "brightness_pct": vals.get("brightness_pct") if on else None,
+            "color_temp_kelvin": vals.get("color_temp_kelvin") if on else None,
+        }
+
+    def manual_command(self, on: bool, brightness_pct: float | None = None, color_temp_kelvin: float | None = None) -> None:
+        """Comando desde la luz dummy (MQTT, HomeKit...) -- se reenvia TAL
+        CUAL a las luces objetivo ahora mismo (ver `_target_lights`),
+        respetando `:solo_brillo` por luz. No toca la logica de
+        presencia/reglas -- es un override puntual, exactamente igual que
+        si alguien hubiera tocado esas luces a mano por su cuenta (el
+        propio `_detect_manual_overrides` ya se encarga de no pelearse
+        con el en el siguiente ciclo si el valor no encaja con lo que la
+        curva esperaria)."""
+        target, brightness_only = self._target_lights()
+        for entity_id in target:
+            if on:
+                values = {"brightness_pct": brightness_pct, "color_temp_kelvin": color_temp_kelvin}
+                self._apply_values(entity_id, values, turning_on=True, brightness_only=entity_id in brightness_only)
+            else:
+                self._turn_off(entity_id)

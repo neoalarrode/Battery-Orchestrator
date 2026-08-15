@@ -29,8 +29,10 @@ import time
 
 import flask
 
+import ha_mqtt
 import ha_websocket
 from lighting import presets, zone_store
+from lighting.mqtt_lighting import MqttLightingZone
 from lighting.zone_runner import ZoneRunner
 from plugin_base import Plugin
 
@@ -43,11 +45,13 @@ REACTIVE_MIN_INTERVAL_SECONDS = 5
 class LightingPlugin(Plugin):
     slug = "lighting"
     name = "Lighting Orchestrator"
-    version = "0.3.0"
+    version = "0.4.0"
 
     def __init__(self) -> None:
         self._runners: dict[str, ZoneRunner] = {}
+        self._mqtt_zones: dict[str, MqttLightingZone] = {}
         self._ws = ha_websocket.HAWebSocketClient(self._on_entity_change)
+        self._mqtt = ha_mqtt.HAMqttClient(client_id="home_orchestrator_lighting")
         self._reactive = ha_websocket.ReactiveTrigger(self._run_reactive_cycle)
         self._app = flask.Flask("lighting_plugin", template_folder="lighting_templates")
         # Registro GENERICO de "proveedores de actuadores" -- mismo
@@ -190,6 +194,9 @@ class LightingPlugin(Plugin):
             try:
                 runner.decide_and_act()
                 zone_store.update_zone_state(zone_id, runner.to_persisted_state())
+                mqtt_zone = self._mqtt_zones.get(zone_id)
+                if mqtt_zone:
+                    mqtt_zone.publish_state(runner)
             except Exception as exc:
                 log.exception("Fallo forzando decision de zona %s", zone_id)
                 return flask.jsonify({"error": str(exc)}), 500
@@ -210,6 +217,7 @@ class LightingPlugin(Plugin):
     def start_background_threads(self) -> None:
         threading.Thread(target=self._ws.run_forever, name="lighting-ws", daemon=True).start()
         threading.Thread(target=self._reactive.worker_loop, name="lighting-reactive", daemon=True).start()
+        self._mqtt.connect()
 
         zones = zone_store.load_zones()
         for zone in zones:
@@ -222,8 +230,16 @@ class LightingPlugin(Plugin):
         cfg = zone["config"]
         state = zone.get("state") or None
 
-        runner = ZoneRunner(zone_id, cfg, self._ws, state=state, bridges=self)
+        mqtt_zone = MqttLightingZone(self._mqtt, zone_id, cfg)
+        runner = ZoneRunner(zone_id, cfg, self._ws, mqtt_zone=mqtt_zone, state=state, bridges=self)
+        mqtt_zone.bind(runner)
+        mqtt_zone.publish_discovery(
+            min_color_temp_kelvin=float(cfg.get("min_color_temp_kelvin", 2200)),
+            max_color_temp_kelvin=float(cfg.get("max_color_temp_kelvin", 5000)),
+        )
+
         self._runners[zone_id] = runner
+        self._mqtt_zones[zone_id] = mqtt_zone
 
         # Una decision inicial ya al arrancar la zona -- si no, el panel
         # se queda mostrando "sin evaluar todavia" hasta el primer evento
@@ -234,6 +250,7 @@ class LightingPlugin(Plugin):
         try:
             runner.decide_and_act()
             zone_store.update_zone_state(zone_id, runner.to_persisted_state())
+            mqtt_zone.publish_state(runner)
         except Exception:
             log.debug("Zona lighting %s: decision inicial pospuesta (WS aun no listo)", zone_id)
 
@@ -248,6 +265,9 @@ class LightingPlugin(Plugin):
         self._refresh_watched_entities()
 
     def _stop_zone(self, zone_id: str) -> None:
+        mqtt_zone = self._mqtt_zones.pop(zone_id, None)
+        if mqtt_zone:
+            mqtt_zone.remove_discovery()
         self._runners.pop(zone_id, None)
         self._refresh_watched_entities()
         # el hilo periodico de esta zona se auto-termina al no
@@ -272,6 +292,9 @@ class LightingPlugin(Plugin):
             try:
                 runner.handle_reactive_event()
                 zone_store.update_zone_state(zone_id, runner.to_persisted_state())
+                mqtt_zone = self._mqtt_zones.get(zone_id)
+                if mqtt_zone:
+                    mqtt_zone.publish_state(runner)
             except Exception:
                 log.exception("Fallo en ciclo reactivo de zona lighting %s", zone_id)
 
@@ -290,5 +313,8 @@ class LightingPlugin(Plugin):
             try:
                 runner.handle_periodic_reapply()
                 zone_store.update_zone_state(zone_id, runner.to_persisted_state())
+                mqtt_zone = self._mqtt_zones.get(zone_id)
+                if mqtt_zone:
+                    mqtt_zone.publish_state(runner)
             except Exception:
                 log.exception("Fallo en reaplicacion periodica de zona lighting %s", zone_id)

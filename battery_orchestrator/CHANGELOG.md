@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.12.9
+Sha256 de Tuya re-pineado al tag `v0.12.8` (protocolo 3.5, verificado contra dispositivo real) — verificado con una descarga real antes de fijarlo.
+
 ## 0.12.8
 **Protocolo Tuya 3.5 implementado y verificado end-to-end contra un dispositivo real del usuario** (una bombilla WiFi que nunca respondía a 3.1/3.2/3.3/3.4 con ninguna clave — justo el síntoma de un dispositivo que solo habla 3.5). Portado desde `tinytuya` (la misma referencia de la que depende directamente `tuya-local`, otra integración de HA activamente mantenida, según su `manifest.json` — no una reconstrucción a ciegas). 3.5 no es solo un modo de cifrado distinto dentro de la misma trama: es una trama completamente diferente — prefijo `0x6699` (no `0x55AA`), AES-GCM (no ECB+HMAC) envolviendo TODO incluido el propio negociado de sesión, IV aleatorio de 12 bytes por mensaje, y un último paso distinto al derivar la clave de sesión desde el XOR de nonces. El negociado de 3 pasos (intercambio de nonce vía HMAC-SHA256) es idéntico al de 3.4 — solo cambia el envoltorio.
 

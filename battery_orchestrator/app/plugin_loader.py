@@ -111,10 +111,10 @@ PLUGIN_CATALOG = {
     "climate": {
         "name": "Climate Orchestrator",
         "description": "Termostatos adaptativos por zona, expuestos como climate.* nativos de HA (HomeKit/Matter) vía MQTT Discovery",
-        "version": "0.4.0",  # version PROPIA del plugin (ClimatePlugin.version) -- distinta de "tag", que es la version del REPO de la que se descarga
+        "version": "0.4.1",  # version PROPIA del plugin (ClimatePlugin.version) -- distinta de "tag", que es la version del REPO de la que se descarga
         "downloadable": True,
-        "tag": "v0.22.0",
-        "sha256": "9309d2bf1355973a69f069d56b51de665eb8d627fb7aae027a2863d05e6b4722",  # sha256 real del tarball de v0.22.0, verificado contra una descarga real antes de fijarlo aqui (tarjeta de termostato interactiva)
+        "tag": "v0.22.6",
+        "sha256": "dc2fcaa68c6fbe6a5366fe008a9a6a376f784e03850fa3e80ec954e694acc4d0",  # sha256 real del tarball de v0.22.6, verificado contra una descarga real antes de fijarlo aqui (enlace cruzado a Tuya)
         "files": ["climate_plugin.py", "climate", "climate_templates"],
     },
     "tuya": {
@@ -129,10 +129,10 @@ PLUGIN_CATALOG = {
     "lighting": {
         "name": "Lighting Orchestrator",
         "description": "Iluminación adaptativa por zona — color y brillo por hora, encendido/apagado por presencia y reglas condicionales (p.ej. TV encendida -> luces laterales en vez del techo)",
-        "version": "0.6.1",
+        "version": "0.6.2",
         "downloadable": True,
-        "tag": "v0.22.4",
-        "sha256": "75544ccb3cc6dd00d85566ebcb9510163a39053b53cd44f10166de5838d7e91e",  # sha256 real del tarball de v0.22.4, verificado contra una descarga real antes de fijarlo aqui (fix group_state brillo manual)
+        "tag": "v0.22.6",
+        "sha256": "dc2fcaa68c6fbe6a5366fe008a9a6a376f784e03850fa3e80ec954e694acc4d0",  # sha256 real del tarball de v0.22.6, verificado contra una descarga real antes de fijarlo aqui (enlace cruzado a Tuya/TP-Link + fix doc)
         "files": ["lighting_plugin.py", "lighting", "lighting_templates"],
     },
     "tplink": {

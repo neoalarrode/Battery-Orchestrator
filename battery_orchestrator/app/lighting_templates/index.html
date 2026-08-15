@@ -196,6 +196,11 @@
       <input id="zf-transition" type="number" step="1" value="2" style="max-width:160px">
 
       <p class="help" style="margin-top:14px">Curva de color/brillo — atada a la posición real del sol (<code>sun.sun</code>), nunca a una hora fija: se acerca al mínimo de noche y al máximo de día, más cálida cerca del amanecer/atardecer.</p>
+      <label for="zf-preset">Punto de partida por tipo de estancia (opcional)</label>
+      <select id="zf-preset" onchange="applyRoomPreset(this.value)">
+        <option value="">— Elegir para rellenar los 4 campos —</option>
+      </select>
+      <p class="help">Solo copia estos 4 números al elegir -- a partir de ahí son campos normales, tan editables como si los hubieras escrito a mano.</p>
       <div class="grid4">
         <div>
           <label for="zf-min-bright">Brillo mínimo (%)</label>
@@ -459,6 +464,31 @@ function readZoneForm() {
 // _parse_light_entry) -- MISMO formato exacto, para que lo que se ve
 // aqui sea EXACTAMENTE lo que el backend va a interpretar, sin sorpresas.
 
+// ----------------------------------------------- presets por tipo de estancia --
+// Backend ya existia (`GET /api/room-presets`, ver lighting/presets.py) --
+// solo faltaba usarlo aqui. Puro relleno rapido: elegir un preset copia
+// los 4 numeros a los campos de siempre, nunca guarda una referencia al
+// preset en si (ver docstring de presets.py).
+let roomPresets = [];
+
+async function loadRoomPresets() {
+  try {
+    roomPresets = await (await fetch(`${API}/room-presets`)).json();
+    const sel = document.getElementById("zf-preset");
+    sel.innerHTML = '<option value="">— Elegir para rellenar los 4 campos —</option>' +
+      roomPresets.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join("");
+  } catch (e) { /* red temporalmente caida -- el desplegable se queda solo con la opcion vacia */ }
+}
+
+function applyRoomPreset(name) {
+  const preset = roomPresets.find(p => p.name === name);
+  if (!preset || preset.min_brightness_pct === undefined) return;
+  document.getElementById("zf-min-bright").value = preset.min_brightness_pct;
+  document.getElementById("zf-max-bright").value = preset.max_brightness_pct;
+  document.getElementById("zf-min-kelvin").value = preset.min_color_temp_kelvin;
+  document.getElementById("zf-max-kelvin").value = preset.max_color_temp_kelvin;
+}
+
 let rulesModel = [];
 
 function parseRulesTextToModel(text) {
@@ -712,6 +742,7 @@ document.getElementById("raw-rules-details").addEventListener("toggle", (e) => {
 });
 
 renderRulesEditor();
+loadRoomPresets();
 loadZones();
 loadStatus();
 renderPluginSwitch("lighting");

@@ -247,11 +247,16 @@ y tras desplegar, verificar estabilidad sostenida (`docker ps` con
 "Up Ns" creciente, cero AssertionError) durante al menos 20-30s antes de
 dar por bueno. No apresurar este punto.
 
-### 5. Rules editor visual (Lighting) -- NO EMPEZADO
+### 5. Rules editor visual (Lighting) -- HECHO Y DESPLEGADO (v0.23.1)
 
-Sustituir el textarea de `rules_text` (formato `Nombre; si
-entidad=valor; luces=light.a,light.b:solo_brillo`) por un formulario
-visual. Mencionado en sesiones anteriores, nunca empezado.
+Tarjetas por regla (nombre, condiciones, luces con modo color+brillo/
+solo brillo/solo on-off), reordenables, con "Modo texto avanzado"
+colapsable para quien prefiera el textarea crudo (sincronizado en ambas
+direcciones). Ningún cambio en el backend (`lighting/rules.py`) -- el
+editor visual genera el MISMO texto que ya se enviaba, via un espejo en
+JS de `parse_rules_text`/`rules_to_text`. Verificado round-trip a mano
+antes de desplegar; verificado en producción que las 7 zonas existentes
+siguen leyendo/funcionando igual tras el despliegue (backend intacto).
 
 ### 6. Dropdown de room-presets en la UI de Lighting -- BACKEND HECHO, UI NO
 

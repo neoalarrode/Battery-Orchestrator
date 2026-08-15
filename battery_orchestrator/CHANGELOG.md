@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.23.3
+Sha256 de Lighting re-pineado al tag `v0.23.2` (dropdown de room-presets) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
+## 0.23.2
+**Lighting: dropdown de room-presets en el formulario de zona** -- el backend ya existía (`GET /api/room-presets`, `lighting/presets.py`) desde hace tiempo, solo faltaba usarlo en la interfaz. Nuevo desplegable "Punto de partida por tipo de estancia" sobre la curva de color/brillo -- elegir un tipo (Cocina, Salón, Dormitorio...) copia sus 4 valores recomendados a los campos min/max de brillo y color, que a partir de ahí son tan editables como si se hubieran escrito a mano (nunca se guarda una referencia al preset).
+
 ## 0.23.1
 Sha256 de Lighting re-pineado al tag `v0.23.0` (editor visual de reglas) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

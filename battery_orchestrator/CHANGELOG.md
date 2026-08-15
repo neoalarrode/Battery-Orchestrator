@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.18.1
+Sha256 de Climate re-pineado al tag `v0.18.0` (fix real de `_occupancy_anticipate`) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
 ## 0.18.0
 **Bug real, confirmado en producción sobre la zona Dormitorio:** `_occupancy_anticipate` (scheduler.py) calentaba estando la habitación 5.9°C POR ENCIMA del target de calor anticipado. Causa: a diferencia de `_anticipate` (la función hermana, anticipación por previsión exterior), a `_occupancy_anticipate` le faltaba la comprobación direccional (`threshold`/`crossed`) antes de calcular el hueco a cubrir — usaba `gap = abs(target_temp - current_temp)` sin más, así que "la zona está muy por ENCIMA del target de calor" producía el mismo gap absoluto grande que "está muy por DEBAJO", y un gap grande es justo lo que dispara la anticipación. Visto tal cual en real: Dormitorio a 24.9°C, sin presencia, anticipando el preset Confort (calor 19°C, "suele ocuparse en ~1h") — decidía calentar en pleno agosto con la habitación ya caliente. Corregido replicando el mismo guardia direccional que ya tenía `_anticipate`. Verificado con los números reales de producción antes de desplegar: ahora el lado calor da `idle` y el lado frío anticipa correctamente hacia el target de confort.
 

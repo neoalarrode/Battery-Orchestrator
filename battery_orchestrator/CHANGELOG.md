@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.12.5
+Sha256 de Climate re-pineado al tag `v0.12.4` (fix valor retenido de temp/state) — verificado con una descarga real antes de fijarlo.
+
 ## 0.12.4
 **Bug real, confirmado en producción (zona Dormitorio): en modo Automático/heat_cool, el termostato de HA solo mostraba UN mando de temperatura en vez del par calor/frío.** Causa: los tres topics MQTT de consigna (`temp/state`, `temp_low/state`, `temp_high/state`) se publican con `retain=True` (para que HA conozca el último valor nada más suscribirse), pero antes solo se publicaban cuando el atributo correspondiente NO era `None` — nunca se limpiaba el topic contrario. Una zona que en algún momento estuvo en modo único (heat/cool, con consigna simple) y luego pasa a heat_cool se quedaba con el valor RETENIDO antiguo de `temp/state` en el broker para siempre, y HA lo seguía mostrando como si la zona siguiera en modo simple, aunque el backend llevase rato en heat_cool real con `temp_low`/`temp_high` correctos. Fix: publicar payload vacío con `retain=True` (la forma estándar de MQTT de borrar un mensaje retenido) en el topic que no aplica al modo actual, cada vez que se publica estado.
 

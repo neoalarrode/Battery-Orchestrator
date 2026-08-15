@@ -42,6 +42,7 @@ lo mismo, en este orden:
 
 from __future__ import annotations
 
+import concurrent.futures
 import logging
 import time
 
@@ -376,13 +377,36 @@ class ZoneRunner:
         # tocadas a mano.
         auto_on = cfg.get("auto_on", True)
         overrides = self._state.get("manual_override") or {}
+        # BUG REAL, confirmado por el usuario: con varias luces en la
+        # misma zona (Cocina: 4 bombillas TP-Link + 1 nativa de HA), el
+        # encendido se veia "por partes" en vez de a la vez, y la zona
+        # entera tardaba bastantes segundos -- cada `_apply_values` de
+        # una ref de bridge (TP-Link/Tuya) es una llamada de red
+        # BLOQUEANTE (`future.result()`, ver device_manager.py), y aqui
+        # se llamaban una detras de otra: 4 bombillas a ~1-2s cada una
+        # (mas si hay colision de sesion KLAP y toca reintentar) se
+        # convertian facilmente en 10+ segundos SOLO para esta zona.
+        # Lanzarlas todas a la vez (cada una en su propio hilo) hace que
+        # el tiempo total sea el de la MAS LENTA, no la suma de todas --
+        # mismo espiritu que ya se aplico en tplink/device_manager.py
+        # para el escaneo por Discovery.
+        pending: list[tuple] = []
         for entity_id in selected_lights:
             only_brightness = entity_id in selected_brightness_only
             if self._is_on(states, entity_id):
                 if not overrides.get(entity_id):
-                    self._apply_values(entity_id, values, turning_on=False, brightness_only=only_brightness)
+                    pending.append((entity_id, values, False, only_brightness, None))
             elif auto_on and transitioned:
-                self._apply_values(entity_id, values, turning_on=True, brightness_only=only_brightness)
+                pending.append((entity_id, values, True, only_brightness, None))
+        if len(pending) == 1:
+            self._apply_values(*pending[0])
+        elif pending:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=len(pending)) as pool:
+                futures = [
+                    pool.submit(self._apply_values, entity_id, vals, turning_on, brightness_only, hs)
+                    for entity_id, vals, turning_on, brightness_only, hs in pending
+                ]
+                concurrent.futures.wait(futures)
 
         self.reason = f"regla activa: {selected_name or '(sin nombre)'}"
 

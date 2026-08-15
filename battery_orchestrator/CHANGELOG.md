@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.21.5
+Sha256 de Lighting re-pineado al tag `v0.21.4` (encendido de varias luces de una zona en paralelo, no en serie) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
+## 0.21.4
+**Bug real, confirmado por el usuario en producción tras probar la v0.21.2/v0.21.3: las luces de una zona con varias bombillas se encendían "por partes", no a la vez, y la zona entera seguía tardando 15-20s.** Causa real: `decide_and_act` mandaba encender cada luz de la regla activa una detrás de otra, en el mismo hilo -- y cada comando a una ref de bridge (TP-Link/Tuya) es una llamada de red BLOQUEANTE (`future.result()`, ver `device_manager.py`). Con Cocina (4 bombillas TP-Link + 1 luz nativa de HA), 4-5 llamadas de ~1-2s cada una (mas si hay que reintentar por colisión de sesión KLAP) en serie sumaban facilmente 15-20s. Ahora se lanzan todas a la vez, cada una en su propio hilo (`concurrent.futures.ThreadPoolExecutor`) -- el tiempo total de la zona pasa a ser el de la luz MAS LENTA, no la suma de todas. Confirmado con `HAWebSocketClient.call()` (lock propio por mensaje) y `TplinkDeviceManager`/`TuyaDeviceManager` (`run_coroutine_threadsafe`, ya pensados para invocación concurrente) que la llamada concurrente es segura.
+
+Además, se descubrió (no arreglado en esta versión, documentado para seguir): con `off_delay_seconds` alto (120s en producción), si una zona sigue "ocupada" por el margen de gracia cuando llega una presencia nueva, no se cuenta como transición y las luces que estuvieran apagadas (por ejemplo, por un fallo de comando anterior) no se reintentan hasta que la zona quede vacia de verdad y alguien vuelva a entrar.
+
 ## 0.21.3
 Sha256 de Lighting re-pineado al tag `v0.21.2` (fix real de latencia de encendido, 7 lecturas de HA por evento -> 1) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

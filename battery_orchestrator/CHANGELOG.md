@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.22.3
+Sha256 de Lighting re-pineado al tag `v0.22.2` (dashboard interactivo: encender/apagar, brillo, color) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
+## 0.22.2
+**Lighting: Dashboard real** (siguiente paso de la revisión de arquitectura de páginas -- "deberíamos... poder encender apagar modificar colores"). Nuevo `POST /api/zones/<id>/manual_command` en `lighting_plugin.py` -- llama DIRECTO a `ZoneRunner.manual_command` (el mismo mecanismo que ya usa la luz "dummy" de HomeKit/Lovelace por MQTT), así que la tarjeta del dashboard es exactamente como tocar esa luz desde HomeKit. `GET /api/zones` expone además `group` (estado agregado de la luz dummy: on/brillo/color) por zona. Cada tarjeta de zona tiene ahora: botón encender/apagar, selector de color nativo (`<input type=color>`, convertido a HS en el navegador), slider de brillo y slider de temperatura de color de blancos (acotado al rango min/max configurado de la zona) -- cada control manda solo lo que cambia, preservando el resto exactamente igual que ya hacían los handlers MQTT reales (brillo preserva el color manual activo; color de blancos y color HS se pisan mutuamente, nunca los dos a la vez).
+
 ## 0.22.1
 Sha256 de Climate re-pineado al tag `v0.22.0` (tarjeta de termostato interactiva) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

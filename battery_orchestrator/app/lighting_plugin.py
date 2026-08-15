@@ -44,7 +44,7 @@ DEFAULT_REAPPLY_MINUTES = 5
 class LightingPlugin(Plugin):
     slug = "lighting"
     name = "Lighting Orchestrator"
-    version = "0.5.5"
+    version = "0.6.0"
 
     def __init__(self) -> None:
         self._runners: dict[str, ZoneRunner] = {}
@@ -161,6 +161,12 @@ class LightingPlugin(Plugin):
                         "active_rule": runner.active_rule,
                         "current_values": runner.current_values,
                         "reason": runner.reason,
+                        # Estado agregado de la luz "dummy" de la zona
+                        # (ver zone_runner.py:group_state) -- para la
+                        # tarjeta interactiva del dashboard: no depende de
+                        # que MQTT/HA tengan bien resuelta la entidad, es
+                        # exactamente el mismo estado que ya se publica.
+                        "group": runner.group_state(),
                     }
                 out.append(item)
             return flask.jsonify(out)
@@ -205,6 +211,38 @@ class LightingPlugin(Plugin):
                 log.exception("Fallo forzando decision de zona %s", zone_id)
                 return flask.jsonify({"error": str(exc)}), 500
             return flask.jsonify({"ok": True, "reason": runner.reason})
+
+        # ---- comando manual desde la tarjeta interactiva del Dashboard -
+        #
+        # `ZoneRunner.manual_command` ya existia -- hasta ahora solo se
+        # llamaba desde MQTT (ver lighting/mqtt_lighting.py, la luz
+        # "dummy" de HomeKit/Lovelace). Exponerlo tambien por HTTP directo
+        # significa que la tarjeta del dashboard habla con el MISMO
+        # mecanismo, sin depender de que HA tenga la luz dummy bien
+        # resuelta ni de publicar un mensaje MQTT para algo que ya esta
+        # aqui mismo, en el mismo proceso.
+        @app.post("/api/zones/<zone_id>/manual_command")
+        def _manual_command(zone_id):
+            runner = self._runners.get(zone_id)
+            if not runner:
+                return flask.jsonify({"error": "zona no encontrada o no arrancada"}), 404
+            payload = flask.request.get_json(force=True) or {}
+            hs = payload.get("hs")
+            try:
+                runner.manual_command(
+                    on=bool(payload.get("on")),
+                    brightness_pct=payload.get("brightness_pct"),
+                    color_temp_kelvin=payload.get("color_temp_kelvin"),
+                    hs=tuple(hs) if hs else None,
+                )
+                zone_store.update_zone_state(zone_id, runner.to_persisted_state())
+                mqtt_zone = self._mqtt_zones.get(zone_id)
+                if mqtt_zone:
+                    mqtt_zone.publish_state(runner)
+            except Exception as exc:
+                log.exception("Fallo aplicando comando manual en zona %s", zone_id)
+                return flask.jsonify({"error": str(exc)}), 500
+            return flask.jsonify({"ok": True, "group": runner.group_state()})
 
         @app.get("/api/status")
         def _status():

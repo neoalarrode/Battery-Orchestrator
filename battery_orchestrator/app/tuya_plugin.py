@@ -35,7 +35,7 @@ log = logging.getLogger("tuya_plugin")
 class TuyaPlugin(Plugin):
     slug = "tuya"
     name = "Tuya Orchestrator"
-    version = "0.3.1"
+    version = "0.3.2"
 
     def __init__(self) -> None:
         self._manager = TuyaDeviceManager(on_any_change=self._on_device_change)
@@ -221,6 +221,15 @@ class TuyaPlugin(Plugin):
         if cfg.get("expose_mqtt"):
             mqtt_dev = MqttTuyaDevice(self._mqtt, self._manager, cfg["device_id"], cfg.get("name") or cfg["device_id"])
             mqtt_dev.publish_discovery()
+            # Bug real, confirmado en produccion: sin esto, una entidad
+            # recien expuesta se quedaba en "unknown"/todo-None hasta el
+            # PRIMER cambio espontaneo del dispositivo (on_any_change) --
+            # que para un dispositivo que no cambia solo (una bombilla
+            # apagada y quieta, p.ej.) podia no llegar nunca. Los DPs ya
+            # estan en cache tras _manager.add_device() (ver
+            # _connect_and_prime), asi que hay estado real que publicar
+            # desde el primer instante, no hace falta esperar a nada.
+            mqtt_dev.publish_state()
             self._mqtt_devices[cfg["device_id"]] = mqtt_dev
 
         threading.Thread(

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.13.2
+**Bug real, confirmado en producción: una entidad Tuya recién expuesta a HA se quedaba en "unknown" hasta el primer cambio espontáneo del dispositivo.** `_start_device` llamaba a `publish_discovery()` pero nunca a `publish_state()` justo después — los DPs ya están en caché desde que el dispositivo conecta (`_connect_and_prime`), así que había estado real que publicar desde el primer instante, pero se esperaba en silencio a `on_any_change`, que para un dispositivo quieto (una bombilla apagada, p.ej.) podía no llegar nunca. Verificado en producción: `light.luz_pabajo_light` (recién publicada en v0.13.1) se quedó en `unknown` con todos los atributos a `None`. Fix: publicar el estado inicial inmediatamente tras el discovery.
+
 ## 0.13.1
 Sha256 de Tuya re-pineado al tag `v0.13.0` (descubrimiento 0x6699 + entidad light.* real) — verificado con una descarga real antes de fijarlo.
 

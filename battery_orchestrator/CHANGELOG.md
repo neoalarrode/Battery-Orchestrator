@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.19.6
+Sha256 de Lighting re-pineado al tag `v0.19.5` (curva de brillo corregida) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
 ## 0.19.5
 **Lighting**: corregida la curva de brillo a petición expresa del usuario. El modo "default" del proyecto de referencia (Adaptive Lighting) deja el brillo fijo en el máximo durante todo el día, variando solo de noche -- no es lo que se quería aquí. Ahora el brillo sube desde el mínimo en el amanecer hasta el máximo en el mediodía solar y vuelve a bajar hacia el atardecer (misma forma que ya usaba el color), quedándose fijo en el mínimo por la noche. Verificado con valores concretos antes de desplegar.
 

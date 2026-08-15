@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.12.7
+Sha256 de Climate re-pineado al tag `v0.12.6` (fix de verdad: value_template limpia temp/state) — verificado con una descarga real antes de fijarlo.
+
 ## 0.12.6
 Continuación real del fix de v0.12.4: publicar payload vacío con `retain=True` limpia el mensaje retenido en el BROKER, pero HA no lo interpreta como "borra el valor" — al no poder convertirlo a número, simplemente ignora el mensaje y se queda con el último valor válido en memoria para siempre (comportamiento de fondo del componente MQTT climate). Verificado en producción: tras v0.12.4 la zona Dormitorio seguía mostrando `temperature: 23.0` en el termostato pese a estar en heat_cool real con `temp_low`/`temp_high` correctos. Fix de verdad: `temperature_state_template`/`temperature_low_state_template`/`temperature_high_state_template` en el discovery, que traducen un payload vacío a `None` explícito — eso sí limpia el atributo en HA.
 

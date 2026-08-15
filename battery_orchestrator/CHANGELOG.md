@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.21.9
+Sha256 de Lighting re-pineado al tag `v0.21.8` (una sola escritura de config por ciclo reactivo, no 7) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
+## 0.21.8
+**Bug real, medido con la instrumentacion añadida en la v0.21.6: el ciclo reactivo de Lighting seguia tardando 1-3s incluso con la copia local de estados de HA ya en produccion (lectura de HA bajada a 0.001s).** Causa real: `zone_store.update_zone_state` relee y reescribe el fichero de config COMPLETO del addon (compartido con Battery/Climate/Tuya/TP-Link) en cada llamada -- y `_run_reactive_cycle` lo llamaba una vez POR ZONA (7 en produccion), asi que un solo evento disparaba 7 lecturas + 7 escrituras completas de disco en serie. Nuevo `zone_store.update_zone_states` (plural) acumula el estado de las 7 zonas del ciclo y hace UN solo read-modify-write al final, en vez de 7.
+
 ## 0.21.7
 Sha256 de Lighting/TP-Link re-pineados al tag `v0.21.6` (copia local de estados de HA + reintento TP-Link mas corto + exclusion total de brillo/color para luces `:solo_encendido`) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`ha_websocket.py`, ademas de `plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

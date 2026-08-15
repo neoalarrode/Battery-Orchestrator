@@ -44,7 +44,7 @@ DEFAULT_REAPPLY_MINUTES = 5
 class LightingPlugin(Plugin):
     slug = "lighting"
     name = "Lighting Orchestrator"
-    version = "0.5.4"
+    version = "0.5.5"
 
     def __init__(self) -> None:
         self._runners: dict[str, ZoneRunner] = {}
@@ -312,15 +312,28 @@ class LightingPlugin(Plugin):
             log.exception("Fallo leyendo estados de HA para el ciclo reactivo de Lighting")
             states = None
         states_elapsed = time.monotonic() - cycle_start
+        # BUG REAL, confirmado por el usuario: incluso tras eliminar el
+        # volcado completo de HA (`get_states()`), el ciclo seguia
+        # tardando 1-3s -- `zone_store.update_zone_state` relee y
+        # reescribe el fichero de config COMPLETO (compartido con
+        # Battery/Climate/Tuya/TP-Link) en cada llamada, y aqui se
+        # llamaba una vez POR ZONA (7 lecturas + 7 escrituras completas
+        # de disco, en serie, por un solo evento). Se acumulan aqui y se
+        # escriben de una sola vez al final (`update_zone_states`).
+        pending_states: dict[str, dict] = {}
         for zone_id, runner in list(self._runners.items()):
             try:
                 runner.handle_reactive_event(states)
-                zone_store.update_zone_state(zone_id, runner.to_persisted_state())
+                pending_states[zone_id] = runner.to_persisted_state()
                 mqtt_zone = self._mqtt_zones.get(zone_id)
                 if mqtt_zone:
                     mqtt_zone.publish_state(runner)
             except Exception:
                 log.exception("Fallo en ciclo reactivo de zona lighting %s", zone_id)
+        try:
+            zone_store.update_zone_states(pending_states)
+        except Exception:
+            log.exception("Fallo guardando el estado de las zonas de Lighting tras el ciclo reactivo")
         total_elapsed = time.monotonic() - cycle_start
         log.info(
             "Ciclo reactivo de Lighting: %.3fs total (lectura de HA: %.3fs, %d zona(s))",

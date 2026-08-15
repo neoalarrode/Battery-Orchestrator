@@ -154,6 +154,13 @@ class ClimatePlugin(Plugin):
                         "target_temperature_low": runner.target_temperature_low,
                         "target_temperature_high": runner.target_temperature_high,
                         "reason": runner.reason,
+                        # Para que la tarjeta de termostato del dashboard
+                        # sepa que opciones ofrecer -- no todas las zonas
+                        # soportan los mismos modos (p.ej. una sin
+                        # actuador de frio no tiene "cool"/"heat_cool").
+                        "hvac_modes": runner.hvac_modes,
+                        "preset_mode": runner._preset_mode,
+                        "preset_modes": runner._preset_modes,
                     }
                 out.append(item)
             return flask.jsonify(out)
@@ -213,6 +220,54 @@ class ClimatePlugin(Plugin):
                 log.exception("Fallo forzando decision de zona %s", zone_id)
                 return flask.jsonify({"error": str(exc)}), 500
             return flask.jsonify({"ok": True})
+
+        # ---- comandos de la tarjeta de termostato del Dashboard --------
+        #
+        # `ZoneRunner.set_temperature`/`set_hvac_mode`/`set_preset_mode` ya
+        # existian -- son el MISMO mecanismo que ya usa la orden MQTT real
+        # del climate.* expuesto a HA (ver mqtt_climate.py), asi que la
+        # tarjeta del dashboard no depende de que HA tenga bien resuelta
+        # la entidad ni de ir a buscar su entity_id: habla DIRECTO con el
+        # runner, exactamente igual que si la orden viniera de HomeKit.
+        # Los tres terminan en `decide_and_act()` (que ya publica el
+        # estado nuevo por MQTT solo, ver `_maybe_publish_state`), asi que
+        # aqui solo hace falta persistir el estado tras la llamada -- mismo
+        # patron que `/refresh` de arriba.
+        def _zone_command(zone_id, fn):
+            runner = self._runners.get(zone_id)
+            if not runner:
+                return flask.jsonify({"error": "zona no encontrada o no arrancada"}), 404
+            try:
+                fn(runner)
+                zone_store.update_zone_state(zone_id, runner.to_persisted_state())
+            except Exception as exc:
+                log.exception("Fallo aplicando comando en zona %s", zone_id)
+                return flask.jsonify({"error": str(exc)}), 500
+            return flask.jsonify({"ok": True})
+
+        @app.post("/api/zones/<zone_id>/set_temperature")
+        def _set_temperature(zone_id):
+            payload = flask.request.get_json(force=True) or {}
+            return _zone_command(zone_id, lambda r: r.set_temperature(
+                single=payload.get("temperature"), low=payload.get("target_temp_low"),
+                high=payload.get("target_temp_high"),
+            ))
+
+        @app.post("/api/zones/<zone_id>/set_hvac_mode")
+        def _set_hvac_mode(zone_id):
+            payload = flask.request.get_json(force=True) or {}
+            hvac_mode = payload.get("hvac_mode")
+            if not hvac_mode:
+                return flask.jsonify({"error": "falta 'hvac_mode'"}), 400
+            return _zone_command(zone_id, lambda r: r.set_hvac_mode(hvac_mode))
+
+        @app.post("/api/zones/<zone_id>/set_preset_mode")
+        def _set_preset_mode(zone_id):
+            payload = flask.request.get_json(force=True) or {}
+            preset_mode = payload.get("preset_mode")
+            if not preset_mode:
+                return flask.jsonify({"error": "falta 'preset_mode'"}), 400
+            return _zone_command(zone_id, lambda r: r.set_preset_mode(preset_mode))
 
         @app.get("/api/status")
         def _status():

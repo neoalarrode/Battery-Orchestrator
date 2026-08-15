@@ -207,6 +207,30 @@ funciona. Falta usarlo en el formulario de edición de zona de
 `lighting_templates/index.html` (un desplegable que rellene brillo/color
 min/max al elegir un tipo de estancia).
 
+### 7. Logos para los complementos -- NO EMPEZADO
+
+Añadir un logo/icono propio a cada plugin (hoy solo tienen el favicon SVG
+inline y el icono del `plugin-switch`). Revisar si HA espera un formato
+concreto (`icon.png`/`logo.png` en la raíz del addon, ver documentación
+de Supervisor de add-ons) para que aparezca en el listado de HA, aparte
+del uso interno en nuestras propias páginas.
+
+### 8. Plugin de Starlink -- NO EMPEZADO
+
+Referencia dada por el usuario: https://github.com/DaveyHert/dishylink
+(hay que integrar esa app/lógica en nuestro sistema, no enlazarla suelta
+-- mismo patrón "plugin propio" que Tuya/TP-Link, no una redirección).
+Falta: leer el repo de referencia para entender su protocolo real hacia
+la antena Starlink (gRPC local del dish, normalmente `192.168.100.1:9200`)
+antes de diseñar nada.
+
+### 9. Actualizar todo el repositorio -- NO EMPEZADO
+
+Identidad (README, nombre mostrado, badges), y documentación de cada
+plugin (uno por carpeta, o una sección por plugin en el README
+principal) -- revisar qué existe ya en el repo antes de escribir nada
+nuevo.
+
 ## Otras notas sueltas
 
 - `app/templates/index.html` (Battery/Energy): dedup completo del CSS

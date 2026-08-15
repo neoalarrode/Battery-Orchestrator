@@ -120,28 +120,28 @@ PLUGIN_CATALOG = {
     "tuya": {
         "name": "Tuya Orchestrator",
         "description": "Puente de ingesta para dispositivos Tuya-por-LAN — consumo interno por Climate y/o exposición opcional a HA por MQTT",
-        "version": "0.4.0",
+        "version": "0.4.1",
         "downloadable": True,
-        "tag": "v0.15.0",
-        "sha256": "fc36b7dee2a42c28b3d974d5e81768e2b36fc4708366657f9e71c57f9177ca45",  # sha256 real del tarball de v0.15.0, verificado contra una descarga real antes de fijarlo aqui (fix real: conversion mireds/DP de color + light_handle para control directo desde Lighting)
+        "tag": "v0.20.0",
+        "sha256": "09ca42862e2e79a9ead4512461393cd1bbfbbe2999d100b9cebd0ac2bbd7e313",  # sha256 real del tarball de v0.20.0, verificado contra una descarga real antes de fijarlo aqui (TuyaLightHandle.turn_on acepta hs, codec de color movido a profile.py)
         "files": ["tuya_plugin.py", "tuya", "tuya_templates"],
     },
     "lighting": {
         "name": "Lighting Orchestrator",
         "description": "Iluminación adaptativa por zona — color y brillo por hora, encendido/apagado por presencia y reglas condicionales (p.ej. TV encendida -> luces laterales en vez del techo)",
-        "version": "0.4.2",
+        "version": "0.5.0",
         "downloadable": True,
-        "tag": "v0.19.5",
-        "sha256": "9e90f5a301b26bcc60205a752435cec2af9ea4d75590146dddd91e8724cdce29",  # sha256 real del tarball de v0.19.5, verificado contra una descarga real antes de fijarlo aqui (curva de brillo corregida: sube al mediodia solar, no fijo en el maximo todo el dia)
+        "tag": "v0.20.0",
+        "sha256": "09ca42862e2e79a9ead4512461393cd1bbfbbe2999d100b9cebd0ac2bbd7e313",  # sha256 real del tarball de v0.20.0, verificado contra una descarga real antes de fijarlo aqui (color manual HS en la luz de conjunto)
         "files": ["lighting_plugin.py", "lighting", "lighting_templates"],
     },
     "tplink": {
         "name": "TP-Link Orchestrator",
         "description": "Puente de ingesta para dispositivos TP-Link (Kasa/Tapo) vía python-kasa (misma librería que usa Home Assistant) — consumo interno por Lighting y/o exposición opcional a HA por MQTT",
-        "version": "0.1.0",
+        "version": "0.1.5",
         "downloadable": True,
-        "tag": "v0.16.8",
-        "sha256": "bbf0643a8ec3e49fa517a218c4aeb3c44c81fddc3633b231912eb8b033a7b3dd",  # sha256 real del tarball de v0.16.8, verificado contra una descarga real antes de fijarlo aqui (fix real: reintento en escrituras, Tapo/KLAP solo admite una sesion a la vez)
+        "tag": "v0.20.0",
+        "sha256": "09ca42862e2e79a9ead4512461393cd1bbfbbe2999d100b9cebd0ac2bbd7e313",  # sha256 real del tarball de v0.20.0, verificado contra una descarga real antes de fijarlo aqui (TplinkLightHandle.turn_on acepta hs)
         "files": ["tplink_plugin.py", "tplink", "tplink_templates", "tplink_store.py"],
     },
 }

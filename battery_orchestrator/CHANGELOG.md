@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.20.1
+Sha256 de Lighting/TP-Link/Tuya re-pineados al tag `v0.20.0` (color manual HS) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
 ## 0.20.0
 **Lighting**: color manual (HS) en la luz "dummy" de conjunto de cada zona, a petición expresa del usuario. Además de la curva automática de blancos (nunca produce color, solo temperatura de color), ahora se puede fijar un color concreto a mano desde HomeKit/Lovelace en la propia luz de conjunto -- se reenvía a las luces reales de la zona que lo soporten (TP-Link, Tuya, o cualquier `light.*` nativo de HA vía `hs_color`).
 

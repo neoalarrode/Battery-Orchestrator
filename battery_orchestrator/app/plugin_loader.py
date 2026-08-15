@@ -105,10 +105,10 @@ PLUGIN_CATALOG = {
     "tuya": {
         "name": "Tuya Orchestrator",
         "description": "Puente de ingesta para dispositivos Tuya-por-LAN — consumo interno por Climate y/o exposición opcional a HA por MQTT",
-        "version": "0.3.3",
+        "version": "0.3.4",
         "downloadable": True,
-        "tag": "v0.13.4",
-        "sha256": "7572e3ee6e01f9b98a943c11851ceb6afebd671a03ab9bb77644c19898a3d382",  # sha256 real del tarball de v0.13.4, verificado contra una descarga real antes de fijarlo aqui (fix real de 3.5: set_dps/status_once dejaban 3.5 fuera del dialecto CONTROL_NEW)
+        "tag": "v0.13.6",
+        "sha256": "053f66683c4e7bc2e2935c17a3edb8d29d825b459f81ba6d7c737a32cdbbece2",  # sha256 real del tarball de v0.13.6, verificado contra una descarga real antes de fijarlo aqui (fix real de 3.5: los envios normales se emparejaban por seq, pero el dispositivo contesta con su propio contador global)
         "files": ["tuya_plugin.py", "tuya", "tuya_templates"],
     },
 }

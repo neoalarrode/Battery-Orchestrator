@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.16.1
+Sha256 de TP-Link re-pineado al tag `v0.16.0` — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
 ## 0.16.0
 **Nuevo plugin: TP-Link Orchestrator (`tplink`)** -- cuarto plugin de ingesta, mismo papel que Tuya pero para Kasa/Tapo, usando `python-kasa` (dependencia nueva del addon, ver Dockerfile) -- la MISMA librería que usa de verdad el componente `tplink` de Home Assistant, en vez de reimplementar el protocolo a mano.
 

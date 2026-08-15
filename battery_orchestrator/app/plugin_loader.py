@@ -140,8 +140,8 @@ PLUGIN_CATALOG = {
         "description": "Puente de ingesta para dispositivos TP-Link (Kasa/Tapo) vía python-kasa (misma librería que usa Home Assistant) — consumo interno por Lighting y/o exposición opcional a HA por MQTT",
         "version": "0.1.0",
         "downloadable": True,
-        "tag": "PENDING",  # se rellena en el primer despliegue real (ver deploy)
-        "sha256": "PENDING",
+        "tag": "v0.16.0",
+        "sha256": "90d02608fa59624448487614e84e4f0df5c73796b4c80fc984c29202d2ee7427",  # sha256 real del tarball de v0.16.0, verificado contra una descarga real antes de fijarlo aqui
         "files": ["tplink_plugin.py", "tplink", "tplink_templates", "tplink_store.py"],
     },
 }

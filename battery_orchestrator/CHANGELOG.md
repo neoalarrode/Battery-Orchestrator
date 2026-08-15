@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.19.1
+Sha256 de Lighting re-pineado al tag `v0.19.0` (luz dummy por zona vía MQTT) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
 ## 0.19.0
 **Lighting**: nuevo `lighting/mqtt_lighting.py` -- cada zona publica ahora una única entidad `light.*` "de conjunto" vía MQTT Discovery, en vez de exponer cada bombilla suelta. Pensada para controlar la zona entera desde HomeKit/Matter/Lovelace con un solo interruptor.
 

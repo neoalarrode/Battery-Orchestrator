@@ -129,10 +129,10 @@ PLUGIN_CATALOG = {
     "lighting": {
         "name": "Lighting Orchestrator",
         "description": "Iluminación adaptativa por zona — color y brillo por hora, encendido/apagado por presencia y reglas condicionales (p.ej. TV encendida -> luces laterales en vez del techo)",
-        "version": "0.3.0",
+        "version": "0.4.0",
         "downloadable": True,
-        "tag": "v0.17.0",
-        "sha256": "00d52ec504702247e8b1564c2a4ad2ad35c6445c7365c1403ececae87fb4304d",  # sha256 real del tarball de v0.17.0, verificado contra una descarga real antes de fijarlo aqui (current_values sin presencia, exclusion de color por luz, presets por estancia)
+        "tag": "v0.19.0",
+        "sha256": "e42414d1d9e23d7e920c0d5bdca9fd6a645de5b326b0f352e61734616064b3c1",  # sha256 real del tarball de v0.19.0, verificado contra una descarga real antes de fijarlo aqui (luz dummy por zona via MQTT, control de conjunto para HomeKit)
         "files": ["lighting_plugin.py", "lighting", "lighting_templates"],
     },
     "tplink": {

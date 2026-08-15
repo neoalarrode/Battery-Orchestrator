@@ -258,20 +258,23 @@ JS de `parse_rules_text`/`rules_to_text`. Verificado round-trip a mano
 antes de desplegar; verificado en producción que las 7 zonas existentes
 siguen leyendo/funcionando igual tras el despliegue (backend intacto).
 
-### 6. Dropdown de room-presets en la UI de Lighting -- BACKEND HECHO, UI NO
+### 6. Dropdown de room-presets en la UI de Lighting -- HECHO Y DESPLEGADO (v0.23.3)
 
-`GET /api/room-presets` (`lighting/presets.py:list_presets`) ya existe y
-funciona. Falta usarlo en el formulario de edición de zona de
-`lighting_templates/index.html` (un desplegable que rellene brillo/color
-min/max al elegir un tipo de estancia).
+Desplegable "Punto de partida por tipo de estancia" sobre la curva de
+color/brillo -- copia los 4 valores recomendados del tipo elegido a los
+campos min/max, editables despues como si se hubieran tecleado a mano.
 
-### 7. Logos para los complementos -- NO EMPEZADO
+### 7. Logos para los complementos -- YA ESTABA HECHO (sesión anterior)
 
-Añadir un logo/icono propio a cada plugin (hoy solo tienen el favicon SVG
-inline y el icono del `plugin-switch`). Revisar si HA espera un formato
-concreto (`icon.png`/`logo.png` en la raíz del addon, ver documentación
-de Supervisor de add-ons) para que aparezca en el listado de HA, aparte
-del uso interno en nuestras propias páginas.
+Comprobado: `icon.png`/`logo.png` en la raíz del repo (formato que
+Supervisor de HA espera para el listado de add-ons) ya existen con la
+marca correcta (rayo violeta-cian). Home Orchestrator es UN SOLO addon
+de HA con 5 plugins internos -- no hay forma de que Supervisor muestre un
+icono por plugin interno, solo uno para el addon entero. Cada plugin SÍ
+tiene su propio favicon SVG distinto dentro de su propia página (ya
+verificado al leer las plantillas: termómetro/bombilla/nube/ondas WiFi/
+rayo) -- eso ya cubre "logo por plugin" dentro de lo que la arquitectura
+de HA permite.
 
 ### 8. Plugin de Starlink -- NO EMPEZADO
 

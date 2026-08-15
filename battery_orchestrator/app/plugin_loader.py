@@ -122,8 +122,8 @@ PLUGIN_CATALOG = {
         "description": "Iluminación adaptativa por zona — color y brillo por hora, encendido/apagado por presencia y reglas condicionales (p.ej. TV encendida -> luces laterales en vez del techo)",
         "version": "0.1.0",
         "downloadable": True,
-        "tag": "PENDING",  # se rellena en el primer despliegue real (ver deploy)
-        "sha256": "PENDING",
+        "tag": "v0.14.0",
+        "sha256": "d360371ca39a58cc6a2b201edbddca866896ae8ad2d4d0458b46c9e67ca01a9c",  # sha256 real del tarball de v0.14.0, verificado contra una descarga real antes de fijarlo aqui
         "files": ["lighting_plugin.py", "lighting", "lighting_templates"],
     },
 }

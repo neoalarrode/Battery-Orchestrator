@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.14.1
+Sha256 de Lighting re-pineado al tag `v0.14.0` (el pin quedó como "PENDING" hasta calcular el sha256 real del tarball ya publicado) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
 ## 0.14.0
 **Nuevo plugin: Lighting Orchestrator (`lighting`)** -- iluminación adaptativa por zona, tercer plugin de zonas tras Climate. Mismo espíritu "sin caja negra" de todo el proyecto:
 

@@ -181,16 +181,22 @@ Pasos que faltan:
 4. Enlace cruzado a Tuya desde esta página (para las zonas con
    actuadores Tuya) -- pendiente también del punto 3 de más abajo.
 
-### 2. Dashboard de Lighting -- NO EMPEZADO
+### 2. Dashboard de Lighting -- HECHO Y DESPLEGADO (v0.22.5)
 
-Mismo espíritu: listar zonas con tarjeta interactiva (on/off, brillo,
-color) en vez de solo presencia. Backend ya tiene casi todo (ver
-`lighting_plugin.py`: `/api/zones`, `manual_command` en
-`lighting/zone_runner.py` YA acepta `on`, `brightness_pct`,
-`color_temp_kelvin`, `hs` -- reutilizable tal cual desde un endpoint
-`POST /api/zones/<id>/manual_command` si no existe ya uno HTTP directo,
-revisar si `manual_command` solo se llama desde MQTT (`mqtt_lighting.py`)
-o si ya hay ruta HTTP).
+Tarjeta interactiva por zona en `lighting_templates/index.html`: botón
+encender/apagar, color nativo (`<input type=color>` -> HS en el
+navegador), slider de brillo, slider de temperatura de color de blancos.
+Backend: `POST /api/zones/<id>/manual_command` en `lighting_plugin.py`,
+llama directo a `ZoneRunner.manual_command` (mismo mecanismo que la luz
+dummy MQTT). `GET /api/zones` expone `group` (estado agregado) por zona.
+
+**Bug real encontrado y arreglado durante la propia verificación**:
+`group_state()` no reflejaba el brillo manual recien mandado (solo el de
+la curva automática) hasta el siguiente reajuste periódico -- nuevo
+`_manual_brightness_pct`, mismo patrón que el `_manual_hs` ya existente.
+Verificado en producción contra la zona Cocina (encender a 30% de
+brillo, ver el valor reflejado correctamente, apagar, confirmar que
+vuelve a "sin dato" -- con el retraso esperado de ~5s del sondeo TP-Link).
 
 ### 3. Tuya/TP-Link a solo-configuración -- A MEDIAS
 

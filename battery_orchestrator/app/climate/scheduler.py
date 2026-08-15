@@ -529,6 +529,22 @@ def _occupancy_anticipate(heating: bool, current_temp: float, target_temp: float
     if occupancy_now_likely or not occupancy_forecast_likely or not rate_deg_h or rate_deg_h <= 0:
         return "idle", ""
 
+    # BUG REAL, confirmado en produccion: faltaba esta comprobacion
+    # direccional (la MISMA que ya tiene `_anticipate`, ver su
+    # `threshold`/`crossed` -- aqui se copio la idea pero no ese guardia).
+    # Sin ella, `gap = abs(target_temp - current_temp)` mas abajo trataba
+    # "la zona ya esta muy por ENCIMA del target de calor" exactamente
+    # igual que "la zona esta muy por DEBAJO" -- las dos dan un gap
+    # absoluto grande, y un gap grande es precisamente lo que dispara la
+    # anticipacion. Resultado real: zona Dormitorio a 24.9°C, anticipando
+    # el preset Confort (calor 19°C) porque "suele ocuparse en ~1h" --
+    # devolvia "heat" (calentar) estando 5.9°C POR ENCIMA del target de
+    # calor, justo lo contrario de lo que hacia falta.
+    threshold = (target_temp - deadband) if heating else (target_temp + deadband)
+    crossed = (current_temp < threshold) if heating else (current_temp > threshold)
+    if not crossed:
+        return "idle", ""
+
     horizon = occupancy_forecast_likely[:OCCUPANCY_ANTICIPATE_LOOKAHEAD_HOURS]
     try:
         hours_ahead = next(i for i, likely in enumerate(horizon, start=1) if likely)

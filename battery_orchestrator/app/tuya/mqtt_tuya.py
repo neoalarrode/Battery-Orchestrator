@@ -65,6 +65,8 @@ class MqttTuyaDevice:
                 self._publish_dp(domain, dp)
         for i, cm in enumerate(profile.climates):
             self._publish_climate(i, cm)
+        for i, lt in enumerate(profile.lights):
+            self._publish_light(i, lt)
 
     def _publish_dp(self, domain: str, dp) -> None:
         base = self._base(f"dp{dp.dp_id}").format(domain=domain)
@@ -134,6 +136,49 @@ class MqttTuyaDevice:
         self._mqtt.publish(f"{base}/config", payload, retain=True)
         self._mqtt.publish(f"{base}/availability", "online", retain=True)
 
+    def _publish_light(self, index: int, lt) -> None:
+        """Publica el bloque `lights:` del perfil como una entidad
+        `light.*` de verdad (encendido+brillo+color en una tarjeta), no
+        como DPs sueltos -- antes esto no existia en absoluto: una
+        bombilla nunca tenia una tarjeta de luz real, solo los sensores/
+        switches sueltos de `dps:` (los DPs de brillo/color/modo de una
+        bombilla NUNCA aparecen en `dps:` de todos modos -- el perfil los
+        consume aqui, en `lights:`, precisamente para que no se dupliquen
+        como dos entidades para lo mismo)."""
+        base = self._base(f"light{index}").format(domain="light")
+        payload = {
+            "name": lt.name,
+            "unique_id": f"{NODE_ID}_{self.device_id}_light{index}",
+            "state_topic": f"{base}/state",
+            "command_topic": f"{base}/set",
+            "payload_on": "ON", "payload_off": "OFF",
+            "availability_topic": f"{base}/availability",
+            "device": self._device_block,
+        }
+        if lt.brightness_dp is not None:
+            payload.update(
+                brightness_state_topic=f"{base}/brightness/state",
+                brightness_command_topic=f"{base}/brightness/set",
+                brightness_scale=int(lt.brightness_max),
+            )
+            self._mqtt.subscribe(f"{base}/brightness/set", partial(self._on_light_brightness, index))
+        if lt.color_temp_dp is not None:
+            payload.update(
+                color_temp_state_topic=f"{base}/color_temp/state",
+                color_temp_command_topic=f"{base}/color_temp/set",
+                min_mireds=1, max_mireds=max(int(lt.color_temp_max), 1),
+            )
+            self._mqtt.subscribe(f"{base}/color_temp/set", partial(self._on_light_color_temp, index))
+        if lt.color_dp is not None:
+            payload.update(hs_state_topic=f"{base}/hs/state", hs_command_topic=f"{base}/hs/set")
+            self._mqtt.subscribe(f"{base}/hs/set", partial(self._on_light_hs, index))
+        if lt.icon:
+            payload["icon"] = lt.icon
+
+        self._mqtt.subscribe(f"{base}/set", partial(self._on_light_power, index))
+        self._mqtt.publish(f"{base}/config", payload, retain=True)
+        self._mqtt.publish(f"{base}/availability", "online", retain=True)
+
     def remove_discovery(self) -> None:
         profile = self._manager.profile(self.device_id)
         if profile is None:
@@ -144,6 +189,8 @@ class MqttTuyaDevice:
                 self._mqtt.publish(self._base(f"dp{dp.dp_id}").format(domain=domain) + "/config", "", retain=True)
         for i in range(len(profile.climates)):
             self._mqtt.publish(self._base(f"climate{i}").format(domain="climate") + "/config", "", retain=True)
+        for i in range(len(profile.lights)):
+            self._mqtt.publish(self._base(f"light{i}").format(domain="light") + "/config", "", retain=True)
 
     # -------------------------------------------------------------- estado
 
@@ -164,6 +211,26 @@ class MqttTuyaDevice:
             self._mqtt.publish(f"{base}/state", self._encode_state(domain, value), retain=True)
         for i, cm in enumerate(profile.climates):
             self._publish_climate_state(i, cm)
+        for i, lt in enumerate(profile.lights):
+            self._publish_light_state(i, lt)
+
+    def _publish_light_state(self, index: int, lt) -> None:
+        base = self._base(f"light{index}").format(domain="light")
+        switch_val = self._manager.get_decoded(self.device_id, lt.switch_dp)
+        self._mqtt.publish(f"{base}/state", "ON" if switch_val else "OFF", retain=True)
+        if lt.brightness_dp is not None:
+            b = self._manager.get_decoded(self.device_id, lt.brightness_dp)
+            if b is not None:
+                self._mqtt.publish(f"{base}/brightness/state", int(b), retain=True)
+        if lt.color_temp_dp is not None:
+            ct = self._manager.get_decoded(self.device_id, lt.color_temp_dp)
+            if ct is not None:
+                self._mqtt.publish(f"{base}/color_temp/state", int(ct), retain=True)
+        if lt.color_dp is not None:
+            raw = self._manager.get_decoded(self.device_id, lt.color_dp)
+            hs = _decode_color_hs(lt, raw)
+            if hs is not None:
+                self._mqtt.publish(f"{base}/hs/state", f"{hs[0]:.1f},{hs[1]:.1f}", retain=True)
 
     def _publish_climate_state(self, index: int, cm) -> None:
         base = self._base(f"climate{index}").format(domain="climate")
@@ -227,3 +294,88 @@ class MqttTuyaDevice:
             handle.set_temperature(float(msg.payload.decode()))
         except Exception:
             log.exception("Tuya %s: fallo aplicando temperatura climate %s", self.device_id, index)
+
+    def _light(self, index: int):
+        profile = self._manager.profile(self.device_id)
+        return profile.lights[index] if profile and index < len(profile.lights) else None
+
+    def _on_light_power(self, index, client, userdata, msg) -> None:
+        lt = self._light(index)
+        if lt is None:
+            return
+        try:
+            self._manager.set_dp(self.device_id, lt.switch_dp, msg.payload.decode() == "ON")
+        except Exception:
+            log.exception("Tuya %s: fallo aplicando encendido de luz %s", self.device_id, index)
+
+    def _on_light_brightness(self, index, client, userdata, msg) -> None:
+        lt = self._light(index)
+        if lt is None or lt.brightness_dp is None:
+            return
+        try:
+            val = max(int(lt.brightness_min), min(int(lt.brightness_max), round(float(msg.payload.decode()))))
+            if lt.work_mode_dp is not None:
+                # Poner en modo "blanco" ANTES del brillo -- si el
+                # dispositivo esta en modo color, cambiar el brillo del
+                # lado blanco no tendria efecto visible hasta que se
+                # cambia de modo de todos modos.
+                self._manager.set_dp(self.device_id, lt.work_mode_dp, lt.work_mode_white)
+            self._manager.set_dp(self.device_id, lt.brightness_dp, val)
+        except Exception:
+            log.exception("Tuya %s: fallo aplicando brillo de luz %s", self.device_id, index)
+
+    def _on_light_color_temp(self, index, client, userdata, msg) -> None:
+        lt = self._light(index)
+        if lt is None or lt.color_temp_dp is None:
+            return
+        try:
+            val = max(0, min(int(lt.color_temp_max), round(float(msg.payload.decode()))))
+            if lt.work_mode_dp is not None:
+                self._manager.set_dp(self.device_id, lt.work_mode_dp, lt.work_mode_white)
+            self._manager.set_dp(self.device_id, lt.color_temp_dp, val)
+        except Exception:
+            log.exception("Tuya %s: fallo aplicando temperatura de color de luz %s", self.device_id, index)
+
+    def _on_light_hs(self, index, client, userdata, msg) -> None:
+        lt = self._light(index)
+        if lt is None or lt.color_dp is None:
+            return
+        try:
+            h_str, s_str = msg.payload.decode().split(",")
+            raw = _encode_color_hs(lt, float(h_str), float(s_str))
+            if lt.work_mode_dp is not None:
+                self._manager.set_dp(self.device_id, lt.work_mode_dp, lt.work_mode_colour)
+            self._manager.set_dp(self.device_id, lt.color_dp, raw)
+        except Exception:
+            log.exception("Tuya %s: fallo aplicando color de luz %s", self.device_id, index)
+
+
+# ------------------------------------------------------------ color codec -
+# Formato REAL confirmado contra un dispositivo real (no el JSON que
+# describia el docstring de LightMapping, que resulto ser el formato de la
+# nube, distinto del que de verdad viaja por LAN en este dispositivo): una
+# cadena de 12 caracteres hexadecimales, tres campos de 16 bits big-endian
+# consecutivos -- h(4 hex)+s(4 hex)+v(4 hex). Ej. visto en produccion:
+# "000003e803e8" = h=0, s=1000, v=1000.
+
+def _decode_color_hs(lt, raw) -> tuple[float, float] | None:
+    if raw is None:
+        return None
+    if isinstance(raw, str) and len(raw) >= 12 and all(c in "0123456789abcdefABCDEF" for c in raw[:12]):
+        h_raw = int(raw[0:4], 16)
+        s_raw = int(raw[4:8], 16)
+        return (h_raw * 360 / lt.color_h_max, s_raw * 100 / lt.color_s_max)
+    # Defensivo, nunca confirmado en real: por si un dispositivo distinto
+    # de verdad envia la forma JSON que Tuya Cloud describe.
+    try:
+        obj = raw if isinstance(raw, dict) else json.loads(raw)
+        return (obj["h"] * 360 / lt.color_h_max, obj["s"] * 100 / lt.color_s_max)
+    except Exception:
+        return None
+
+
+def _encode_color_hs(lt, h: float, s: float, v_percent: float = 100.0) -> str:
+    h_raw = round(max(0.0, min(360.0, h)) * lt.color_h_max / 360)
+    s_raw = round(max(0.0, min(100.0, s)) * lt.color_s_max / 100)
+    v_raw = round(max(0.0, min(100.0, v_percent)) * lt.color_v_max / 100)
+    return f"{h_raw:04x}{s_raw:04x}{v_raw:04x}"

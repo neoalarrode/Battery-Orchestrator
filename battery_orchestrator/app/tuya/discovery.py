@@ -30,12 +30,18 @@ format, independent of port):
   sometimes already-plaintext JSON) payload, WITH the same 4-byte retcode
   field between header and payload that tuya_lan.py's receive path needed
   fixing for (see that module's v0.2.7 fix - applies here identically).
-- prefix `0x00006699`: a newer, HMAC-based frame used by protocol 3.4+
-  devices' broadcasts. Genuinely NOT implemented here (matches this
-  project's existing, explicit 3.4/3.5 scope gap for the control
-  protocol) - detected and logged at debug level so a device using it
-  shows up as a clear "unsupported format" line instead of vanishing
-  silently into the same catch-all as a malformed/unrelated packet.
+- prefix `0x00006699`: the SAME AES-GCM frame protocol 3.5 uses for real
+  control traffic (see tuya_lan.py) - a broadcast just wraps the "gwId/ip/
+  productKey/version" JSON in it instead of a DP payload. Cross-checked
+  against tinytuya's `core/udp_helper.py:decrypt_udp()`: unlike the
+  control protocol (which negotiates a per-device session key), the
+  BROADCAST is encrypted with the SAME fixed, publicly-documented key as
+  0x55AA's 6667 port (`UDP_KEY_ENCRYPTED` below) - GCM mode instead of
+  ECB, but no per-device secret involved, so this needs no `local_key` to
+  decode (same as the rest of discovery, which is why discovery can find
+  a device before it has ever been added). Was genuinely unimplemented
+  here until protocol 3.5's control-side framing was ported to tuya_lan.py
+  and this could be verified against a real 3.5 broadcast.
 - anything else (no valid 16-byte Tuya header at all): last-resort
   fallback, try decrypting the ENTIRE raw datagram directly (matches
   tinytuya's own fallback for legacy/non-standard broadcast shapes).
@@ -70,6 +76,9 @@ PREFIX_6699 = 0x00006699
 _HEADER_SIZE = 16  # prefix+seq+command+length (same as tuya_lan.py)
 _RETCODE_SIZE = 4  # only present on device->us frames, see tuya_lan.py's fix
 _FOOTER_SIZE = 8  # crc32+suffix
+_HEADER_SIZE_6699 = 18  # prefix(4)+unknown(2)+seq(4)+command(4)+length(4), see tuya_lan.py
+_GCM_IV_SIZE = 12
+_GCM_TAG_SIZE = 16
 
 
 @dataclass
@@ -100,6 +109,33 @@ def _decrypt_55aa(data: bytes) -> bytes | None:
         return None
 
 
+def _decrypt_6699(data: bytes) -> bytes | None:
+    """Extract + GCM-decrypt a 0x6699-framed broadcast payload. Same frame
+    shape as tuya_lan.py's control-protocol 6699 parsing (header/iv/
+    ciphertext/tag/suffix), but with the fixed `UDP_KEY_ENCRYPTED` instead
+    of a per-device session key - see module docstring."""
+    if len(data) < _HEADER_SIZE_6699:
+        return None
+    _prefix, _unknown, _seq, _cmd, length = struct.unpack(">IHIII", data[:_HEADER_SIZE_6699])
+    total = _HEADER_SIZE_6699 + length + 4  # +4 suffix, not counted in `length` - see tuya_lan.py
+    if len(data) < total:
+        return None
+    body = data[_HEADER_SIZE_6699:total]
+    iv = body[:_GCM_IV_SIZE]
+    tag = body[-(_GCM_TAG_SIZE + 4):-4]
+    ciphertext = body[_GCM_IV_SIZE:-(_GCM_TAG_SIZE + 4)]
+    aad = data[4:_HEADER_SIZE_6699]
+    try:
+        cipher = AES.new(UDP_KEY_ENCRYPTED, AES.MODE_GCM, nonce=iv)
+        cipher.update(aad)
+        plaintext = cipher.decrypt_and_verify(ciphertext, tag)
+    except ValueError:
+        return None
+    # Same retcode convention as the control protocol's 6699 frames (see
+    # tuya_lan.py's _try_parse_6699) - a broadcast carries one too.
+    return plaintext[4:] if len(plaintext) >= 4 else plaintext
+
+
 def _decode_broadcast(data: bytes) -> dict | None:
     """Decode one broadcast datagram regardless of which port it arrived
     on - see module docstring for the three cases handled."""
@@ -114,11 +150,13 @@ def _decode_broadcast(data: bytes) -> dict | None:
             except (ValueError, TypeError):
                 return None
         if prefix == PREFIX_6699:
-            _LOGGER.debug(
-                "Discovery: received a 0x6699-framed (protocol 3.4+ app) broadcast - "
-                "this format is not implemented yet, skipping"
-            )
-            return None
+            payload = _decrypt_6699(data)
+            if payload is None:
+                return None
+            try:
+                return json.loads(payload.rstrip(b"\x00").decode("utf-8"))
+            except (ValueError, TypeError, UnicodeDecodeError):
+                return None
     # Fallback: no recognizable header at all - try decrypting the whole
     # raw datagram directly (matches tinytuya's own last-resort path).
     try:

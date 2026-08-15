@@ -35,7 +35,7 @@ log = logging.getLogger("tuya_plugin")
 class TuyaPlugin(Plugin):
     slug = "tuya"
     name = "Tuya Orchestrator"
-    version = "0.3.0"
+    version = "0.3.1"
 
     def __init__(self) -> None:
         self._manager = TuyaDeviceManager(on_any_change=self._on_device_change)

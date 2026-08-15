@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.13.0
+Dos piezas más para dejar el soporte de bombillas Tuya completo:
+
+1. **Descubrimiento por LAN también soporta el broadcast 0x6699 (protocolo 3.5+)** — antes se detectaba el prefijo y se descartaba explícitamente ("no implementado todavía"). Mismo framing que el protocolo de control (ver v0.12.8), pero con la clave FIJA y pública ya usada para el puerto 6667, en modo GCM en vez de ECB — no hace falta el `local_key` del dispositivo para esto, igual que el resto del descubrimiento. Verificado con un paquete sintético construido y descifrado por el propio código (simetría cifrado→descifrado).
+
+2. **`mqtt_tuya.py` ahora publica el bloque `lights:` del perfil como una entidad `light.*` real** (encendido+brillo+temperatura de color+color en una tarjeta) — antes no existía en absoluto, solo los DPs sueltos de `dps:` (que ni siquiera incluyen los DPs de una bombilla, viven aparte en `lights:` a propósito). El formato real del DP de color en LAN resultó ser hexadecimal empaquetado (`h`+`s`+`v`, 4 hex cada uno) — DISTINTO del JSON que describía el comentario original del perfil (ese es el formato de la nube, no el que viaja por LAN en este dispositivo real) — verificado contra el dato real visto en producción (`000003e803e8` = h=0,s=1000,v=1000) y con una prueba de ida y vuelta del codec.
+
 ## 0.12.9
 Sha256 de Tuya re-pineado al tag `v0.12.8` (protocolo 3.5, verificado contra dispositivo real) — verificado con una descarga real antes de fijarlo.
 

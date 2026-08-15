@@ -1,7 +1,15 @@
 ARG BUILD_FROM
 FROM $BUILD_FROM
 
-RUN apk add --no-cache python3 py3-pip
+# nodejs/npm: SOLO los necesita el plugin Starlink, para correr TAL CUAL
+# (nunca reimplementado) el historian y el servidor de cuenta reales de
+# Dishylink (https://github.com/DaveyHert/dishylink, MIT) -- ver
+# app/starlink_node/PATCH.md. Mismo compromiso documentado abajo para las
+# dependencias Python por plugin: se instala aqui, en la imagen base,
+# aunque Starlink no este instalado -- no hay (todavia) un mecanismo de
+# dependencias DE SISTEMA por plugin, solo el paquete Python por
+# `pip3 install` de la linea de mas abajo.
+RUN apk add --no-cache python3 py3-pip nodejs npm
 
 WORKDIR /app
 COPY app/ /app/

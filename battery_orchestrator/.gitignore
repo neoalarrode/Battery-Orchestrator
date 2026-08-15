@@ -1,0 +1,5 @@
+# node_modules del plugin Starlink (ver app/starlink_node/) -- se
+# instala solo, la primera vez que se activa el plugin (`npm install`,
+# ver starlink_plugin.py:_ensure_node_deps). Nunca se commitea, igual
+# que cualquier otro node_modules.
+node_modules/

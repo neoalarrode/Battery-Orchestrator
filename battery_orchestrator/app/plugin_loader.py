@@ -157,7 +157,7 @@ PLUGIN_CATALOG = {
         "downloadable": True,
         "tag": "v0.24.2",
         "sha256": "ef914495748867852b4980757c604c7ac63d85785af38907c46e279fb930f1cf",  # sha256 real del tarball de v0.24.2, verificado contra una descarga real antes de fijarlo aqui (FIX GRAVE: el dish nunca se contactaba, rutas absolutas de raiz de dominio)
-        "files": ["starlink_plugin.py", "starlink_dist"],
+        "files": ["starlink_plugin.py", "starlink_store.py", "starlink_dist", "starlink_node"],
     },
 }
 

@@ -45,7 +45,12 @@ app/tuya_templates/
 
 # Starlink -- igual que el resto: descargable desde la tienda, nunca
 # horneado en la imagen del nucleo. app/starlink_dist/ es el build web
-# vendorizado de Dishylink (~3MB, no queremos eso en la imagen base
-# tampoco si nadie instala este plugin).
+# vendorizado de Dishylink (~3MB); app/starlink_node/ es el historian +
+# servidor de cuenta reales (Node, ~500KB de fuente + node_modules
+# instalados la primera vez que se activa el plugin, ver
+# starlink_plugin.py:_ensure_node_deps) -- no queremos nada de esto en
+# la imagen base si nadie instala el plugin.
 app/starlink_plugin.py
+app/starlink_store.py
 app/starlink_dist/
+app/starlink_node/

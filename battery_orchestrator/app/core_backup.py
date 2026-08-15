@@ -68,12 +68,26 @@ def restore_backup(bundle: dict) -> list[str]:
 
     files = bundle["files"]
     restored = []
+    real_data_dir = os.path.realpath(DATA_DIR)
     os.makedirs(DATA_DIR, exist_ok=True)
     for name, content in files.items():
-        if not name.endswith(".json") or name in EXCLUDED_FILES or "/" in name or "\\" in name:
-            log.warning("Backup: fichero '%s' ignorado (fuera del formato esperado)", name)
+        if not isinstance(name, str) or not name.endswith(".json") or name in EXCLUDED_FILES:
+            log.warning("Backup: fichero '%r' ignorado (fuera del formato esperado)", name)
             continue
         path = os.path.join(DATA_DIR, name)
+        # BUG REAL, marcado por CodeQL (py/path-injection): comprobar
+        # solo que `name` no contenga "/"/"\\" no es una prueba real de
+        # que la ruta final se queda dentro de DATA_DIR -- mas robusto
+        # (y lo que CodeQL de verdad reconoce como neutralizado):
+        # resolver la ruta final y comprobar que sigue siendo hija real
+        # de DATA_DIR antes de escribir nada. `name` viene de un backup
+        # subido por el propio usuario -- nunca de una fuente ajena,
+        # pero la comprobacion cuesta lo mismo y cierra la clase entera
+        # de bug, no solo el patron concreto que se nos ocurriera a
+        # mano (symlinks, codificaciones raras...).
+        if os.path.realpath(path) != os.path.join(real_data_dir, name):
+            log.warning("Backup: fichero '%s' ignorado (ruta fuera de %s)", name, DATA_DIR)
+            continue
         tmp_path = path + ".restoring.tmp"
         with open(tmp_path, "w") as f:
             json.dump(content, f, indent=2, ensure_ascii=False)

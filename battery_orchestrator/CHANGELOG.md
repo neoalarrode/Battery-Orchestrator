@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.25.1
+Sha256 de Starlink re-pineado al tag `v0.25.0` (historian real, cuenta real, IP de router manual) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`, `Dockerfile`) el que cambia, así que esta versión SÍ lleva Release en GitHub. **Este cambio instala Node.js/npm en la imagen base del addon** (`apk add nodejs npm`) -- necesario para el historian/servidor de cuenta reales de Starlink, aunque el plugin no esté instalado.
+
+## 0.25.0
+**Starlink: historian y cuenta REALES, no recortados** -- a petición expresa del usuario ("no acepto recortar funciones, implementa la librería de verdad"). Hasta ahora el dashboard mostraba "Data usage needs the history recorder running" y "Couldn't reach your Starlink account" porque ninguno de los dos backends estaba implementado. Ahora sí:
+
+- **Historian real** (`collector/historian.mts` de Dishylink, vendorizado tal cual en `app/starlink_node/`, sin reimplementar nada) corre como proceso Node de fondo -- registra energía/alertas/eventos/mapa de obstrucción de forma continua, con persistencia en `/data/starlink/historian` (sobrevive a reinicios del add-on). Alimenta las gráficas de día/semana/mes que antes se quedaban siempre vacías.
+- **Servidor de cuenta real** (`cloud/starlinkCloudHandler.ts` de Dishylink, también sin tocar) corre en un segundo proceso Node -- nuevo fichero `cloud-server.mts` (el ÚNICO añadido de esta integración, no existe en el proyecto original) que une ese handler real a un servidor HTTP normal en vez de al plugin de Vite que usa su propio dev server. El flujo de "pegar tu cookie de sesión" (el mismo que ofrece la app oficial para un navegador plano, sin bridge nativo de Electron/extensión) funciona de verdad.
+- **IP de router manual**: nuevo campo en la pestaña "Router" de la propia interfaz de Dishylink (`RouterSettingsTab.tsx`, parche documentado en `app/starlink_dist/PATCH.md`) para cuando la IP por defecto (192.168.1.1) coincide con el router propio de la instalación -- automático por defecto, con override manual guardado server-side (`starlink_store.py`, `/api/router-config`) y aplicado tanto al proxy `/router` como al `ROUTER_URL` del historian/cuenta (reinicia ambos procesos Node al guardar).
+- **Botón de vuelta**: nuevo enlace en la cabecera de Dishylink (`TopBar.tsx`) para volver a Home Orchestrator -- esta página no lleva nuestro topbar compartido a propósito (mantiene su propio diseño intacto).
+- **Backend**: `starlink_plugin.py` instala las dependencias Node (`tsx`, `@bufbuild/protobuf` -- solo esas dos, nada de React/Vite/Electron) la primera vez que el plugin se activa, lanza los dos procesos, y los expone por `/api/*` y `/cloud/*` con los mismos nombres relativos que el frontend ya esperaba.
+
+Verificado en local con los dos servicios reales arrancados de verdad (no simulados) antes de desplegar: `GET /api/health` responde del historian real, `GET /cloud/account` responde el 428 real del handler de cuenta real (mapea correctamente al flujo de "Conectar cuenta", no a un error de red).
+
+De paso, corregida una alerta real de seguridad de CodeQL (`py/stack-trace-exposure`) en los proxies de Starlink -- el detalle de la excepción ya no se filtra al cliente, solo un mensaje genérico (el detalle completo se sigue registrando en el log del add-on).
+
 ## 0.24.3
 Sha256 de Starlink re-pineado al tag `v0.24.2` (fix real: el dish nunca llegaba a contactarse) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

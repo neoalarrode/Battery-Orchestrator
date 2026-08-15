@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  launchd service for the Dishylink energy historian — keeps it running across
+  logout and (re)launches it after sleep/crash.
+
+  Install:
+    cp collector/com.dishylink.historian.plist ~/Library/LaunchAgents/
+    launchctl load  ~/Library/LaunchAgents/com.dishylink.historian.plist
+  Stop / uninstall:
+    launchctl unload ~/Library/LaunchAgents/com.dishylink.historian.plist
+  Logs: collector/data/historian.out.log  /  historian.err.log
+
+  Paths below are absolute for this machine; update them if the repo moves.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.dishylink.historian</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/daveyhert/.nvm/versions/node/v22.19.0/bin/node</string>
+    <string>/Users/daveyhert/Desktop/projects/dishylink/node_modules/tsx/dist/cli.mjs</string>
+    <string>/Users/daveyhert/Desktop/projects/dishylink/collector/historian.mts</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/daveyhert/Desktop/projects/dishylink</string>
+
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/daveyhert/Desktop/projects/dishylink/collector/data/historian.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/daveyhert/Desktop/projects/dishylink/collector/data/historian.err.log</string>
+</dict>
+</plist>

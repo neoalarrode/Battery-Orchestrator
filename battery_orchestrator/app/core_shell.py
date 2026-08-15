@@ -197,12 +197,25 @@ function toast(msg) {
 }
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+// Mismos iconos SVG por plugin que el resto de paginas (ver
+// core_static/plugin-switch.js) -- antes esta pagina usaba un emoji
+// generico (⚡ solo para battery, ◐ para TODO lo demas) sin distinguir
+// ningun plugin de otro.
+const CATALOG_ICONS = {
+  battery: '<path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="currentColor"/>',
+  climate: '<path d="M12 3a3 3 0 0 0-3 3v7.1a4 4 0 1 0 6 0V6a3 3 0 0 0-3-3Zm0 2a1 1 0 0 1 1 1v7.6l.6.5a2 2 0 1 1-3.2 0l.6-.5V6a1 1 0 0 1 1-1Z" fill="currentColor"/>',
+  tuya: '<path d="M6 4h9a2 2 0 0 1 2 2v9l-7 7-9-9V6a2 2 0 0 1 2-2Zm2.5 2.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z" fill="currentColor"/>',
+  lighting: '<path d="M12 2a7 7 0 0 0-4 12.74V17a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-2.26A7 7 0 0 0 12 2Zm-2 17h4v1a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-1Z" fill="currentColor"/>',
+  tplink: '<path d="M12 5a7 7 0 0 0-4.95 11.95l1.41-1.41a5 5 0 1 1 7.08 0l1.41 1.41A7 7 0 0 0 12 5Zm0 4a3 3 0 0 0-2.12 5.12l1.41-1.41a1 1 0 1 1 1.42 0l1.41 1.41A3 3 0 0 0 12 9Z" fill="currentColor"/>',
+  starlink: '<path d="M12 3a9 9 0 0 1 9 9h-2a7 7 0 0 0-7-7V3Z" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><path d="M12 14v7M9 21h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/>',
+};
+
 async function loadCatalog() {
   const r = await fetch('api/core/plugins');
   const plugins = await r.json();
   document.getElementById('plugin-grid').innerHTML = plugins.map(p => `
     <div class="plugin-tile">
-      <span class="plugin-tile-icon">${p.slug === 'battery' ? '⚡' : '◐'}</span>
+      <span class="plugin-tile-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">${CATALOG_ICONS[p.slug] || ''}</svg></span>
       <span class="plugin-tile-name">${esc(p.name)}</span>
       <span class="plugin-tile-desc">${esc(p.description)}</span>
       ${p.installed

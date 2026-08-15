@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.13.6
+**Bug real, confirmado en producción tras el fix de dialecto de v0.13.4: seguía sin poder escribirse en la bombilla (encender, brillo, color — todos timeout).** Diagnosticado con una prueba de 3 comandos seguidos y trazado (`.trace()`): se mandaba un comando con seq 59608 y llegaba una respuesta con seq 59621 (mismo comando, `0x0d`) que se descartaba por "no hay quien la espere". Confirmado contra `tinytuya`: en 3.5 el dispositivo contesta usando SU PROPIO contador de secuencia global, no un eco del que le mandamos — su propio comentario lo dice literalmente ("v3.5 devices respond with a global incrementing seqno, not the sent seqno") y su lógica de match de retcode está condicionada por versión exactamente por esto. En 3.1-3.4 esto nunca se nota porque el dispositivo sí devuelve el seq recibido. Fix: para 3.5, todo envío normal (no solo el negociado de sesión, que ya usaba este mecanismo) se empareja con la respuesta por COMANDO en vez de por seq, serializado con un lock nuevo (`_cmd_lock`) para que dos comandos del mismo tipo mandados casi a la vez (p.ej. brillo y color desde un único `light.turn_on`) no se pisen el uno al otro esperando la misma respuesta. Verificado con 4 escrituras reales seguidas contra la bombilla (`encender`, `brillo 50%`, `brillo 100%`, `apagar`) — las 4 con éxito, cero timeouts.
+
 ## 0.13.5
 Sha256 de Tuya re-pineado al tag `v0.13.4` (fix real de 3.5: escritura usaba el dialecto viejo) — verificado con una descarga real antes de fijarlo.
 

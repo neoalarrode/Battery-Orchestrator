@@ -232,6 +232,19 @@ class TuyaLocalDevice:
         # matching yet (see _negotiate_session_key's docstring).
         self._pending_cmd: dict[int, asyncio.Future] = {}
         self._lock = asyncio.Lock()
+        # 3.5-only: real bug, confirmed against live hardware -- protocol
+        # 3.5 replies with the DEVICE's own global incrementing sequence
+        # counter, NOT an echo of the seq we sent (tinytuya's own comment,
+        # confirmed live: our seq 59608 out, reply came back tagged 59621 -
+        # every non-handshake command timed out because nothing was ever
+        # waiting on that number). Command-keyed waiting (`_pending_cmd`,
+        # already used for the session handshake) is the fix, same as the
+        # reference does for 3.5 - but TWO outstanding commands of the SAME
+        # type would then displace each other's waiter, so this serializes
+        # the whole send-then-wait cycle for ordinary (non-handshake)
+        # commands on 3.5, one at a time - matches how a real embedded
+        # device processes them anyway (synchronously, never pipelined).
+        self._cmd_lock = asyncio.Lock() if protocol_version == "3.5" else None
         # Connection-lifecycle guards, ported from localtuya's
         # `TuyaDevice.async_connect()` (common.py), which refuses to start a
         # second connection with:
@@ -927,6 +940,26 @@ class TuyaLocalDevice:
     ) -> TuyaMessage:
         if not self.connected:
             await self.connect()
+
+        # 3.5-only real bug fix (see _cmd_lock's comment): default to
+        # waiting by COMMAND, not by echoed seq, for every ordinary
+        # exchange - not just the handshake's explicit `wait_cmd` calls.
+        # Serialized via `_cmd_lock` so two same-typed commands (e.g. a
+        # brightness AND a color change fired almost together by one MQTT
+        # `turn_on`) never displace each other's waiter.
+        use_cmd_wait = wait_cmd if wait_cmd is not None else (
+            command if self.protocol_version == "3.5" else None
+        )
+        serialize = self._cmd_lock is not None and use_cmd_wait is not None
+
+        if serialize:
+            async with self._cmd_lock:
+                return await self._send_receive_raw_locked(command, raw_payload, use_cmd_wait, extra_note)
+        return await self._send_receive_raw_locked(command, raw_payload, use_cmd_wait, extra_note)
+
+    async def _send_receive_raw_locked(
+        self, command: int, raw_payload: bytes, wait_cmd: int | None, extra_note: str
+    ) -> TuyaMessage:
         packet, seq, _hmac_key = self._encode_message(command, raw_payload)
         self._trace_add(
             "tx", seq, command, packet,

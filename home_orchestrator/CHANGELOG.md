@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.37.1
+Re-pin de Lighting al tag `v0.37.0` (corrige parpadeo real del sensor de lux) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
 ## 0.37.0
 **Corrige bug real, GRAVE: la luz del Salón parpadeó decenas de veces en una hora por el sensor de lux (v0.36.0 no bastaba).** Confirmado por el usuario y verificado contra el histórico real de producción: el sensor Aqara FP300 del Salón saltaba entre 35 y 82 lx alrededor del objetivo de 50 configurado, cruzándolo varias veces por minuto (a veces en 4-9 segundos) — sin margen, cada cruce encendía o apagaba la luz.
 

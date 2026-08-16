@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.36.1
+Re-pin de Lighting al tag `v0.36.0` (corrige apagado por lux) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
 ## 0.36.0
 **Corrige bug real del sensor de lux de Lighting (v0.35.0): el apagado por luz suficiente solo reaccionaba al FLANCO oscuro→claro, no al nivel actual.** Confirmado por el usuario en producción: una luz que estaba encendida mientras ya había luz de sobra (por ejemplo, encendida antes de configurar el sensor, o el propio ciclo de arranque) nunca se re-evaluaba y se quedaba encendida indefinidamente — el código solo comprobaba "¿acaba de pasar de oscuro a claro?", nunca "¿está claro AHORA?".
 

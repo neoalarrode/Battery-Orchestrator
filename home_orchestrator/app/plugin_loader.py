@@ -100,10 +100,10 @@ PLUGIN_CATALOG = {
     "battery": {
         "name": "Energy Orchestrator",
         "description": "Baterías, solar y cargas diferibles — carga y descarga adaptativa por precio, sol y consumo real",
-        "version": "0.11.83",
+        "version": "0.11.84",
         "downloadable": True,
-        "tag": "v0.39.0",
-        "sha256": "7a588ad223aa72553c8982a41889de72f256ec6affaabac6fcd464c016e18e13",  # sha256 real del tarball de v0.39.0, verificado contra una descarga real antes de fijarlo aqui (rediseño: estetica de Dishylink)
+        "tag": "v0.41.0",
+        "sha256": "19000d49e80ba4d07b1e27900106b4ee0dee00b24d96e08d3a70839b5c01a6b9",  # sha256 real del tarball de v0.41.0, verificado contra una descarga real antes de fijarlo aqui (sparklines en tarjetas de metrica)
         "files": [
             "main.py", "battery_plugin.py", "battery_exec.py", "anomaly_store.py",
             "capacity_store.py", "climate_link.py", "deferrable_exec.py",
@@ -117,10 +117,10 @@ PLUGIN_CATALOG = {
     "climate": {
         "name": "Climate Orchestrator",
         "description": "Termostatos adaptativos por zona, expuestos como climate.* nativos de HA (HomeKit/Matter) vía MQTT Discovery",
-        "version": "0.4.6",  # version PROPIA del plugin (ClimatePlugin.version) -- distinta de "tag", que es la version del REPO de la que se descarga
+        "version": "0.4.7",  # version PROPIA del plugin (ClimatePlugin.version) -- distinta de "tag", que es la version del REPO de la que se descarga
         "downloadable": True,
-        "tag": "v0.39.0",
-        "sha256": "7a588ad223aa72553c8982a41889de72f256ec6affaabac6fcd464c016e18e13",  # sha256 real del tarball de v0.39.0, verificado contra una descarga real antes de fijarlo aqui (rediseño: estetica de Dishylink)
+        "tag": "v0.41.0",
+        "sha256": "19000d49e80ba4d07b1e27900106b4ee0dee00b24d96e08d3a70839b5c01a6b9",  # sha256 real del tarball de v0.41.0, verificado contra una descarga real antes de fijarlo aqui (sparklines en tarjetas de metrica)
         "files": ["climate_plugin.py", "climate", "climate_templates"],
     },
     "tuya": {
@@ -135,10 +135,10 @@ PLUGIN_CATALOG = {
     "lighting": {
         "name": "Lighting Orchestrator",
         "description": "Iluminación adaptativa por zona — color y brillo por hora, encendido/apagado por presencia y reglas condicionales (p.ej. TV encendida -> luces laterales en vez del techo)",
-        "version": "0.7.8",
+        "version": "0.7.9",
         "downloadable": True,
-        "tag": "v0.39.0",
-        "sha256": "7a588ad223aa72553c8982a41889de72f256ec6affaabac6fcd464c016e18e13",  # sha256 real del tarball de v0.39.0, verificado contra una descarga real antes de fijarlo aqui (rediseño: estetica de Dishylink)
+        "tag": "v0.41.0",
+        "sha256": "19000d49e80ba4d07b1e27900106b4ee0dee00b24d96e08d3a70839b5c01a6b9",  # sha256 real del tarball de v0.41.0, verificado contra una descarga real antes de fijarlo aqui (sparklines en tarjetas de metrica)
         "files": ["lighting_plugin.py", "lighting", "lighting_templates"],
     },
     "tplink": {

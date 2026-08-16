@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.41.1
+Energy/Climate/Lighting re-pineados al tag `v0.41.0` (sparklines) — Tuya/TP-Link/Starlink NO se tocan, siguen apuntando a su tag previo. Verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
 ## 0.41.0
 Sparklines reales en tarjetas de metrica -- lo que faltaba del rediseño Dishylink (v0.40.0 ya igualaba la estructura de cabecera/tarjetas, pero ninguna pagina que no fuera Energy llevaba el tipo de tarjeta con mini-grafica que caracteriza al Dishylink real, Download/Upload/Latencia/Power draw con su linea de tendencia).
 

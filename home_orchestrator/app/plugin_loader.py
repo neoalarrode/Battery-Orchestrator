@@ -144,10 +144,10 @@ PLUGIN_CATALOG = {
     "tplink": {
         "name": "TP-Link Orchestrator",
         "description": "Puente de ingesta para dispositivos TP-Link (Kasa/Tapo) vía python-kasa (misma librería que usa Home Assistant) — consumo interno por Lighting y/o exposición opcional a HA por MQTT",
-        "version": "0.1.11",
+        "version": "0.1.12",
         "downloadable": True,
-        "tag": "v0.34.0",
-        "sha256": "e4e02c325d6d7ba734e5a11a9a822cd72fa839deb82612d4c6f751957f02645b",  # sha256 real del tarball de v0.34.0, verificado contra una descarga real antes de fijarlo aqui (cabecera: Home Orchestrator pasa a marca principal)
+        "tag": "v0.38.0",
+        "sha256": "2484c5d89b6c876a7181078f377a51a648dc1dc076e9ee17e467459217fd26b2",  # sha256 real del tarball de v0.38.0, verificado contra una descarga real antes de fijarlo aqui (corrige KeyError 'color_temp' real en produccion)
         "files": ["tplink_plugin.py", "tplink", "tplink_templates", "tplink_store.py"],
     },
     "starlink": {

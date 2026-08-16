@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.38.1
+Re-pin de TP-Link al tag `v0.38.0` (corrige KeyError 'color_temp' real en producción) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
 ## 0.38.0
 Arreglo real, repetido en producción: `sensor.tplink_*` (y el ciclo reactivo de Lighting que depende de esos datos) se caía con `KeyError: 'color_temp'` cada vez que una luz TP-Link variable-color-temp (p.ej. los Tapo L630) respondía a un sondeo con datos parciales — `is_variable_color_temp` seguía dando `True` pero `self.data` de ese sondeo concreto no traía la clave `color_temp` (reproducido contra un Tapo L630 real: python-kasa a veces sufre un 403 parcial en el `multipleRequest` y el estado de ese ciclo llega incompleto). `TplinkLightAdapter.color_temp_kelvin` (`app/tplink/device_manager.py`) ahora captura ese `KeyError` puntual y devuelve `None` para esa luz en ese ciclo, sin tumbar el resto — mismo criterio que el resto de sondeos de este módulo (nunca ocultar el fallo del log, solo evitar que rompa el ciclo entero).
 

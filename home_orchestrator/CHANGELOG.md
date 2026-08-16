@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.53.1
+Energy re-pineado al tag `v0.53.0` (registro tipado de entidades) — resto sin cambios. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
+
 ## 0.53.0
 Primer paso del registro tipado de entidades pedido por el usuario (tarea aparcada desde hace varias sesiones): "guardar entidades con tipos (energía, carga, importado, exportado...) y un desplegable en Energy para añadirlas a su tipo correspondiente".
 

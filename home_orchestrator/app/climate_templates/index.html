@@ -22,17 +22,21 @@
   .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 16px; }
   @media (max-width: 700px) { .grid3 { grid-template-columns: 1fr; } }
 
-  /* Variantes de .pill propias de Climate -- el resto de estilos de
-     .pill vienen del sistema compartido. */
-  .pill-heat { background: var(--red-soft); color: var(--red); box-shadow: 0 0 0 1px #fb718533; }
-  .pill-cool { background: var(--accent-soft); color: var(--accent-2); box-shadow: 0 0 0 1px var(--accent-soft); }
-  .pill-idle { background: var(--glass-bg); color: var(--muted); box-shadow: 0 0 0 1px var(--border); }
-  .pill-off { background: var(--glass-bg); color: var(--muted); box-shadow: 0 0 0 1px var(--border); }
-  .pill-fan { background: var(--amber-soft); color: var(--amber); box-shadow: 0 0 0 1px #fbbf2433; }
-  .pill-dry { background: var(--amber-soft); color: var(--amber); box-shadow: 0 0 0 1px #fbbf2433; }
-  .pill-unavailable { background: var(--red-soft); color: var(--red); box-shadow: 0 0 0 1px #fb718533; }
+  /* Estado semantico de la zona -- punto de color + texto, MISMO
+     lenguaje que el "online" del Dishylink real (ver design-system.css:
+     .conn-dot) en vez de una pastilla rellena de color por cada estado.
+     Antes cada zona podia mostrar hasta 3 pastillas apiladas (accion,
+     modo, simulacion) -- ahora es una sola linea de estado + una linea
+     de metadatos aparte (ver .zone-meta), la pastilla queda reservada
+     para "simulación" (es una advertencia real, si merece bulto). */
+  .zone-status { display: inline-flex; align-items: center; gap: 6px; font-size: .74rem; font-weight: 600; font-family: var(--font-body); color: var(--muted); white-space: nowrap; }
+  .zone-status .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+  .zone-status.heating { color: var(--red); }
+  .zone-status.cooling { color: var(--accent-2); }
+  .zone-status.fan { color: var(--amber); }
+  .zone-status.drying { color: var(--amber); }
+  @media (prefers-reduced-motion: no-preference) { .zone-status.heating .dot, .zone-status.cooling .dot { animation: pulse 1.8s ease-in-out infinite; } }
   .pill-sim { background: var(--accent-soft); color: var(--accent); box-shadow: 0 0 0 1px var(--accent-soft); }
-  @media (prefers-reduced-motion: no-preference) { .pill-heat::before, .pill-cool::before { animation: pulse 1.8s ease-in-out infinite; } }
 
   .conn-dot { display: inline-flex; align-items: center; gap: 6px; font-size: .72rem; font-family: var(--font-body); font-weight: 600; color: var(--muted); }
   .conn-dot .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--red); }
@@ -40,33 +44,61 @@
 
   .zone-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
   .zone-card {
-    border: 1px solid var(--glass-border); border-radius: var(--radius); padding: 16px 18px;
+    border: 1px solid var(--glass-border); border-radius: var(--radius); padding: 18px 20px;
     background: var(--glass-bg); backdrop-filter: var(--glass-blur-soft); -webkit-backdrop-filter: var(--glass-blur-soft);
     box-shadow: var(--shadow);
   }
-  .zone-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .zone-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 2px; flex-wrap: wrap; }
   .zone-name { font-family: var(--font-display); font-weight: 700; font-size: 1rem; }
-  .zone-temps { display: flex; align-items: baseline; gap: 10px; margin: 10px 0 6px; }
-  .zone-temp-now { font-family: var(--font-body); font-size: 1.9rem; font-weight: 700; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
-  .zone-temp-target { font-family: var(--font-body); font-weight: 500; font-size: 0.9rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .zone-reason { font-size: 0.78rem; color: var(--muted); margin-top: 6px; min-height: 2.6em; }
-  .zone-actions { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
-  .zone-actions button { padding: 6px 11px; font-size: .76rem; }
+  .zone-hero { margin: 8px 0 2px; line-height: 1; }
+  .zone-temp-now { font-family: var(--font-body); font-size: 2.1rem; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .zone-meta { font-size: .8rem; color: var(--muted); margin-top: 5px; }
+  .zone-meta strong { color: var(--text); font-weight: 600; }
+  .zone-reason { font-size: 0.78rem; color: var(--muted); margin-top: 8px; min-height: 2.6em; }
+
+  /* --- Fila de acciones: SOLO "Forzar decision" queda como boton de
+     texto (es la unica accion que un humano necesita reconocer sin
+     ambiguedad); Previsión/Editar/Eliminar pasan a iconos -- mismo
+     vocabulario de botones-icono que el propio Dishylink real usa en su
+     cabecera (campana/corazon/luna) en vez de una fila de 4 botones de
+     texto compitiendo por atencion. --- */
+  .zone-actions { display: flex; align-items: center; gap: 6px; margin-top: 14px; }
+  .zone-actions .spacer { flex: 1; }
+  .zone-actions button.secondary { padding: 7px 12px; font-size: .78rem; }
+  .icon-btn {
+    width: 30px; height: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+    background: var(--card); color: var(--muted); box-shadow: 0 0 0 1px var(--border); border-radius: 8px; flex: none;
+  }
+  .icon-btn:hover { color: var(--text); filter: none; }
+  .icon-btn.active { background: var(--accent); color: var(--accent-ink); box-shadow: none; }
+  .icon-btn.danger:hover { color: var(--red); }
 
   /* --- Tarjeta de termostato interactiva -- el trozo que faltaba para
      que esta pagina fuera un Dashboard de verdad (control real, no solo
      lectura) en vez de una configuracion con estado pintado encima. Las
      ordenes van al MISMO mecanismo que ya usa la orden MQTT real del
      climate.* expuesto a HA (ver climate_plugin.py:_zone_command), asi
-     que tocar aqui es exactamente como tocar el termostato en HomeKit. --- */
-  .zone-thermostat { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 12px 0; padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); }
-  .zone-thermostat.disabled { opacity: .5; pointer-events: none; }
-  .therm-stepper { display: flex; align-items: center; gap: 8px; }
-  .therm-stepper button { width: 30px; height: 30px; padding: 0; border-radius: 50%; font-size: 1rem; line-height: 1; font-weight: 700; background: var(--card); color: var(--accent); box-shadow: 0 0 0 1px var(--glass-border); }
+     que tocar aqui es exactamente como tocar el termostato en HomeKit.
+     Sin caja tintada de ambar de fondo (v0.43 y antes) -- Dishylink no
+     mete los controles en una caja de color, solo separa con espacio y
+     una linea fina; el acento se queda en los propios controles
+     (boton activo, thumb del stepper), no en un panel entero. --- */
+  .zone-control { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 14px 0 4px; padding-top: 14px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+  .zone-control.disabled { opacity: .5; pointer-events: none; }
+  .therm-stepper { display: flex; align-items: center; gap: 10px; }
+  .therm-stepper button { width: 28px; height: 28px; padding: 0; border-radius: 50%; font-size: 1rem; line-height: 1; font-weight: 700; background: var(--card); color: var(--accent); box-shadow: 0 0 0 1px var(--border); }
   .therm-stepper button:hover { background: var(--accent); color: var(--accent-ink); }
-  .therm-stepper .therm-val { font-family: var(--font-body); font-size: 1.05rem; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 3.2em; text-align: center; }
-  .therm-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .therm-controls select { width: auto; padding: 6px 9px; font-size: .78rem; }
+  .therm-stepper .therm-val { font-family: var(--font-body); font-size: 1rem; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 3.2em; text-align: center; }
+  .therm-stepper + .therm-stepper { margin-left: 4px; }
+
+  /* Selector de modo -- segmentado (icono-a-icono), mismo componente
+     visual que .page-tabs/.plugin-switch, en vez de un <select> nativo
+     del navegador que rompe con el resto del sistema de diseño. */
+  .mode-switch { display: inline-flex; gap: 2px; padding: 2px; border-radius: 14px; background: var(--bg-alt); border: 1px solid var(--border); flex-wrap: wrap; }
+  .mode-switch button { background: transparent; color: var(--muted); box-shadow: none; padding: 5px 10px; border-radius: 11px; font-size: .72rem; font-weight: 600; }
+  .mode-switch button:hover { filter: none; color: var(--text); }
+  .mode-switch button.current { background: var(--accent); color: var(--accent-ink); }
+  .zone-control select.preset-select { width: auto; padding: 5px 8px; font-size: .72rem; margin-top: 6px; }
 
   /* --- Grafico de previsión 24h por zona -- mismo lenguaje visual que la
      grafica de SOC de Energy (ver templates/index.html), adaptado a
@@ -293,11 +325,18 @@ function jsAttr(s) {
   return esc(String(s ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'"));
 }
 
-function actionPillClass(hvacAction, available) {
-  if (available === false) return "pill-unavailable";
-  return {heating: "pill-heat", cooling: "pill-cool", idle: "pill-idle", off: "pill-off",
-          fan: "pill-fan", drying: "pill-dry"}[hvacAction] || "pill-idle";
+// Punto de color + texto (ver .zone-status en el <style>) en vez de la
+// pastilla rellena de antes -- mismo lenguaje que el "online" del
+// Dishylink real.
+function zoneStatusMeta(hvacAction, available) {
+  if (available === false) return { cls: "unavailable", label: "no disponible" };
+  const labels = { heating: "calentando", cooling: "enfriando", idle: "en espera", off: "apagado", fan: "ventilando", drying: "secando" };
+  return { cls: hvacAction || "idle", label: labels[hvacAction] || "—" };
 }
+
+const ICON_CHART = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 20V10M11 20V4M18 20v-7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+const ICON_EDIT = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>';
+const ICON_TRASH = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 7h14M10 7V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2M7 7l1 13h8l1-13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 function fmtTemp(v) { return (v === null || v === undefined) ? "—" : `${Number(v).toFixed(1)}°`; }
 
@@ -315,28 +354,25 @@ function renderZones(zones) {
     if (live.target_temperature_low !== null && live.target_temperature_low !== undefined) {
       targetLabel = `${fmtTemp(live.target_temperature_low)} – ${fmtTemp(live.target_temperature_high)}`;
     }
+    const status = zoneStatusMeta(live.hvac_action, available);
+    const modeLabelText = { off: "Apagado", heat: "Calor", cool: "Frío", heat_cool: "Auto", fan_only: "Ventilador", dry: "Seco" }[live.hvac_mode] || live.hvac_mode || "—";
     return `
     <div class="zone-card">
       <div class="zone-card-head">
         <span class="zone-name">${esc(cfg.name || z.id)}</span>
-        <span class="pill ${actionPillClass(live.hvac_action, available)}">${available ? esc(live.hvac_action || "—") : "no disponible"}</span>
+        <span class="zone-status ${status.cls}"><span class="dot"></span>${esc(status.label)}</span>
       </div>
-      <div class="zone-temps">
-        <span class="zone-temp-now">${fmtTemp(live.current_temperature)}</span>
-        <span class="zone-temp-target">objetivo ${targetLabel}</span>
-      </div>
+      <div class="zone-hero"><span class="zone-temp-now">${fmtTemp(live.current_temperature)}</span></div>
+      <div class="zone-meta">objetivo <strong>${targetLabel}</strong> · ${esc(modeLabelText)}${cfg.simulate ? ' · <span class="pill pill-sim" style="padding:2px 8px;font-size:.64rem">simulación</span>' : ""}</div>
       ${renderSparkline(live.temp_history, { colorVar: "--accent" })}
-      <div>
-        <span class="pill pill-idle" style="text-transform:capitalize">${esc(live.hvac_mode || "—")}</span>
-        ${cfg.simulate ? '<span class="pill pill-sim">simulación</span>' : ""}
-      </div>
       ${renderThermostat(z.id, live)}
       <div class="zone-reason">${esc(live.reason || "")}</div>
       <div class="zone-actions">
         <button class="secondary" onclick="refreshZone('${z.id}')">Forzar decisión</button>
-        <button class="ghost" onclick="toggleZoneChart('${z.id}')" id="chart-toggle-${z.id}">Previsión 24h</button>
-        <button class="ghost" onclick="editZone('${z.id}')">Editar</button>
-        <button class="danger" onclick="deleteZone('${z.id}', '${jsAttr(cfg.name || z.id)}')">Eliminar</button>
+        <span class="spacer"></span>
+        <button class="icon-btn" title="Previsión 24h" aria-label="Previsión 24h" onclick="toggleZoneChart('${z.id}')" id="chart-toggle-${z.id}">${ICON_CHART}</button>
+        <button class="icon-btn" title="Editar" aria-label="Editar" onclick="editZone('${z.id}')">${ICON_EDIT}</button>
+        <button class="icon-btn danger" title="Eliminar" aria-label="Eliminar" onclick="deleteZone('${z.id}', '${jsAttr(cfg.name || z.id)}')">${ICON_TRASH}</button>
       </div>
       <div class="zone-chart-host" id="zone-chart-host-${z.id}">
         <div id="zone-chart-${z.id}"></div>
@@ -359,7 +395,7 @@ function renderZones(zones) {
     const btn = document.getElementById(`chart-toggle-${id}`);
     if (!host) { openZoneCharts.delete(id); return; }
     host.classList.add("open");
-    if (btn) btn.textContent = "Ocultar previsión";
+    if (btn) btn.classList.add("active");
     const cached = zoneChartCache.get(id);
     if (cached) renderZoneChart(id, cached);
   });
@@ -396,8 +432,8 @@ const TEMP_STEP = 0.5;
 function renderThermostat(id, live) {
   if (live.available === false || !live.hvac_modes) return "";
   const modes = live.hvac_modes.length ? live.hvac_modes : [live.hvac_mode].filter(Boolean);
-  const modeLabel = {off: "Apagado", heat: "Calor", cool: "Frío", heat_cool: "Auto", fan_only: "Ventilador", dry: "Seco"};
-  const modeOptions = modes.map(m => `<option value="${esc(m)}" ${m === live.hvac_mode ? "selected" : ""}>${esc(modeLabel[m] || m)}</option>`).join("");
+  const modeLabel = {off: "Apagado", heat: "Calor", cool: "Frío", heat_cool: "Auto", fan_only: "Vent.", dry: "Seco"};
+  const modeButtons = modes.map(m => `<button type="button" class="${m === live.hvac_mode ? "current" : ""}" onclick="setHvacMode('${id}','${esc(m)}')">${esc(modeLabel[m] || m)}</button>`).join("");
   const presetOptions = (live.preset_modes || []).map(p => `<option value="${esc(p)}" ${p === live.preset_mode ? "selected" : ""}>${esc(p)}</option>`).join("");
 
   const disabledCls = live.hvac_mode === "off" ? " disabled" : "";
@@ -424,11 +460,11 @@ function renderThermostat(id, live) {
   }
 
   return `
-  <div class="zone-thermostat${disabledCls}">
+  <div class="zone-control${disabledCls}">
     ${stepperHtml}
-    <div class="therm-controls">
-      <select onchange="setHvacMode('${id}', this.value)" aria-label="Modo">${modeOptions}</select>
-      ${presetOptions ? `<select onchange="setPresetMode('${id}', this.value)" aria-label="Preset">${presetOptions}</select>` : ""}
+    <div>
+      <div class="mode-switch" role="group" aria-label="Modo">${modeButtons}</div>
+      ${presetOptions ? `<select class="preset-select" onchange="setPresetMode('${id}', this.value)" aria-label="Preset">${presetOptions}</select>` : ""}
     </div>
   </div>`;
 }
@@ -486,7 +522,7 @@ function toggleZoneChart(id) {
   if (!host) return;
   const opening = !host.classList.contains("open");
   host.classList.toggle("open", opening);
-  if (btn) btn.textContent = opening ? "Ocultar previsión" : "Previsión 24h";
+  if (btn) btn.classList.toggle("active", opening);
   if (opening) {
     openZoneCharts.add(id);
     const cached = zoneChartCache.get(id);

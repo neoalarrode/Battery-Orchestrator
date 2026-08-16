@@ -26,11 +26,13 @@
 
   code { font-family: var(--font-mono); background: var(--accent-soft); color: var(--accent); padding: 1px 5px; border-radius: 4px; font-size: .85em; }
 
-  /* Variantes de .pill propias de esta pagina (encendida/apagada) --
-     el resto de estilos de .pill vienen del sistema compartido. */
-  .pill-on { background: var(--amber-soft); color: var(--amber); box-shadow: 0 0 0 1px #fbbf2433; }
-  .pill-off { background: var(--glass-bg); color: var(--muted); box-shadow: 0 0 0 1px var(--border); }
-  @media (prefers-reduced-motion: no-preference) { .pill-on::before { animation: pulse 1.8s ease-in-out infinite; } }
+  /* Estado de ocupacion -- punto de color + texto, mismo lenguaje que
+     .conn-dot / el "online" del Dishylink real, en vez de la pastilla
+     rellena que llevaba antes. */
+  .zone-status { display: inline-flex; align-items: center; gap: 6px; font-size: .74rem; font-weight: 600; font-family: var(--font-body); color: var(--muted); white-space: nowrap; }
+  .zone-status .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+  .zone-status.occupied { color: var(--amber); }
+  @media (prefers-reduced-motion: no-preference) { .zone-status.occupied .dot { animation: pulse 1.8s ease-in-out infinite; } }
 
   .conn-dot { display: inline-flex; align-items: center; gap: 6px; font-size: .72rem; font-family: var(--font-body); font-weight: 600; color: var(--muted); }
   .conn-dot .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--red); }
@@ -38,42 +40,60 @@
 
   .zone-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
   .zone-card {
-    border: 1px solid var(--glass-border); border-radius: var(--radius); padding: 16px 18px;
+    border: 1px solid var(--glass-border); border-radius: var(--radius); padding: 18px 20px;
     background: var(--glass-bg); backdrop-filter: var(--glass-blur-soft); -webkit-backdrop-filter: var(--glass-blur-soft);
     box-shadow: var(--shadow);
   }
-  .zone-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .zone-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 2px; flex-wrap: wrap; }
   .zone-name { font-family: var(--font-display); font-weight: 700; font-size: 1rem; }
-  .zone-swatch {
-    display: inline-flex; align-items: center; gap: 10px; margin: 10px 0 6px;
-  }
-  .zone-swatch .bulb {
-    width: 30px; height: 30px; border-radius: 50%; flex: none;
-    box-shadow: 0 0 0 1px var(--border), inset 0 0 10px rgba(0,0,0,.15);
+
+  /* --- Hero: brillo en grande, MISMO peso visual que la temperatura de
+     Climate -- antes esta pagina no tenia numero protagonista, solo un
+     circulo de color + texto pequeño, lo que la hacia sentir menos
+     "panel de control" que Climate/Energy. */
+  .zone-hero { display: flex; align-items: center; gap: 10px; margin: 8px 0 2px; line-height: 1; }
+  .zone-hero .bulb {
+    width: 13px; height: 13px; border-radius: 50%; flex: none;
+    box-shadow: 0 0 0 1px var(--border), inset 0 0 6px rgba(0,0,0,.15);
     transition: background .3s, box-shadow .3s;
   }
-  .zone-swatch .bulb.lit { box-shadow: 0 0 0 1px var(--border), 0 0 18px -2px currentColor; }
-  .zone-swatch .vals { font-family: var(--font-body); font-weight: 600; font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .zone-rule { font-size: 0.8rem; color: var(--text); margin-top: 2px; }
-  .zone-rule .muted { color: var(--muted); }
-  .zone-reason { font-size: 0.78rem; color: var(--muted); margin-top: 6px; min-height: 2.2em; }
-  .zone-actions { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
-  .zone-actions button { padding: 6px 11px; font-size: .76rem; }
+  .zone-hero .bulb.lit { box-shadow: 0 0 0 1px var(--border), 0 0 14px -1px currentColor; }
+  .zone-hero .val { font-family: var(--font-body); font-size: 2.1rem; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .zone-meta { font-size: .8rem; color: var(--muted); margin-top: 5px; }
+  .zone-meta strong { color: var(--text); font-weight: 600; }
+  .zone-reason { font-size: 0.78rem; color: var(--muted); margin-top: 8px; min-height: 2.2em; }
+
+  .zone-actions { display: flex; align-items: center; gap: 6px; margin-top: 14px; }
+  .zone-actions .spacer { flex: 1; }
+  .zone-actions button.secondary { padding: 7px 12px; font-size: .78rem; }
+  .icon-btn {
+    width: 30px; height: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+    background: var(--card); color: var(--muted); box-shadow: 0 0 0 1px var(--border); border-radius: 8px; flex: none;
+  }
+  .icon-btn:hover { color: var(--text); filter: none; }
+  .icon-btn.danger:hover { color: var(--red); }
 
   /* --- Control interactivo de la luz de conjunto -- el trozo que
      faltaba para que esta pagina fuera un Dashboard de verdad (encender/
      apagar/ajustar de verdad, no solo ver si hay presencia). Habla
      DIRECTO con `ZoneRunner.manual_command` (ver lighting_plugin.py),
      el MISMO mecanismo que ya usa la luz dummy de HomeKit/Lovelace por
-     MQTT -- tocar aqui es exactamente como tocarla desde HomeKit. --- */
-  .zone-lightctl { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 4px; padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); }
-  .light-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  .light-toggle-row button { padding: 6px 14px; font-size: .78rem; }
-  .light-toggle-row button.on { background: var(--amber); color: var(--accent-ink); }
+     MQTT -- tocar aqui es exactamente como tocarla desde HomeKit.
+     Sin caja tintada de ambar de fondo (v0.43 y antes) -- mismo cambio
+     que en Climate: el acento vive en el propio interruptor/slider, no
+     en un panel entero pintado de color. El boton de texto "Encender/
+     Apagar" pasa a un interruptor de verdad (pista + circulo), lenguaje
+     de control mas reconocible que un boton que cambia de texto. --- */
+  .zone-lightctl { display: flex; flex-direction: column; gap: 10px; margin: 14px 0 4px; padding-top: 14px; border-top: 1px solid var(--border); }
+  .light-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .light-switch { position: relative; width: 42px; height: 24px; border-radius: 12px; background: var(--bg-alt); box-shadow: 0 0 0 1px var(--border); border: none; padding: 0; cursor: pointer; flex: none; }
+  .light-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: var(--muted); transition: transform .15s, background .15s; }
+  .light-switch.on { background: var(--accent-soft); }
+  .light-switch.on::after { transform: translateX(18px); background: var(--accent); }
   .light-slider { display: flex; align-items: center; gap: 8px; }
-  .light-slider label { font-size: .68rem; color: var(--muted); width: 70px; flex: none; margin: 0; }
+  .light-slider label { font-size: .7rem; color: var(--muted); width: 60px; flex: none; margin: 0; }
   .light-slider input[type=range] { flex: 1; accent-color: var(--accent); height: 4px; }
-  .light-color { width: 30px; height: 30px; padding: 0; border: none; border-radius: 50%; background: none; cursor: pointer; flex: none; }
+  .light-color { width: 26px; height: 26px; padding: 0; border: none; border-radius: 50%; background: none; cursor: pointer; flex: none; }
   .light-color::-webkit-color-swatch-wrapper { padding: 0; border-radius: 50%; }
   .light-color::-webkit-color-swatch { border: 1px solid var(--glass-border); border-radius: 50%; }
 
@@ -287,6 +307,9 @@ function jsAttr(s) {
   return esc(String(s ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'"));
 }
 
+const ICON_EDIT = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>';
+const ICON_TRASH = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 7h14M10 7V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2M7 7l1 13h8l1-13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
 function kelvinToRgbCss(k) {
   // Aproximacion visual rapida (Tanner Helland) SOLO para pintar el
   // avatar de la zona -- no se usa para ningun calculo real, eso vive
@@ -312,25 +335,28 @@ function renderZones(zones) {
     const vals = live.current_values || null;
     const lit = occupied && !!live.active_rule;
     const color = vals && vals.color_temp_kelvin ? kelvinToRgbCss(vals.color_temp_kelvin) : "var(--muted)";
-    const valsLabel = vals ? `${vals.brightness_pct}% · ${vals.color_temp_kelvin ?? "—"}K` : "sin lectura de sol.sun";
+    const metaHtml = vals
+      ? `<strong>${vals.color_temp_kelvin ?? "—"}K</strong> · ${live.active_rule ? `regla activa: <strong>${esc(live.active_rule)}</strong>` : "ninguna regla activa"}`
+      : "sin lectura de sol.sun";
     return `
     <div class="zone-card">
       <div class="zone-card-head">
         <span class="zone-name">${esc(cfg.name || z.id)}</span>
-        <span class="pill ${occupied ? "pill-on" : "pill-off"}">${occupied ? "ocupada" : "vacía"}</span>
+        <span class="zone-status ${occupied ? "occupied" : ""}"><span class="dot"></span>${occupied ? "ocupada" : "vacía"}</span>
       </div>
-      <div class="zone-swatch">
+      <div class="zone-hero">
         <span class="bulb ${lit ? "lit" : ""}" style="background:${lit ? color : "var(--glass-bg)"};color:${color}"></span>
-        <span class="vals">${esc(valsLabel)}</span>
+        <span class="val">${vals ? vals.brightness_pct + "%" : "—"}</span>
       </div>
+      <div class="zone-meta">${metaHtml}</div>
       ${cfg.lux_sensor ? renderSparkline(live.lux_history, { colorVar: "--accent-2" }) : ""}
-      <div class="zone-rule">${live.active_rule ? `regla activa: <strong>${esc(live.active_rule)}</strong>` : '<span class="muted">ninguna regla activa</span>'}</div>
       ${renderLightControl(z.id, live.group || {}, cfg)}
       <div class="zone-reason">${esc(live.reason || "")}</div>
       <div class="zone-actions">
         <button class="secondary" onclick="refreshZone('${z.id}')">Forzar decisión</button>
-        <button class="ghost" onclick="editZone('${z.id}')">Editar</button>
-        <button class="danger" onclick="deleteZone('${z.id}', '${jsAttr(cfg.name || z.id)}')">Eliminar</button>
+        <span class="spacer"></span>
+        <button class="icon-btn" title="Editar" aria-label="Editar" onclick="editZone('${z.id}')">${ICON_EDIT}</button>
+        <button class="icon-btn danger" title="Eliminar" aria-label="Eliminar" onclick="deleteZone('${z.id}', '${jsAttr(cfg.name || z.id)}')">${ICON_TRASH}</button>
       </div>
     </div>`;
   }).join("");
@@ -398,7 +424,7 @@ function renderLightControl(id, group, cfg) {
   return `
   <div class="zone-lightctl">
     <div class="light-toggle-row">
-      <button type="button" class="${on ? "on" : ""}" onclick="toggleZoneLight('${id}', ${!on})">${on ? "Apagar" : "Encender"}</button>
+      <button type="button" class="light-switch ${on ? "on" : ""}" role="switch" aria-checked="${on}" aria-label="${on ? "Apagar" : "Encender"}" onclick="toggleZoneLight('${id}', ${!on})"></button>
       <input type="color" class="light-color" value="${colorHex}" title="Color manual" onchange="setZoneColor('${id}', this.value)">
     </div>
     <div class="light-slider">

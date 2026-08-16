@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.44.0
+Rediseño de las tarjetas de zona de Climate y Lighting, a peticion expresa del usuario ("rediseñe los widgets estos de Climate como de iluminación no me parece que sigan la estética moderna ni funcional") -- v0.40-v0.43 ya habian igualado tokens/tipografia/densidad del CHROME (cabecera, tarjetas de metrica), pero las tarjetas de zona en si seguian siendo la vieja identidad "panel de configuracion" (multiples pastillas apiladas, `<select>` nativos, caja tintada de ambar, 3-4 botones de texto por tarjeta).
+
+- **Estado**: la pastilla de color rellena (accion de climatizacion / ocupacion) pasa a punto de color + texto, mismo lenguaje que el "online" del Dishylink real (`.zone-status`, ver `.conn-dot` que ya usaba este patron para WebSocket/MQTT).
+- **Numero protagonista**: Climate ya tenia la temperatura en grande; Lighting gana un hero equivalente (brillo en %, 2.1rem) -- antes solo tenia un circulo de color + una linea de texto pequeña, sin ancla visual.
+- **Controles sin caja tintada**: `.zone-thermostat`/`.zone-lightctl` perdian el fondo ambar-soft de bloque -- ahora es solo espacio + una linea fina de separacion, el acento vive en el propio control (boton de modo activo, thumb del slider, interruptor), no en un panel entero pintado de color.
+- **Selector de modo de Climate**: de un `<select>` nativo del navegador a un grupo segmentado de botones (`.mode-switch`, mismo componente visual que `.page-tabs`/`.plugin-switch`) -- consistente con el resto del sistema en vez de romper con un control nativo del SO.
+- **Interruptor de Lighting**: el boton de texto "Encender/Apagar" pasa a un interruptor de pista+circulo de verdad (`.light-switch`), lenguaje de control mas reconocible.
+- **Acciones**: de 3-4 botones de texto por tarjeta a 1 boton de texto ("Forzar decisión", la unica accion que de verdad necesita ser inequivoca) + iconos (Editar/Eliminar/Previsión) -- mismo vocabulario de botones-icono que la propia cabecera del Dishylink real (campana/corazon/luna).
+
 ## 0.43.1
 Energy re-pineado al tag `v0.43.0` (bug de layout en movil) — resto de plugins sin cambios. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
 

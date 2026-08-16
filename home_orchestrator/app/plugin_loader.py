@@ -100,7 +100,7 @@ PLUGIN_CATALOG = {
     "battery": {
         "name": "Energy Orchestrator",
         "description": "Baterías, solar y cargas diferibles — carga y descarga adaptativa por precio, sol y consumo real",
-        "version": "0.11.81",
+        "version": "0.11.82",
         "downloadable": True,
         "tag": "v0.34.0",
         "sha256": "e4e02c325d6d7ba734e5a11a9a822cd72fa839deb82612d4c6f751957f02645b",  # sha256 real del tarball de v0.34.0, verificado contra una descarga real antes de fijarlo aqui (cabecera: Home Orchestrator pasa a marca principal)
@@ -117,7 +117,7 @@ PLUGIN_CATALOG = {
     "climate": {
         "name": "Climate Orchestrator",
         "description": "Termostatos adaptativos por zona, expuestos como climate.* nativos de HA (HomeKit/Matter) vía MQTT Discovery",
-        "version": "0.4.4",  # version PROPIA del plugin (ClimatePlugin.version) -- distinta de "tag", que es la version del REPO de la que se descarga
+        "version": "0.4.5",  # version PROPIA del plugin (ClimatePlugin.version) -- distinta de "tag", que es la version del REPO de la que se descarga
         "downloadable": True,
         "tag": "v0.34.0",
         "sha256": "e4e02c325d6d7ba734e5a11a9a822cd72fa839deb82612d4c6f751957f02645b",  # sha256 real del tarball de v0.34.0, verificado contra una descarga real antes de fijarlo aqui (cabecera: Home Orchestrator pasa a marca principal)
@@ -126,7 +126,7 @@ PLUGIN_CATALOG = {
     "tuya": {
         "name": "Tuya Orchestrator",
         "description": "Puente de ingesta para dispositivos Tuya-por-LAN — consumo interno por Climate y/o exposición opcional a HA por MQTT",
-        "version": "0.4.5",
+        "version": "0.4.6",
         "downloadable": True,
         "tag": "v0.34.0",
         "sha256": "e4e02c325d6d7ba734e5a11a9a822cd72fa839deb82612d4c6f751957f02645b",  # sha256 real del tarball de v0.34.0, verificado contra una descarga real antes de fijarlo aqui (cabecera: Home Orchestrator pasa a marca principal)
@@ -135,16 +135,16 @@ PLUGIN_CATALOG = {
     "lighting": {
         "name": "Lighting Orchestrator",
         "description": "Iluminación adaptativa por zona — color y brillo por hora, encendido/apagado por presencia y reglas condicionales (p.ej. TV encendida -> luces laterales en vez del techo)",
-        "version": "0.7.3",
+        "version": "0.7.5",
         "downloadable": True,
-        "tag": "v0.34.0",
-        "sha256": "e4e02c325d6d7ba734e5a11a9a822cd72fa839deb82612d4c6f751957f02645b",  # sha256 real del tarball de v0.34.0, verificado contra una descarga real antes de fijarlo aqui (cabecera: Home Orchestrator pasa a marca principal)
+        "tag": "v0.35.0",
+        "sha256": "4edc5e225ccc4f57f1f2181357534d8c4efa84c9057c9949fd9bb261deacb5c7",  # sha256 real del tarball de v0.35.0, verificado contra una descarga real antes de fijarlo aqui (sensor de lux opcional)
         "files": ["lighting_plugin.py", "lighting", "lighting_templates"],
     },
     "tplink": {
         "name": "TP-Link Orchestrator",
         "description": "Puente de ingesta para dispositivos TP-Link (Kasa/Tapo) vía python-kasa (misma librería que usa Home Assistant) — consumo interno por Lighting y/o exposición opcional a HA por MQTT",
-        "version": "0.1.10",
+        "version": "0.1.11",
         "downloadable": True,
         "tag": "v0.34.0",
         "sha256": "e4e02c325d6d7ba734e5a11a9a822cd72fa839deb82612d4c6f751957f02645b",  # sha256 real del tarball de v0.34.0, verificado contra una descarga real antes de fijarlo aqui (cabecera: Home Orchestrator pasa a marca principal)

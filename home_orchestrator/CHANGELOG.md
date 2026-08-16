@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.35.1
+Re-pin de Lighting al tag `v0.35.0` (sensor de lux) en `plugin_loader.py` — y de paso corregido el campo `"version"` (solo informativo, se muestra en la tienda de plugins) de Energy/Climate/Tuya/TP-Link, que se había quedado desincronizado de la versión real de cada plugin en el último despliegue (v0.34.x, cabecera). No afecta a la descarga en sí (esa depende de `tag`/`sha256`, correctos), solo al número que se veía en la tienda. Verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
 ## 0.35.0
 **Lighting: nuevo sensor de lux, opcional — enciende/apaga según la luz ambiente real, no solo la presencia.** A petición expresa del usuario. Primer intento (descartado a mitad, el usuario corrigió el enfoque): un "boost" de brillo por encima de la curva solar cuando había poca luz real. Lo que se pedía de verdad era más simple: que la presencia por sí sola no encienda la luz si ya hay suficiente luz natural, y que se apague sola si se hace de día mientras la zona sigue ocupada.
 

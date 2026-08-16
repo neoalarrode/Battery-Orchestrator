@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.28.0
+**"Configuración" sale del submenú de Energy y pasa al menú principal.** A petición expresa del usuario: *"si te fijas está en el submenú dentro de Energy y debería de estar arriba donde tenemos Climate, Energy, Starlink... el porqué es simple, configuración aplica a todos [los plugins]"*. La pestaña en sí (rejilla con la config de cada plugin instalado) sigue viviendo en la página de Energy — solo cambia desde dónde se llega a ella:
+
+- Quitado el botón "Configuración" de la barra de pestañas propia de Energy.
+- Añadida "Configuración" al selector de nivel superior (junto a Energy/Climate/Lighting/Starlink) — visible en TODAS las páginas de plugin, no solo en Energy (`core_static/plugin-switch.js`, fichero núcleo, y la copia propia de Energy en `templates/index.html`). Enlaza a `?tab=config` sobre la página de Energy.
+- Energy detecta ese parámetro al cargar y aterriza directamente en la pestaña de configuración, sin pasar por "Estado actual" primero.
+
+Como `core_static/plugin-switch.js` es un fichero núcleo horneado en la imagen del addon (no un plugin descargable), esta versión SÍ lleva Release en GitHub.
+
 ## 0.27.1
 Sha256 de Starlink re-pineado al tag `v0.27.0` (corrige mapeo real de SSID/contraseña del router) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

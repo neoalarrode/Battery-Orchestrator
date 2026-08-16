@@ -48,6 +48,15 @@ const PLUGIN_ICONS = {
 };
 const PLUGIN_LABELS = { battery: "Energy", climate: "Climate", tuya: "Tuya", lighting: "Lighting", tplink: "TP-Link", starlink: "Starlink" };
 
+// "Configuración" no es un plugin -- vive en la pagina de Energy (rejilla
+// con la config de cada plugin instalado), pero es alcanzable desde el
+// selector de nivel superior de CUALQUIER pagina, a peticion expresa del
+// usuario ("configuracion aplica a todos"). Antes solo vivia dentro del
+// propio submenu de Energy; ver templates/index.html para la mitad que
+// la recibe (`?tab=config`, manejado en su arranque).
+const CONFIG_ICON =
+  '<path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm8.4 5.4-1.8.4a6.6 6.6 0 0 1-.8 1.9l1 1.6-1.7 1.7-1.6-1a6.6 6.6 0 0 1-1.9.8l-.4 1.8h-2.4l-.4-1.8a6.6 6.6 0 0 1-1.9-.8l-1.6 1-1.7-1.7 1-1.6a6.6 6.6 0 0 1-.8-1.9l-1.8-.4v-2.4l1.8-.4a6.6 6.6 0 0 1 .8-1.9l-1-1.6 1.7-1.7 1.6 1a6.6 6.6 0 0 1 1.9-.8l.4-1.8h2.4l.4 1.8a6.6 6.6 0 0 1 1.9.8l1.6-1 1.7 1.7-1 1.6a6.6 6.6 0 0 1 .8 1.9l1.8.4v2.4Z" fill="currentColor"/>';
+
 // Solo los plugins con un dashboard de verdad aparecen en el selector de
 // nivel superior (ver tarea de arquitectura de paginas) -- Tuya/TP-Link
 // son pura configuracion, se acceden desde dentro de Climate/Lighting,
@@ -66,15 +75,17 @@ async function renderPluginSwitch(slug, containerId = "plugin-switch-nav") {
   if (!nav) return;
   try {
     const plugins = await (await fetch(`${ingressRoot()}api/core/plugins`)).json();
-    nav.innerHTML = plugins
+    const pluginLinks = plugins
       .filter((p) => p.installed && PLUGIN_SWITCH_VISIBLE.has(p.slug))
       .map((p) => {
         const current = p.slug === slug ? ' class="current"' : "";
         const icon = PLUGIN_ICONS[p.slug] || "";
         const label = PLUGIN_LABELS[p.slug] || p.name;
         return `<a href="${_pluginHref(p.slug)}"${current}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">${icon}</svg>${label}</a>`;
-      })
-      .join("");
+      });
+    const configHref = `${ingressRoot()}?tab=config`;
+    const configLink = `<a href="${configHref}"${slug === "config" ? ' class="current"' : ""}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">${CONFIG_ICON}</svg>Configuración</a>`;
+    nav.innerHTML = [...pluginLinks, configLink].join("");
   } catch (e) {
     /* no bloquea el resto de la pagina */
   }

@@ -483,7 +483,6 @@
   <button class="tab-btn active" data-tab="inicio" data-i18n="tab_estado" onclick="switchTab('inicio')" type="button">Estado actual</button>
   <button class="tab-btn" data-tab="prevision" data-i18n="tab_prevision" onclick="switchTab('prevision')" type="button">Previsión</button>
   <button class="tab-btn" data-tab="salud" data-i18n="tab_salud" onclick="switchTab('salud')" type="button">Salud de batería</button>
-  <button class="tab-btn" id="tab-config-btn" data-tab="config" data-i18n="tab_config" onclick="switchTab('config')" type="button">Configuración</button>
   <button class="tab-btn" id="tab-store-btn" data-tab="store" data-i18n="tab_store" onclick="switchTab('store')" type="button">Tienda</button>
 </nav>
 
@@ -1890,6 +1889,17 @@ const PLUGIN_SWITCH_ICONS = {
   starlink: '<path d="M12 3a9 9 0 0 1 9 9h-2a7 7 0 0 0-7-7V3Z" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><path d="M12 14v7M9 21h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/>',
 };
 const PLUGIN_SWITCH_LABEL = { battery: 'Energy', climate: 'Climate', tuya: 'Tuya', lighting: 'Lighting', tplink: 'TP-Link', starlink: 'Starlink' };
+
+// "Configuración" (antes una pestaña MAS dentro de Energy) vive ahora en
+// este mismo selector de nivel superior, junto a Energy/Climate/
+// Lighting/Starlink -- a peticion expresa del usuario: "configuracion
+// aplica a todos [los plugins], no solo a Energy". No es un plugin (no
+// sale de /api/core/plugins), asi que se añade a mano, siempre visible,
+// apuntando a esta misma pagina con `?tab=config` (ver el manejo de ese
+// parametro en el arranque, mas abajo) -- la pestaña "config" en si
+// sigue viviendo aqui (rejilla con la config de cada plugin instalado,
+// ver renderConfigPluginGrid), solo cambia DESDE DONDE se llega a ella.
+const CONFIG_NAV_ICON = '<path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm8.4 5.4-1.8.4a6.6 6.6 0 0 1-.8 1.9l1 1.6-1.7 1.7-1.6-1a6.6 6.6 0 0 1-1.9.8l-.4 1.8h-2.4l-.4-1.8a6.6 6.6 0 0 1-1.9-.8l-1.6 1-1.7-1.7 1-1.6a6.6 6.6 0 0 1-.8-1.9l-1.8-.4v-2.4l1.8-.4a6.6 6.6 0 0 1 .8-1.9l-1-1.6 1.7-1.7 1.6 1a6.6 6.6 0 0 1 1.9-.8l.4-1.8h2.4l.4 1.8a6.6 6.6 0 0 1 1.9.8l1.6-1 1.7 1.7-1 1.6a6.6 6.6 0 0 1 .8 1.9l1.8.4v2.4Z" fill="currentColor"/>';
 
 // Solo los plugins con un dashboard de verdad aparecen en el selector de
 // nivel superior -- mismo criterio y misma lista que core_static/
@@ -3702,7 +3712,6 @@ async function refreshStatus() {
 }
 
 function applyWallpanelMode() {
-  document.getElementById('tab-config-btn').style.display = 'none';
   document.getElementById('tab-store-btn').style.display = 'none';
   document.getElementById('run-now-btn').style.display = 'none';
   document.getElementById('wallpanel-pill').style.display = '';
@@ -3722,12 +3731,15 @@ async function renderPluginSwitch() {
   try {
     const plugins = await (await fetch('api/core/plugins')).json();
     const nav = document.getElementById('plugin-switch-nav');
-    nav.innerHTML = plugins.filter(p => p.installed && PLUGIN_SWITCH_VISIBLE.has(p.slug)).map(p => {
+    const configActive = new URLSearchParams(location.search).get('tab') === 'config';
+    const pluginLinks = plugins.filter(p => p.installed && PLUGIN_SWITCH_VISIBLE.has(p.slug)).map(p => {
       const href = p.slug === 'battery' ? './' : `plugins/${p.slug}/`;
-      const current = p.slug === 'battery' ? ' class="current"' : '';
+      const current = p.slug === 'battery' && !configActive ? ' class="current"' : '';
       const icon = PLUGIN_SWITCH_ICONS[p.slug] || '';
       return `<a href="${href}"${current}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">${icon}</svg>${PLUGIN_SWITCH_LABEL[p.slug] || p.name}</a>`;
-    }).join('');
+    });
+    const configLink = `<a href="?tab=config"${configActive ? ' class="current"' : ''}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">${CONFIG_NAV_ICON}</svg>${t('tab_config')}</a>`;
+    nav.innerHTML = [...pluginLinks, configLink].join('');
   } catch (e) { /* la cabecera se queda vacia si /api/core/plugins no responde -- no bloquea el resto */ }
 }
 
@@ -3737,6 +3749,12 @@ async function renderPluginSwitch() {
     // el servidor responde o no a /api/config — ver la funcion.
     await loadConfig();
     renderPluginSwitch();
+    // Llegada desde el selector de nivel superior de otro plugin (ver
+    // renderPluginSwitch de arriba y core_static/plugin-switch.js) --
+    // "Configuración" ya no es una pestaña propia de Energy, asi que
+    // llegar aqui con este parametro es la unica forma de aterrizar
+    // directamente en ella en vez de en "Estado actual".
+    if (new URLSearchParams(location.search).get('tab') === 'config') switchTab('config');
     await refreshStatus();
     // A partir de aqui, un fallo puntual de red (ya en marcha, no en la
     // carga inicial) no debe quedar como una promesa rechazada sin

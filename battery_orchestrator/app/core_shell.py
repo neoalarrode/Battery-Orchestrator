@@ -59,9 +59,9 @@ def api_install_plugin(slug):
         return jsonify({"error": "plugin desconocido"}), 404
     try:
         plugin_loader.install_plugin(slug)
-    except Exception as exc:
+    except Exception:
         log.exception("Fallo instalando el plugin '%s'", slug)
-        return jsonify({"error": str(exc)}), 502
+        return jsonify({"error": "fallo instalando el plugin"}), 502
     return jsonify({"installed": True, "restart_required": True})
 
 
@@ -70,8 +70,9 @@ def api_uninstall_plugin(slug):
     import plugin_loader
     try:
         plugin_loader.uninstall_plugin(slug)
-    except ValueError as exc:
-        return jsonify({"error": str(exc)}), 400
+    except ValueError:
+        log.warning("Fallo desinstalando el plugin '%s'", slug, exc_info=True)
+        return jsonify({"error": "plugin desconocido"}), 400
     return jsonify({"installed": False, "restart_required": True})
 
 
@@ -116,8 +117,9 @@ def api_core_backup_restore():
         return jsonify({"error": "JSON invalido"}), 400
     try:
         restored = core_backup.restore_backup(bundle)
-    except core_backup.BackupError as exc:
-        return jsonify({"error": str(exc)}), 400
+    except core_backup.BackupError:
+        log.warning("Fallo restaurando la copia de seguridad", exc_info=True)
+        return jsonify({"error": "el fichero de copia de seguridad no es valido"}), 400
 
     ensured_plugins = _ensure_plugins_from_config() if "config.json" in restored else []
     return jsonify({

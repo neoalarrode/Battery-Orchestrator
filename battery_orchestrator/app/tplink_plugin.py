@@ -42,7 +42,7 @@ log = logging.getLogger("tplink_plugin")
 class TplinkPlugin(Plugin):
     slug = "tplink"
     name = "TP-Link Orchestrator"
-    version = "0.1.8"
+    version = "0.1.9"
 
     def __init__(self) -> None:
         self._manager = TplinkDeviceManager(on_any_change=self._on_device_change)
@@ -138,9 +138,9 @@ class TplinkPlugin(Plugin):
             added_hosts = {d["config"]["host"] for d in tplink_store.load_devices()}
             try:
                 found = self._manager.discover(self._credentials())
-            except Exception as exc:
+            except Exception:
                 log.exception("Fallo escaneando la LAN en busca de dispositivos TP-Link")
-                return flask.jsonify({"error": str(exc)}), 502
+                return flask.jsonify({"error": "fallo escaneando la LAN"}), 502
             out = [
                 {
                     "host": host,

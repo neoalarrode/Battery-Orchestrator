@@ -35,7 +35,7 @@ REACTIVE_MIN_INTERVAL_SECONDS = 5
 class ClimatePlugin(Plugin):
     slug = "climate"
     name = "Climate Orchestrator"
-    version = "0.4.2"
+    version = "0.4.3"
 
     def __init__(self) -> None:
         self._runners: dict[str, ZoneRunner] = {}
@@ -216,9 +216,9 @@ class ClimatePlugin(Plugin):
             try:
                 runner.decide_and_act()
                 zone_store.update_zone_state(zone_id, runner.to_persisted_state())
-            except Exception as exc:
+            except Exception:
                 log.exception("Fallo forzando decision de zona %s", zone_id)
-                return flask.jsonify({"error": str(exc)}), 500
+                return flask.jsonify({"error": "fallo forzando la decision de la zona"}), 500
             return flask.jsonify({"ok": True})
 
         # ---- comandos de la tarjeta de termostato del Dashboard --------
@@ -240,9 +240,9 @@ class ClimatePlugin(Plugin):
             try:
                 fn(runner)
                 zone_store.update_zone_state(zone_id, runner.to_persisted_state())
-            except Exception as exc:
+            except Exception:
                 log.exception("Fallo aplicando comando en zona %s", zone_id)
-                return flask.jsonify({"error": str(exc)}), 500
+                return flask.jsonify({"error": "fallo aplicando el comando en la zona"}), 500
             return flask.jsonify({"ok": True})
 
         @app.post("/api/zones/<zone_id>/set_temperature")

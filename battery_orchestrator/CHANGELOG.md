@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.30.0
+**Tarea "revisar alertas de seguridad del proyecto" — corregidas todas las `py/stack-trace-exposure` que quedaban abiertas.** Mismo patrón ya aplicado antes en `starlink_plugin.py`/`core_backup.py`: el detalle real de la excepción se sigue registrando siempre en el log del add-on (`log.exception`/`log.warning(..., exc_info=True)`), pero la respuesta HTTP al cliente ya no reenvía `str(exc)` tal cual — mensaje fijo y descriptivo en su lugar.
+
+- `climate_plugin.py` (2 sitios: forzar decisión / aplicar comando de zona)
+- `lighting_plugin.py` (2 sitios: mismo par que Climate)
+- `tplink_plugin.py` (1 sitio: escaneo de LAN)
+- `tuya_plugin.py` (3 sitios: vincular cuenta ×2, resolver dispositivo descubierto)
+- `core_shell.py` (3 sitios: instalar plugin, desinstalar plugin, restaurar backup)
+- `ecoflow_login.py` (1 sitio: el mensaje de red de EcoFlow podía incluir la URL/host de destino)
+
+`py/path-injection` en `core_backup.py`: ya estaba corregido de una pasada anterior de esta misma sesión (el `os.path.realpath()` de contención sigue ahí) — la alerta seguía abierta en GitHub solo porque el escaneo de CodeQL de este repo es semanal (`default-setup`, sin workflow propio) y no había vuelto a correr desde el fix; se cerrará sola en el próximo barrido, no hace falta ningún cambio de código adicional.
+
+`py/weak-cryptographic-algorithm` en `tuya/discovery.py`/`tuya/tuya_lan.py`: sin cambios — MD5/AES-ECB son requisito real del protocolo Tuya-por-LAN (no una elección de este proyecto), documentado para marcarlo "won't fix" en GitHub con esa justificación.
+
+Como `core_shell.py` es un fichero núcleo, esta versión SÍ lleva Release en GitHub.
+
 ## 0.29.1
 Sha256 de Energy re-pineado al tag `v0.29.0` (quita el sistema de tokens duplicado) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

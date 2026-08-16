@@ -35,7 +35,7 @@ log = logging.getLogger("tuya_plugin")
 class TuyaPlugin(Plugin):
     slug = "tuya"
     name = "Tuya Orchestrator"
-    version = "0.4.3"
+    version = "0.4.4"
 
     def __init__(self) -> None:
         self._manager = TuyaDeviceManager(on_any_change=self._on_device_change)
@@ -143,10 +143,12 @@ class TuyaPlugin(Plugin):
                     payload.get("region", "eu"), payload.get("access_id", ""), payload.get("access_secret", ""),
                 )
                 api.validate()
-            except (TuyaCloudAuthError, TuyaCloudApiError) as exc:
-                return flask.jsonify({"error": f"credenciales rechazadas por Tuya: {exc}"}), 400
-            except Exception as exc:
-                return flask.jsonify({"error": str(exc)}), 502
+            except (TuyaCloudAuthError, TuyaCloudApiError):
+                log.warning("Tuya: credenciales rechazadas vinculando cuenta", exc_info=True)
+                return flask.jsonify({"error": "credenciales rechazadas por Tuya"}), 400
+            except Exception:
+                log.exception("Tuya: fallo inesperado vinculando cuenta")
+                return flask.jsonify({"error": "fallo vinculando la cuenta"}), 502
             tuya_store.save_account({
                 "region": payload.get("region", "eu"), "access_id": payload.get("access_id", ""),
                 "access_secret": payload.get("access_secret", ""), "uid": payload.get("uid", ""),
@@ -178,8 +180,9 @@ class TuyaPlugin(Plugin):
                 if cloud_device is None or not cloud_device.get("local_key"):
                     return flask.jsonify({"error": "la cuenta vinculada no conoce este dispositivo (¿esta vinculado en Tuya IoT Platform?)"}), 404
                 schema = api.get_device_schema(device_id)
-            except (TuyaCloudAuthError, TuyaCloudApiError) as exc:
-                return flask.jsonify({"error": f"fallo consultando la nube de Tuya: {exc}"}), 502
+            except (TuyaCloudAuthError, TuyaCloudApiError):
+                log.warning("Tuya: fallo consultando la nube para resolver %s", device_id, exc_info=True)
+                return flask.jsonify({"error": "fallo consultando la nube de Tuya"}), 502
 
             profile, warnings = auto_profile.build_profile_from_schema(
                 cloud_device["name"], cloud_device.get("category"), cloud_device.get("product_id"), schema,

@@ -47,7 +47,12 @@ def resolve_user_id(email: str, password: str) -> str:
             timeout=TIMEOUT,
         )
     except requests.RequestException as e:
-        raise EcoFlowLoginError(f"No se pudo contactar con EcoFlow: {e}") from e
+        # El mensaje de EcoFlowLoginError llega tal cual a la respuesta HTTP
+        # (ver main.py:api_ecoflow_login) -- el texto de una RequestException
+        # de verdad puede incluir la URL/host de destino, nunca se reenvia
+        # sin mas. El detalle real se registra aqui, no se pierde.
+        log.warning("EcoFlow: fallo de red contactando con la API", exc_info=True)
+        raise EcoFlowLoginError("No se pudo contactar con EcoFlow") from e
 
     if not r.ok:
         raise EcoFlowLoginError(f"EcoFlow respondió con un error ({r.status_code})")

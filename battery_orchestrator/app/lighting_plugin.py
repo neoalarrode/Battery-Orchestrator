@@ -44,7 +44,7 @@ DEFAULT_REAPPLY_MINUTES = 5
 class LightingPlugin(Plugin):
     slug = "lighting"
     name = "Lighting Orchestrator"
-    version = "0.7.1"
+    version = "0.7.2"
 
     def __init__(self) -> None:
         self._runners: dict[str, ZoneRunner] = {}
@@ -208,9 +208,9 @@ class LightingPlugin(Plugin):
                 mqtt_zone = self._mqtt_zones.get(zone_id)
                 if mqtt_zone:
                     mqtt_zone.publish_state(runner)
-            except Exception as exc:
+            except Exception:
                 log.exception("Fallo forzando decision de zona %s", zone_id)
-                return flask.jsonify({"error": str(exc)}), 500
+                return flask.jsonify({"error": "fallo forzando la decision de la zona"}), 500
             return flask.jsonify({"ok": True, "reason": runner.reason})
 
         # ---- comando manual desde la tarjeta interactiva del Dashboard -
@@ -240,9 +240,9 @@ class LightingPlugin(Plugin):
                 mqtt_zone = self._mqtt_zones.get(zone_id)
                 if mqtt_zone:
                     mqtt_zone.publish_state(runner)
-            except Exception as exc:
+            except Exception:
                 log.exception("Fallo aplicando comando manual en zona %s", zone_id)
-                return flask.jsonify({"error": str(exc)}), 500
+                return flask.jsonify({"error": "fallo aplicando el comando en la zona"}), 500
             return flask.jsonify({"ok": True, "group": runner.group_state()})
 
         @app.get("/api/status")

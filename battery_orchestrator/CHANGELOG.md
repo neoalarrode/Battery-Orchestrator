@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.32.0
+**Corrige las 5 alertas `js/incomplete-sanitization` de CodeQL (climate/lighting/tplink×2/tuya) — bug real, no solo de patrón.** Las tarjetas de zona/dispositivo construyen su botón "Eliminar" como `onclick="deleteX('id', '${...}')"`; el nombre que va dentro pasaba por `esc(...)` (escapa `&<>"'` para HTML) y luego un `.replace(/'/g, "\\'")` que ya no hacía nada (esc() no dejaba ninguna comilla suelta que reemplazar) — pero nunca escapaba la barra invertida. Un nombre terminado en `\` hace que, tras decodificar el HTML, la secuencia `\'` se lea como una comilla ESCAPADA dentro del string JS en vez de su cierre: el string se sigue "comiendo" el resto del atributo hasta la siguiente comilla suelta que encuentre en la página — la vía real para inyectar JS con un nombre de zona/dispositivo bien elegido, no una alerta cosmética.
+
+Nuevo helper `jsAttr()` en las 4 plantillas afectadas: escapa la barra invertida y la comilla para el contexto JS (por ese orden — la barra invertida SIEMPRE antes, o se vuelve a colar el mismo bug), y el resultado pasa por el `esc()` de HTML de siempre antes de embeberlo en el atributo. Sustituidos los 5 sitios marcados por CodeQL.
+
+Como son 4 plugins descargables distintos (Climate/Lighting/TP-Link/Tuya), esta versión SÍ lleva Release en GitHub (re-pin de los 4 en el mismo tag).
+
 ## 0.31.0
 **Corrección real de `py/path-injection` en `core_backup.py` (el fix anterior de esta misma sesión no era suficiente).** El escaneo de CodeQL volvió a marcar la misma alerta contra el commit del re-pin anterior — comprobar a mano `os.path.realpath(path) != os.path.join(real_data_dir, name)` no es un patrón que CodeQL reconozca como una barrera real, aunque sea correcto en la práctica. Cambiado a `werkzeug.utils.safe_join` (ya una dependencia del proyecto — es lo que usa el propio Flask internamente para servir ficheros estáticos sin este mismo bug), el saneador canónico que CodeQL sí reconoce para este patrón exacto. Verificado con una prueba real (traversal `../` y `sneaky/../../`) antes de desplegar: ambos casos se rechazan, el resto del backup se restaura igual. `core_backup.py` es un fichero núcleo horneado en la imagen (no un plugin descargable), así que esta versión SÍ lleva Release en GitHub.
 

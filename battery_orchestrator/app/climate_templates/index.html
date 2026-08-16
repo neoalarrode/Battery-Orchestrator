@@ -276,6 +276,24 @@ function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
 
+// Para un valor que va DENTRO de un atributo onclick="...('${...}')" --
+// cruza dos capas (el HTML lo decodifica primero, luego el navegador
+// ejecuta lo decodificado como JS), y cada capa necesita su propio
+// escapado, en el orden correcto. BUG REAL, marcado por CodeQL
+// (js/incomplete-sanitization): la version anterior solo quitaba las
+// comillas simples SOBRANTES de esc() (que ya no quedaba ninguna, ese
+// paso no hacia nada) y nunca escapaba la barra invertida -- un valor
+// terminado en "\" (una sola barra) hace que el "\'" resultante se lea
+// como una comilla ESCAPADA dentro del string JS, no como su cierre, y
+// el string se sigue "comiendo" el resto del HTML hasta la siguiente
+// comilla suelta que encuentre -- ahi es donde se puede inyectar JS de
+// verdad. Aqui se escapa la barra invertida PRIMERO (para que "\'" del
+// paso siguiente no se pueda formar) y despues la comilla, antes de
+// pasar por el escapado de HTML de siempre.
+function jsAttr(s) {
+  return esc(String(s ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'"));
+}
+
 function actionPillClass(hvacAction, available) {
   if (available === false) return "pill-unavailable";
   return {heating: "pill-heat", cooling: "pill-cool", idle: "pill-idle", off: "pill-off",
@@ -318,7 +336,7 @@ function renderZones(zones) {
         <button class="secondary" onclick="refreshZone('${z.id}')">Forzar decisión</button>
         <button class="ghost" onclick="toggleZoneChart('${z.id}')" id="chart-toggle-${z.id}">Previsión 24h</button>
         <button class="ghost" onclick="editZone('${z.id}')">Editar</button>
-        <button class="danger" onclick="deleteZone('${z.id}', '${esc(cfg.name || z.id).replace(/'/g, "\\'")}')">Eliminar</button>
+        <button class="danger" onclick="deleteZone('${z.id}', '${jsAttr(cfg.name || z.id)}')">Eliminar</button>
       </div>
       <div class="zone-chart-host" id="zone-chart-host-${z.id}">
         <div id="zone-chart-${z.id}"></div>

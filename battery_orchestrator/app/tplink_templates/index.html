@@ -124,6 +124,12 @@ function toast(msg) {
   setTimeout(() => t.classList.remove("show"), 2200);
 }
 function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+// Para un valor que va DENTRO de un atributo onclick="...('${...}')" -- ver
+// el mismo helper y su comentario completo en climate_templates/index.html
+// (BUG REAL, marcado por CodeQL como js/incomplete-sanitization: la barra
+// invertida sin escapar dejaba que un valor terminado en "\" reescribiera
+// donde termina el string JS de verdad).
+function jsAttr(s) { return esc(String(s ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'")); }
 
 let lastDevices = [];
 
@@ -144,7 +150,7 @@ function renderDevices(devices) {
       ${d.config.expose_mqtt ? '<span class="pill pill-mqtt" style="margin-top:8px">expuesto por MQTT</span>' : ''}
       <div class="device-actions">
         <button class="ghost" onclick="editDevice('${d.id}')">Editar</button>
-        <button class="danger" onclick="deleteDevice('${d.id}', '${esc(d.config.name || d.id).replace(/'/g, "\\'")}')">Eliminar</button>
+        <button class="danger" onclick="deleteDevice('${d.id}', '${jsAttr(d.config.name || d.id)}')">Eliminar</button>
       </div>
     </div>`;
   }).join("");
@@ -211,7 +217,7 @@ function renderDiscovered(devices) {
       </div>
       <div class="device-meta">${esc(d.host)}${d.model ? ' · ' + esc(d.model) : ''}</div>
       <div class="device-actions">
-        <button onclick="addFromDiscovered('${esc(d.host)}', '${esc((d.alias || '').replace(/'/g, "\\'"))}')">Añadir</button>
+        <button onclick="addFromDiscovered('${jsAttr(d.host)}', '${jsAttr(d.alias || '')}')">Añadir</button>
       </div>
     </div>`).join("");
 }

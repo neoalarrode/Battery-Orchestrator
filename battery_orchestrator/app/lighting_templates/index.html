@@ -268,6 +268,15 @@ function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
 
+// Para un valor que va DENTRO de un atributo onclick="...('${...}')" -- ver
+// el mismo helper y su comentario completo en climate_templates/index.html
+// (BUG REAL, marcado por CodeQL como js/incomplete-sanitization: la barra
+// invertida sin escapar dejaba que un valor terminado en "\" reescribiera
+// donde termina el string JS de verdad).
+function jsAttr(s) {
+  return esc(String(s ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'"));
+}
+
 function kelvinToRgbCss(k) {
   // Aproximacion visual rapida (Tanner Helland) SOLO para pintar el
   // avatar de la zona -- no se usa para ningun calculo real, eso vive
@@ -310,7 +319,7 @@ function renderZones(zones) {
       <div class="zone-actions">
         <button class="secondary" onclick="refreshZone('${z.id}')">Forzar decisión</button>
         <button class="ghost" onclick="editZone('${z.id}')">Editar</button>
-        <button class="danger" onclick="deleteZone('${z.id}', '${esc(cfg.name || z.id).replace(/'/g, "\\'")}')">Eliminar</button>
+        <button class="danger" onclick="deleteZone('${z.id}', '${jsAttr(cfg.name || z.id)}')">Eliminar</button>
       </div>
     </div>`;
   }).join("");

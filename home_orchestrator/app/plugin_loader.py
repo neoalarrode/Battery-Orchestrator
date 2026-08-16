@@ -100,10 +100,10 @@ PLUGIN_CATALOG = {
     "battery": {
         "name": "Energy Orchestrator",
         "description": "Baterías, solar y cargas diferibles — carga y descarga adaptativa por precio, sol y consumo real",
-        "version": "0.11.82",
+        "version": "0.11.83",
         "downloadable": True,
-        "tag": "v0.34.0",
-        "sha256": "e4e02c325d6d7ba734e5a11a9a822cd72fa839deb82612d4c6f751957f02645b",  # sha256 real del tarball de v0.34.0, verificado contra una descarga real antes de fijarlo aqui (cabecera: Home Orchestrator pasa a marca principal)
+        "tag": "v0.39.0",
+        "sha256": "7a588ad223aa72553c8982a41889de72f256ec6affaabac6fcd464c016e18e13",  # sha256 real del tarball de v0.39.0, verificado contra una descarga real antes de fijarlo aqui (rediseño: estetica de Dishylink)
         "files": [
             "main.py", "battery_plugin.py", "battery_exec.py", "anomaly_store.py",
             "capacity_store.py", "climate_link.py", "deferrable_exec.py",
@@ -117,37 +117,37 @@ PLUGIN_CATALOG = {
     "climate": {
         "name": "Climate Orchestrator",
         "description": "Termostatos adaptativos por zona, expuestos como climate.* nativos de HA (HomeKit/Matter) vía MQTT Discovery",
-        "version": "0.4.5",  # version PROPIA del plugin (ClimatePlugin.version) -- distinta de "tag", que es la version del REPO de la que se descarga
+        "version": "0.4.6",  # version PROPIA del plugin (ClimatePlugin.version) -- distinta de "tag", que es la version del REPO de la que se descarga
         "downloadable": True,
-        "tag": "v0.34.0",
-        "sha256": "e4e02c325d6d7ba734e5a11a9a822cd72fa839deb82612d4c6f751957f02645b",  # sha256 real del tarball de v0.34.0, verificado contra una descarga real antes de fijarlo aqui (cabecera: Home Orchestrator pasa a marca principal)
+        "tag": "v0.39.0",
+        "sha256": "7a588ad223aa72553c8982a41889de72f256ec6affaabac6fcd464c016e18e13",  # sha256 real del tarball de v0.39.0, verificado contra una descarga real antes de fijarlo aqui (rediseño: estetica de Dishylink)
         "files": ["climate_plugin.py", "climate", "climate_templates"],
     },
     "tuya": {
         "name": "Tuya Orchestrator",
         "description": "Puente de ingesta para dispositivos Tuya-por-LAN — consumo interno por Climate y/o exposición opcional a HA por MQTT",
-        "version": "0.4.6",
+        "version": "0.4.7",
         "downloadable": True,
-        "tag": "v0.34.0",
-        "sha256": "e4e02c325d6d7ba734e5a11a9a822cd72fa839deb82612d4c6f751957f02645b",  # sha256 real del tarball de v0.34.0, verificado contra una descarga real antes de fijarlo aqui (cabecera: Home Orchestrator pasa a marca principal)
+        "tag": "v0.39.0",
+        "sha256": "7a588ad223aa72553c8982a41889de72f256ec6affaabac6fcd464c016e18e13",  # sha256 real del tarball de v0.39.0, verificado contra una descarga real antes de fijarlo aqui (rediseño: estetica de Dishylink)
         "files": ["tuya_plugin.py", "tuya", "tuya_templates"],
     },
     "lighting": {
         "name": "Lighting Orchestrator",
         "description": "Iluminación adaptativa por zona — color y brillo por hora, encendido/apagado por presencia y reglas condicionales (p.ej. TV encendida -> luces laterales en vez del techo)",
-        "version": "0.7.7",
+        "version": "0.7.8",
         "downloadable": True,
-        "tag": "v0.37.0",
-        "sha256": "a8921e9a727fe0ce8db303f41203bf235196850bdd2838bce7520dfb00b8e985",  # sha256 real del tarball de v0.37.0, verificado contra una descarga real antes de fijarlo aqui (corrige parpadeo real del sensor de lux)
+        "tag": "v0.39.0",
+        "sha256": "7a588ad223aa72553c8982a41889de72f256ec6affaabac6fcd464c016e18e13",  # sha256 real del tarball de v0.39.0, verificado contra una descarga real antes de fijarlo aqui (rediseño: estetica de Dishylink)
         "files": ["lighting_plugin.py", "lighting", "lighting_templates"],
     },
     "tplink": {
         "name": "TP-Link Orchestrator",
         "description": "Puente de ingesta para dispositivos TP-Link (Kasa/Tapo) vía python-kasa (misma librería que usa Home Assistant) — consumo interno por Lighting y/o exposición opcional a HA por MQTT",
-        "version": "0.1.12",
+        "version": "0.1.13",
         "downloadable": True,
-        "tag": "v0.38.0",
-        "sha256": "2484c5d89b6c876a7181078f377a51a648dc1dc076e9ee17e467459217fd26b2",  # sha256 real del tarball de v0.38.0, verificado contra una descarga real antes de fijarlo aqui (corrige KeyError 'color_temp' real en produccion)
+        "tag": "v0.39.0",
+        "sha256": "7a588ad223aa72553c8982a41889de72f256ec6affaabac6fcd464c016e18e13",  # sha256 real del tarball de v0.39.0, verificado contra una descarga real antes de fijarlo aqui (rediseño: estetica de Dishylink)
         "files": ["tplink_plugin.py", "tplink", "tplink_templates", "tplink_store.py"],
     },
     "starlink": {

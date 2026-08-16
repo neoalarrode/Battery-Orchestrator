@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.39.1
+Energy/Climate/Tuya/Lighting/TP-Link re-pineados al tag `v0.39.0` (rediseño con la estética de Dishylink) — Starlink NO se toca. Verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
 ## 0.39.0
 **Rediseño real: se aplica la estética de Dishylink (el plugin Starlink) al resto de Home Orchestrator.** A petición expresa del usuario, tras conectar Claude a su navegador para revisar Starlink en producción: *"aplica la misma estética de Dishylink a todo"*. Los tokens de abajo se sacaron DIRECTAMENTE del Dishylink real en producción (`getComputedStyle` contra el DOM real, no adivinados): fondo negro puro, tarjetas sólidas sin desenfoque, texto en 3 niveles de gris, un único acento ámbar, tipografía Barlow + IBM Plex Mono.
 

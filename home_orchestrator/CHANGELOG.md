@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.50.1
+Energy re-pineado al tag `v0.50.0` (cuota de reparto en autoconsumo compartido) — resto sin cambios. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
+
 ## 0.50.0
 Cuota de reparto en instalaciones de autoconsumo COMPARTIDO, a petición expresa del usuario. En ese tipo de instalación (varios suministros repartiéndose la misma generación), el sensor de un panel/string puede estar midiendo la instalación COMPLETA compartida, no solo lo que corresponde a esta vivienda — y, a diferencia de una instalación propia, el excedente no suele netearse solo en el propio contador: el contador ve el consumo bruto como si viniera entero de red.
 

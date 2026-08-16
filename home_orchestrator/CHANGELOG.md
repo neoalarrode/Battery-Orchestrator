@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.47.1
+Shelly re-pineado al tag `v0.47.0` (fix del escaneo) — resto sin cambios. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
+
 ## 0.47.0
 BUG REAL, reportado por el usuario: el escaneo de Shelly encontraba 0 dispositivos con 4 Shelly reales en la LAN. `ShellyDeviceManager.discover()` calculaba la subred a barrer con `socket.gethostbyname(socket.gethostname())` -- bajo Supervisor de Home Assistant eso NO devuelve la IP de la LAN real, devuelve la IP del contenedor en la red INTERNA de gestión de Supervisor (`172.30.32.x`, para Ingress/comunicación Supervisor↔addon), que sigue existiendo aunque `host_network: true` esté activo para el tráfico normal -- el barrido se hacía contra la subred equivocada, nunca podía encontrar nada en la LAN de verdad (verificado contra el contenedor real: `gethostbyname` devolvía `172.30.32.1`).
 

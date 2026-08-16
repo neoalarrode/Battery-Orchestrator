@@ -184,10 +184,10 @@ PLUGIN_CATALOG = {
     "shelly": {
         "name": "Shelly Orchestrator",
         "description": "Puente de ingesta para dispositivos Shelly — API local del propio fabricante (Gen1 HTTP / Gen2+ RPC), sin cuenta ni nube — consumo interno por Lighting y/o exposición opcional a HA por MQTT",
-        "version": "0.1.0",
+        "version": "0.1.1",
         "downloadable": True,
-        "tag": "v0.46.0",
-        "sha256": "a27c33deae1236f67549e1510dc47d3cc1114e67f39a0e0aada93758f0f13d76",  # sha256 real del tarball de v0.46.0, verificado contra una descarga real antes de fijarlo aqui (primera version del plugin)
+        "tag": "v0.47.0",
+        "sha256": "0b8342e432cdadfdf989939aa8dd4a257c5bd2d3c8d71dfe89e3fce32dc6a3c0",  # sha256 real del tarball de v0.47.0, verificado contra una descarga real antes de fijarlo aqui (fix real: escaneo barria la subred equivocada de Supervisor)
         "files": ["shelly_plugin.py", "shelly", "shelly_templates", "shelly_store.py"],
     },
 }

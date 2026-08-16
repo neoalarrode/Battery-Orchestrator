@@ -141,11 +141,31 @@ class ShellyDeviceManager:
         `aioshelly` usa `zeroconf`), y añadir esa dependencia solo para
         esto no compensaba. Sondear las ~254 IPs de la /24 en paralelo
         con un timeout corto es mas lento que un multicast, pero real --
-        ningun resultado inventado, solo lo que responde de verdad."""
+        ningun resultado inventado, solo lo que responde de verdad.
+
+        BUG REAL, confirmado en produccion (0 dispositivos encontrados
+        pese a tener 4 Shelly reales en la LAN): `gethostbyname(gethostname())`
+        NO devuelve la IP de la LAN real bajo Supervisor de HA -- devuelve
+        la IP del contenedor en la red INTERNA de gestion de Supervisor
+        (`172.30.32.x`, para la comunicacion Supervisor<->addon/Ingress),
+        que sigue existiendo aunque `host_network: true` este activo para
+        el trafico normal. El barrido se hacia contra la subred
+        EQUIVOCADA -- nunca podia encontrar nada en la LAN de verdad
+        (192.168.x.x). El truco real para sacar la IP de la interfaz de
+        SALIDA de verdad: abrir un socket UDP y "conectarlo" a cualquier
+        IP externa (con UDP no se manda ningun paquete real, solo hace
+        que el kernel elija la interfaz/IP de salida correcta) y leer
+        `getsockname()` -- verificado contra el host real: devuelve
+        192.168.1.93, la IP de la LAN, no la de gestion de Supervisor."""
         try:
-            local_ip = socket_module.gethostbyname(socket_module.gethostname())
+            probe_sock = socket_module.socket(socket_module.AF_INET, socket_module.SOCK_DGRAM)
+            try:
+                probe_sock.connect(("192.0.2.1", 80))  # 192.0.2.0/24 (TEST-NET-1, RFC 5737) -- nunca se manda nada de verdad
+                local_ip = probe_sock.getsockname()[0]
+            finally:
+                probe_sock.close()
         except OSError:
-            log.warning("Shelly: no se pudo resolver la IP propia del contenedor -- sin escaneo posible")
+            log.warning("Shelly: no se pudo determinar la IP de la LAN real -- sin escaneo posible")
             return []
         network = ipaddress.ip_network(f"{local_ip}/24", strict=False)
         hosts = [str(h) for h in network.hosts()]

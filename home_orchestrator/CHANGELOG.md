@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.47.0
+BUG REAL, reportado por el usuario: el escaneo de Shelly encontraba 0 dispositivos con 4 Shelly reales en la LAN. `ShellyDeviceManager.discover()` calculaba la subred a barrer con `socket.gethostbyname(socket.gethostname())` -- bajo Supervisor de Home Assistant eso NO devuelve la IP de la LAN real, devuelve la IP del contenedor en la red INTERNA de gestión de Supervisor (`172.30.32.x`, para Ingress/comunicación Supervisor↔addon), que sigue existiendo aunque `host_network: true` esté activo para el tráfico normal -- el barrido se hacía contra la subred equivocada, nunca podía encontrar nada en la LAN de verdad (verificado contra el contenedor real: `gethostbyname` devolvía `172.30.32.1`).
+
+- `shelly/device_manager.py`: `discover()` calcula la IP de la interfaz de salida real con el truco estándar de "conectar" un socket UDP a una IP externa (con UDP no se manda ningún paquete de verdad, solo hace que el kernel elija la interfaz correcta) y leer `getsockname()` -- verificado contra el host real: devuelve `192.168.1.93`, la IP de la LAN, no la de gestión de Supervisor.
+
 ## 0.46.3
 Govee re-pineado al tag `v0.46.2` (hotfix del crash-loop) — resto sin cambios. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
 

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.52.1
+Energy re-pineado al tag `v0.52.0` (sensores instantáneos de potencia importada/vertida) — resto sin cambios. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
+
 ## 0.52.0
 Contrapartida instantánea (W) de los sensores de energía importada/vertida, a petición expresa del usuario — mismo patrón que ya existía para solar (`sensor.battery_orchestrator_solar_power` junto a `..._solar_energy`), que grid import/export no tenía todavía.
 

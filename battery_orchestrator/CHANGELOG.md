@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.30.1
+Sha256 de Energy, Climate, Tuya, Lighting y TP-Link re-pineados al tag `v0.30.0` (fix de `py/stack-trace-exposure`) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
 ## 0.30.0
 **Tarea "revisar alertas de seguridad del proyecto" — corregidas todas las `py/stack-trace-exposure` que quedaban abiertas.** Mismo patrón ya aplicado antes en `starlink_plugin.py`/`core_backup.py`: el detalle real de la excepción se sigue registrando siempre en el log del add-on (`log.exception`/`log.warning(..., exc_info=True)`), pero la respuesta HTTP al cliente ya no reenvía `str(exc)` tal cual — mensaje fijo y descriptivo en su lugar.
 

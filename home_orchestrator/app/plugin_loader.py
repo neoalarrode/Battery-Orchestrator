@@ -117,10 +117,10 @@ PLUGIN_CATALOG = {
     "climate": {
         "name": "Climate Orchestrator",
         "description": "Termostatos adaptativos por zona, expuestos como climate.* nativos de HA (HomeKit/Matter) vía MQTT Discovery",
-        "version": "0.4.8",  # version PROPIA del plugin (ClimatePlugin.version) -- distinta de "tag", que es la version del REPO de la que se descarga
+        "version": "0.4.9",  # version PROPIA del plugin (ClimatePlugin.version) -- distinta de "tag", que es la version del REPO de la que se descarga
         "downloadable": True,
-        "tag": "v0.42.0",
-        "sha256": "1b5c8e10991acda5d2b13c086b1934956464139d23a11b6c0a6741e9f0902c96",  # sha256 real del tarball de v0.42.0, verificado contra una descarga real antes de fijarlo aqui (correccion de tipografia: Barlow en vez de mono)
+        "tag": "v0.44.0",
+        "sha256": "5d73ed53661c95ba2221bbfab91638707b6a652c453017c51df71ff9d9c31292",  # sha256 real del tarball de v0.44.0, verificado contra una descarga real antes de fijarlo aqui (rediseño de tarjetas de zona)
         "files": ["climate_plugin.py", "climate", "climate_templates"],
     },
     "tuya": {
@@ -135,10 +135,10 @@ PLUGIN_CATALOG = {
     "lighting": {
         "name": "Lighting Orchestrator",
         "description": "Iluminación adaptativa por zona — color y brillo por hora, encendido/apagado por presencia y reglas condicionales (p.ej. TV encendida -> luces laterales en vez del techo)",
-        "version": "0.7.10",
+        "version": "0.7.11",
         "downloadable": True,
-        "tag": "v0.42.0",
-        "sha256": "1b5c8e10991acda5d2b13c086b1934956464139d23a11b6c0a6741e9f0902c96",  # sha256 real del tarball de v0.42.0, verificado contra una descarga real antes de fijarlo aqui (correccion de tipografia: Barlow en vez de mono)
+        "tag": "v0.44.0",
+        "sha256": "5d73ed53661c95ba2221bbfab91638707b6a652c453017c51df71ff9d9c31292",  # sha256 real del tarball de v0.44.0, verificado contra una descarga real antes de fijarlo aqui (rediseño de tarjetas de zona)
         "files": ["lighting_plugin.py", "lighting", "lighting_templates"],
     },
     "tplink": {

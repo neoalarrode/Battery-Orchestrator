@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.44.1
+Climate/Lighting re-pineados al tag `v0.44.0` (rediseño de tarjetas de zona) — Energy/Tuya/TP-Link/Starlink sin cambios. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
+
 ## 0.44.0
 Rediseño de las tarjetas de zona de Climate y Lighting, a peticion expresa del usuario ("rediseñe los widgets estos de Climate como de iluminación no me parece que sigan la estética moderna ni funcional") -- v0.40-v0.43 ya habian igualado tokens/tipografia/densidad del CHROME (cabecera, tarjetas de metrica), pero las tarjetas de zona en si seguian siendo la vieja identidad "panel de configuracion" (multiples pastillas apiladas, `<select>` nativos, caja tintada de ambar, 3-4 botones de texto por tarjeta).
 

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.26.1
+Sha256 de Starlink re-pineado al tag `v0.26.0` (mapa de satélites corregido, escritura real de config del router) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
 ## 0.26.0
 **Starlink: mapa de satélites corregido + escritura real de configuración del router, con avisos claros.** Dos peticiones expresas del usuario:
 

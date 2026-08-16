@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.46.2 -- HOTFIX (crash-loop en produccion)
+Instalar Govee dejaba el addon ENTERO (Energy/Climate/Lighting/Tuya/TP-Link, no solo Govee) en un bucle de reinicio infinito, confirmado en produccion: `GoveeDeviceManager.start()` fallaba con `OSError: Address already in use` al enlazar el puerto UDP 4002 (fijo, del propio protocolo -- otro proceso del host ya lo tenia tomado, `host_network: true` hace que esto compita por puertos con TODO el host, no solo con este addon) y esa excepcion, sin atrapar, tiraba abajo el proceso completo desde `core_app.py: main()`.
+
+- `core_app.py`: el bucle que arranca los hilos de fondo de cada plugin ahora atrapa cualquier excepcion POR PLUGIN -- mismo criterio de resiliencia que `plugin_loader.load_all_plugins()` ya aplicaba a la CARGA de un plugin ("se omite, el resto del nucleo sigue arrancando"), que faltaba aplicar tambien al ARRANQUE de sus hilos. Protege contra que CUALQUIER plugin futuro con el mismo tipo de fallo (puerto ocupado, credencial invalida, lo que sea) tire abajo a los demas.
+- `govee_plugin.py`: ademas, atrapa el `OSError` especificamente en el propio plugin -- el resto de Govee (API de dispositivos, MQTT) sigue funcionando con normalidad si el listener LAN no pudo arrancar, en vez de dejar el plugin entero en un estado a medias.
+
 ## 0.46.1
 Govee y Shelly re-pineados al tag `v0.46.0` (primera version de ambos) — resto de plugins sin cambios. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
 

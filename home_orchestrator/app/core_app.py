@@ -95,8 +95,28 @@ def main() -> None:
     # nucleo y el montaje de plugins ya estan completos elimina la
     # ventana de carrera por completo -- ninguna peticion puede llegar a
     # nada antes de que el app este totalmente armado.
+    # BUG REAL, confirmado en produccion (crash-loop ENTERO del addon):
+    # sin este try/except, un fallo en el arranque de hilos de fondo de
+    # UN SOLO plugin (visto tal cual: `GoveeDeviceManager.start()` con
+    # `OSError: [Errno 98] Address in use` al enlazar el puerto UDP 4002
+    # -- otro proceso del host ya lo tenia tomado) tira el proceso ENTERO
+    # abajo, con el, Energy/Climate/Lighting y el resto de plugins que sí
+    # habian arrancado bien un instante antes -- un bucle de reinicio
+    # infinito que nunca se recupera solo (el puerto sigue ocupado en el
+    # siguiente intento). Mismo criterio de resiliencia que
+    # `plugin_loader.load_all_plugins()` ya aplica a la CARGA de un
+    # plugin ("se omite, el resto del nucleo sigue arrancando") --
+    # faltaba aplicarlo tambien al ARRANQUE de sus hilos de fondo.
     for p in plugins:
-        p.start_background_threads()
+        try:
+            p.start_background_threads()
+        except Exception:
+            log.exception(
+                "Plugin '%s' fallo arrancando sus hilos de fondo -- se omite, el resto "
+                "del nucleo sigue arrancando. Puede quedarse sin funcionar hasta que se "
+                "resuelva la causa (revisar los logs de arriba).",
+                p.slug,
+            )
 
     run_simple("0.0.0.0", 8099, root_app, threaded=True)
 

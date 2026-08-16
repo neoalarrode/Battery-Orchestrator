@@ -132,7 +132,26 @@ class GoveePlugin(Plugin):
     # ------------------------------------------------------------- arranque
 
     def start_background_threads(self) -> None:
-        self._manager.start()
+        # BUG REAL, confirmado en produccion (crash-loop entero del addon,
+        # ver core_app.py): el puerto UDP 4002 (fijo, del propio protocolo
+        # LAN de Govee -- ver device_manager.py) puede estar ya tomado por
+        # OTRO proceso del host (`host_network: true` en config.yaml, asi
+        # que esto compite por puertos con TODO el host, no solo con este
+        # addon). Un `OSError` aqui ya no tira el proceso ENTERO abajo
+        # (core_app.py tambien lo protege de forma generica, por si otro
+        # plugin futuro falla igual), pero se atrapa TAMBIEN aqui para que
+        # el resto de este plugin (la API de dispositivos, MQTT) siga
+        # funcionando con normalidad -- solo el listener LAN de Govee se
+        # queda sin arrancar, `connected()` ya reporta False con
+        # normalidad para cualquier dispositivo mientras tanto.
+        try:
+            self._manager.start()
+        except OSError:
+            log.exception(
+                "Govee: fallo arrancando el listener UDP (puerto %d) -- revisa si otro "
+                "proceso del host ya lo tiene tomado. Las bombillas se quedaran sin "
+                "conexion hasta que se resuelva.", 4002,
+            )
         self._mqtt.connect()
         devices = govee_store.load_devices()
         for device in devices:

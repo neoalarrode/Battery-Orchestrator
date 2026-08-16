@@ -8,10 +8,16 @@
      "brand-mark" de la cabecera) — sin depender de servir un archivo aparte. -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%3E%3Cdefs%3E%3ClinearGradient%20id%3D%27g%27%20x1%3D%270%27%20y1%3D%270%27%20x2%3D%2724%27%20y2%3D%2724%27%20gradientUnits%3D%27userSpaceOnUse%27%3E%3Cstop%20offset%3D%270%27%20stop-color%3D%27%238b5cf6%27%2F%3E%3Cstop%20offset%3D%271%27%20stop-color%3D%27%2322d3ee%27%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%2724%27%20height%3D%2724%27%20rx%3D%276%27%20fill%3D%27url%28%23g%29%27%2F%3E%3Cpath%20d%3D%27M13%202%204%2014h6l-1%208%209-12h-6l1-8Z%27%20fill%3D%27%230b0a16%27%2F%3E%3C%2Fsvg%3E">
 <!-- Sistema de diseño compartido (ver app/core_static/design-system.css).
-     Enlazado de forma aditiva: esta pagina es la mas grande y antigua del
-     proyecto y todavia mantiene su propio <style> completo (dedup pendiente,
-     fuera del alcance de esta pasada) -- pero los tokens/componentes
-     compartidos quedan disponibles para cuando se aborde. -->
+     Dedup real (tarea "verificar que todas las pestañas siguen la misma
+     estetica"): esta pagina mantenia su PROPIA copia completa de los
+     4 bloques de tokens (:root base, @media light, [data-theme=light],
+     [data-theme=dark]) ademas de enlazar el fichero compartido -- byte a
+     byte identica a la de design-system.css, verificado antes de quitarla.
+     Sin drift alguno hoy, pero un cambio futuro al sistema compartido no
+     se habria notado aqui -- exactamente el riesgo que esta tarea pide
+     comprobar. El resto del <style> (layout propio de Energy: grafica,
+     tarjetas de estadisticas, pestañas...) se queda, solo se quitan los
+     tokens que ya provee el fichero compartido. -->
 <link rel="stylesheet" href="shared/design-system.css">
 <style>
   /*
@@ -22,58 +28,10 @@
     violeta, a proposito. Superficies en Liquid Glass: desenfoque real
     (backdrop-filter) sobre las manchas de color ambiente de `body::before`
     — sin esas manchas detras, el desenfoque no se nota en nada (ver
-    --glass-* mas abajo, y `.card`/`.stat-tile`/etc que lo usan).
+    --glass-* mas abajo, y `.card`/`.stat-tile`/etc que lo usan). Tokens
+    (--bg/--accent/--glass-*/--font-*...) definidos en design-system.css,
+    enlazado arriba -- ya no se redeclaran aqui, ver comentario del <link>.
   */
-  :root {
-    color-scheme: dark light;
-    --bg: #0b0a16; --bg-alt: #131226; --card: #14132a; --text: #eae8f7; --muted: #8b87ab;
-    --border: #2a2850; --accent: #8b5cf6; --accent-2: #22d3ee; --accent-soft: #8b5cf626; --accent-ink: #0b0a16;
-    --glow: 0 0 0 1px #8b5cf64d, 0 0 24px -6px #8b5cf673;
-    --green: #34d399; --amber: #fbbf24; --red: #fb7185;
-    --green-soft: #34d39920; --amber-soft: #fbbf2420; --red-soft: #fb718520;
-    --radius: 12px; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 28px -8px rgba(139,92,246,.18);
-    --glass-bg: rgba(20, 19, 42, .48); --glass-bg-strong: rgba(20, 19, 42, .7);
-    --glass-border: rgba(255, 255, 255, .1); --glass-sheen: rgba(255, 255, 255, .08);
-    --glass-blur: blur(22px) saturate(170%); --glass-blur-soft: blur(14px) saturate(150%);
-    --font-display: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-    --font-body: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-    --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
-  }
-  @media (prefers-color-scheme: light) {
-    :root {
-      --bg:#f2f1fa; --bg-alt:#e7e5f6; --card:#ffffff; --text:#1c1a2e; --muted:#68648c;
-      --border:#dcd9f2; --accent:#7c3aed; --accent-2:#0891b2; --accent-soft:#7c3aed15; --accent-ink:#ffffff;
-      --glow: 0 0 0 1px #7c3aed33, 0 0 20px -8px #7c3aed4d;
-      --green:#159a67; --amber:#b3790a; --red:#e0475f;
-      --green-soft:#159a6715; --amber-soft:#b3790a15; --red-soft:#e0475f15;
-      --shadow: 0 1px 2px rgba(28,26,46,.05), 0 8px 24px -10px rgba(124,58,237,.15);
-      --glass-bg: rgba(255, 255, 255, .52); --glass-bg-strong: rgba(255, 255, 255, .8);
-      --glass-border: rgba(255, 255, 255, .75); --glass-sheen: rgba(255, 255, 255, .9);
-      --glass-blur: blur(20px) saturate(180%); --glass-blur-soft: blur(12px) saturate(160%);
-    }
-  }
-  :root[data-theme="light"] {
-    --bg:#f2f1fa; --bg-alt:#e7e5f6; --card:#ffffff; --text:#1c1a2e; --muted:#68648c;
-    --border:#dcd9f2; --accent:#7c3aed; --accent-2:#0891b2; --accent-soft:#7c3aed15; --accent-ink:#ffffff;
-    --glow: 0 0 0 1px #7c3aed33, 0 0 20px -8px #7c3aed4d;
-    --green:#159a67; --amber:#b3790a; --red:#e0475f;
-    --green-soft:#159a6715; --amber-soft:#b3790a15; --red-soft:#e0475f15;
-    --shadow: 0 1px 2px rgba(28,26,46,.05), 0 8px 24px -10px rgba(124,58,237,.15);
-    --glass-bg: rgba(255, 255, 255, .52); --glass-bg-strong: rgba(255, 255, 255, .8);
-    --glass-border: rgba(255, 255, 255, .75); --glass-sheen: rgba(255, 255, 255, .9);
-    --glass-blur: blur(20px) saturate(180%); --glass-blur-soft: blur(12px) saturate(160%);
-  }
-  :root[data-theme="dark"] {
-    --bg: #0b0a16; --bg-alt: #131226; --card: #14132a; --text: #eae8f7; --muted: #8b87ab;
-    --border: #2a2850; --accent: #8b5cf6; --accent-2: #22d3ee; --accent-soft: #8b5cf626; --accent-ink: #0b0a16;
-    --glow: 0 0 0 1px #8b5cf64d, 0 0 24px -6px #8b5cf673;
-    --green: #34d399; --amber: #fbbf24; --red: #fb7185;
-    --green-soft: #34d39920; --amber-soft: #fbbf2420; --red-soft: #fb718520;
-    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 28px -8px rgba(139,92,246,.18);
-    --glass-bg: rgba(20, 19, 42, .48); --glass-bg-strong: rgba(20, 19, 42, .7);
-    --glass-border: rgba(255, 255, 255, .1); --glass-sheen: rgba(255, 255, 255, .08);
-    --glass-blur: blur(22px) saturate(170%); --glass-blur-soft: blur(14px) saturate(150%);
-  }
 
   * { box-sizing: border-box; }
   html, body { overflow-x: hidden; }

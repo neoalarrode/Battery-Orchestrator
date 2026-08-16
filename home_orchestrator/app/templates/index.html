@@ -573,6 +573,10 @@
       <option value="hybrid" data-i18n="opt_hybrid">Conectado directo a una batería con inversor integrado — se autoconsume solo</option>
     </select>
     <p class="help" id="pv-install-type-help"></p>
+
+    <label data-i18n="label_share_pct">Cuota de reparto (%, autoconsumo compartido)</label>
+    <input id="pv-share-pct" type="number" min="1" max="100" step="1" value="100">
+    <p class="help" data-i18n="help_share_pct">Déjalo en 100 si es una instalación tuya de verdad. En una instalación de autoconsumo COMPARTIDO (varios suministros repartiéndose la misma generación), pon tu cuota real — el sensor de este panel suele medir la instalación completa, no solo tu parte, y ese tipo de instalación no suele restarse sola en tu propio contador: la app resta tu cuota real del consumo en vivo para calcular lo que de verdad se importa o se vierte.</p>
     <p class="help" id="pv-form-error" style="display:none"></p>
     <div class="actions">
       <button onclick="addPvArray()" id="pv-form-submit-btn" data-i18n="btn_add_panel">Añadir panel</button>
@@ -934,6 +938,8 @@ es: {
   label_install_type: "Tipo de instalación de este panel/string",
   opt_ac_coupled: "Instalación de autoconsumo (AC) — necesita orden de carga por AC",
   opt_hybrid: "Conectado directo a una batería con inversor integrado — se autoconsume solo",
+  label_share_pct: "Cuota de reparto (%, autoconsumo compartido)",
+  help_share_pct: "Déjalo en 100 si es una instalación tuya de verdad. En una instalación de autoconsumo COMPARTIDO (varios suministros repartiéndose la misma generación), pon tu cuota real — el sensor de este panel suele medir la instalación completa, no solo tu parte, y ese tipo de instalación no suele restarse sola en tu propio contador: la app resta tu cuota real del consumo en vivo para calcular lo que de verdad se importa o se vierte.",
   install_help_ac: "Este panel/string es parte de una instalación de autoconsumo aparte — para aprovechar su excedente, la app tiene que activar el modo carga de la batería y fijar la potencia por AC.",
   install_help_hybrid: "Este panel/string está conectado directamente a una batería con inversor integrado. No hace falta que la app active ningún modo de carga para aprovechar su excedente — la batería ya lo absorbe sola al regular su propia salida. La app descuenta automáticamente esta potencia de lo que manda pedir por AC al resto.",
   btn_add_panel: "Añadir panel", btn_save_panel_changes: "Guardar cambios", editing_panel: 'Editando "{name}"',
@@ -1247,6 +1253,8 @@ en: {
   label_install_type: "Installation type for this panel/string",
   opt_ac_coupled: "Self-consumption (AC) installation — needs an AC charge command",
   opt_hybrid: "Directly connected to a battery with an integrated inverter — self-consumes on its own",
+  label_share_pct: "Allocation share (%, shared self-consumption)",
+  help_share_pct: "Leave it at 100 if this is genuinely your own installation. In a SHARED self-consumption installation (several supplies splitting the same generation), enter your real share — this panel's sensor usually measures the whole installation, not just your part, and that kind of installation usually isn't netted out on your own meter: the app subtracts your real share from the live consumption to work out what's actually imported or exported.",
   install_help_ac: "This panel/string is part of a separate self-consumption installation — to make use of its surplus, the app has to turn on the battery's charge mode and set the AC power.",
   install_help_hybrid: "This panel/string is wired directly into a battery with an integrated inverter. The app doesn't need to turn on any charge mode to use its surplus — the battery already absorbs it on its own while regulating its own output. The app automatically subtracts this power from what it requests over AC for the rest.",
   btn_add_panel: "Add panel", btn_save_panel_changes: "Save changes", editing_panel: 'Editing "{name}"',
@@ -2172,6 +2180,7 @@ function resetPvArrayForm() {
   document.getElementById('pv-az').value = '';
   document.getElementById('pv-kwp').value = '';
   document.getElementById('pv-install-type').value = 'ac_coupled';
+  document.getElementById('pv-share-pct').value = '100';
   pendingEcoflowPvBatteryId = null;
   pendingEcoflowPvChannels = [];
   document.getElementById('pv-ecoflow-selected').style.display = 'none';
@@ -2206,6 +2215,7 @@ function editPvArray(id) {
   document.getElementById('pv-kwp').value = a.kwp ?? '';
   document.getElementById('pv-current-sensor').value = a.current_sensor || '';
   document.getElementById('pv-install-type').value = a.installation_type || 'ac_coupled';
+  document.getElementById('pv-share-pct').value = a.self_consumption_share_pct ?? 100;
   const hasEcoflowChannels = !!(a.ecoflow_battery_id && a.ecoflow_pv_channels && a.ecoflow_pv_channels.length);
   // Si el array ya tenia una previsión de Forecast.Solar configurada
   // ademas del vinculo EcoFlow, se recupera el checkbox marcado.
@@ -2249,6 +2259,7 @@ async function addPvArray() {
     kwp: parseFloat(document.getElementById('pv-kwp').value) || 1,
     current_sensor: mode === 'ecoflow_battery' ? null : (document.getElementById('pv-current-sensor').value.trim() || null),
     installation_type: document.getElementById('pv-install-type').value,
+    self_consumption_share_pct: Math.max(1, Math.min(100, parseFloat(document.getElementById('pv-share-pct').value) || 100)),
     ecoflow_battery_id: mode === 'ecoflow_battery' ? pendingEcoflowPvBatteryId : null,
     ecoflow_pv_channels: mode === 'ecoflow_battery' ? pendingEcoflowPvChannels : null,
   };

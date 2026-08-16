@@ -843,6 +843,19 @@ def run_cycle():
     # abajo, extraida aqui para poder integrarla en el acumulado (ver
     # grid_energy_store.py) sin llamar a `_live_export_w` dos veces.
     vertido_now_w = _live_export_w(cfg, known_net_grid_w=net_grid_now_w)
+    if vertido_now_w is None:
+        # Sin sensor de vertido dedicado (`export_sensor`/`net_grid_sensor`)
+        # -- caso real en instalaciones de autoconsumo COMPARTIDO (ver
+        # "self_consumption_share_pct" en DEFAULT_PV_ARRAY): no hay ningun
+        # sensor fisico que mida el vertido, porque el excedente ni
+        # siquiera pasa por tu propio contador. Se DERIVA del mismo balance
+        # que ya se usa para el resto del flujo (solar menos lo que se
+        # consume y lo que se carga en bateria DESDE solar): si sale
+        # positivo, es excedente que de verdad se esta vertiendo. Esto NO
+        # es un cero inventado (ver docstring de `_live_export_w`) -- es un
+        # calculo real a partir de datos reales, solo que sin sensor propio
+        # que lo confirme directamente.
+        vertido_now_w = max(0.0, flow_pv_w - flow_load_w - solar_to_batt_w)
     grid_totals = grid_energy_store.accumulate(now, grid_total_w, vertido_now_w)
     try:
         mqtt_grid_energy.publish_state(_mqtt_client, grid_totals["imported_kwh"], grid_totals["exported_kwh"])

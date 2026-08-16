@@ -206,6 +206,17 @@ def get_pv_forecast_total(
         if live_value is not None and horizon_hours > 0:
             series = [live_value] + list(series[1:])
             any_live = True
+        # Cuota de reparto en instalaciones de autoconsumo COMPARTIDO --
+        # ver "self_consumption_share_pct" en DEFAULT_PV_ARRAY. El
+        # sensor/previsión de este array puede estar midiendo la
+        # instalación COMPLETA compartida, no solo lo que corresponde a
+        # esta vivienda -- se escala aquí, UNA vez, antes de sumar al
+        # total: todo lo que viene después (previsión, generación en
+        # vivo, hybrid_now) ya trabaja con la cuota real, sin tener que
+        # tocar ningún otro sitio.
+        share_pct = float(array.get("self_consumption_share_pct", 100.0) or 100.0)
+        if share_pct != 100.0:
+            series = [v * share_pct / 100.0 for v in series]
         for i in range(horizon_hours):
             total[i] += series[i] if i < len(series) else 0.0
         if horizon_hours > 0 and array.get("installation_type") == "hybrid" and series:

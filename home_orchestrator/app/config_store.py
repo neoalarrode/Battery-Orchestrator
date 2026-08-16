@@ -95,6 +95,20 @@ DEFAULT_PV_ARRAY = {
     # "hybrid" (conectado directo a la bateria por definicion).
     "ecoflow_battery_id": "",     # id de la bateria (cfg["batteries"]) de la que cuelgan estos puertos
     "ecoflow_pv_channels": [],    # lista de "1".."4" -- que puerto(s) MPPT de esa bateria
+    # Cuota de reparto en instalaciones de AUTOCONSUMO COMPARTIDO -- a
+    # peticion expresa del usuario. 100 = instalacion propia normal (el
+    # sensor/previsión de este array ya mide solo lo tuyo). En una
+    # instalacion compartida (varios suministros repartiendose la MISMA
+    # generacion), el sensor/previsión de este array puede estar midiendo
+    # la instalacion COMPLETA -- aqui se declara que fraccion es
+    # realmente tuya. Ese tipo de instalacion, ademas, no suele netear
+    # nada FISICAMENTE antes de tu propio contador (a diferencia de un
+    # panel propio de verdad): tu contador ve tu consumo BRUTO como si
+    # viniera entero de red, y es esta app la que resta tu cuota real de
+    # generacion para reconstruir lo que de verdad se importa/vierte --
+    # ver pv_source.get_pv_forecast_total, donde se aplica el escalado
+    # UNA vez, antes de sumar al resto de arrays.
+    "self_consumption_share_pct": 100.0,
 }
 
 DEFAULT_DEFERRABLE_LOAD = {

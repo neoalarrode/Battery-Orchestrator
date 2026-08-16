@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.50.0
+Cuota de reparto en instalaciones de autoconsumo COMPARTIDO, a petición expresa del usuario. En ese tipo de instalación (varios suministros repartiéndose la misma generación), el sensor de un panel/string puede estar midiendo la instalación COMPLETA compartida, no solo lo que corresponde a esta vivienda — y, a diferencia de una instalación propia, el excedente no suele netearse solo en el propio contador: el contador ve el consumo bruto como si viniera entero de red.
+
+- Nuevo campo por array (`self_consumption_share_pct`, 100% por defecto): se aplica en `pv_source.get_pv_forecast_total`, escalando la generación (previsión + lectura en vivo) de ese array ANTES de sumarla al resto — todo lo que viene después (autoconsumo, previsión del planificador, generación en vivo) ya trabaja con la cuota real, sin tocar ningún otro sitio del código.
+- El vertido a red del sensor acumulativo (v0.49.0) ahora también se DERIVA cuando no hay sensor de vertido dedicado (`export_sensor`/`net_grid_sensor`) — el caso real de una instalación compartida, donde ese sensor no suele existir. Se calcula del mismo balance que ya usa el resto del flujo (solar − consumo − carga de batería desde solar): si sale positivo, es excedente real que se está vertiendo, no un cero inventado.
+- El % de autoconsumo del dashboard NO se toca — el usuario confirmó que ya representa correctamente lo que debe representar; el ajuste real estaba en la generación de origen (ahora escalada), no en esa fórmula.
+- El planificador de baterías NO integra el sensor de vertido como entrada — decisión deliberada: ya tiene todo lo que necesita (solar/consumo en vivo y su previsión) para decidir cuándo cargar con excedente; el vertido es el RESULTADO de esa decisión, no un dato que deba influirla (evita un bucle "vertido bajo → no cargar → vertido sigue bajo").
+
 ## 0.49.1
 Energy re-pineado al tag `v0.49.0` (sensores de importación/vertido) — resto sin cambios. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
 

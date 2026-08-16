@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.49.0
+Nuevos sensores acumulativos de energía importada/vertida a red, a petición expresa del usuario. Energy integra, cada ciclo, la potencia de red en vivo que ya calculaba (`grid_total_w`/`vertido_w`) sobre el tiempo real transcurrido desde el último ciclo (nunca un intervalo fijo asumido) y expone el acumulado por MQTT Discovery como dos `sensor.*` de HA con `device_class: energy` y `state_class: total_increasing` — el mismo contrato que un contador nativo, usable directo en el panel de Energía de HA.
+
+- `grid_energy_store.py` (nuevo): persistencia del acumulado, sobrevive a reinicios del addon. Un hueco de más de 2h entre ciclos (addon parado, reloj del sistema saltando) se descarta ENTERO en vez de integrarse, para no inventar energía sobre un intervalo que no se pudo medir de verdad.
+- `mqtt_grid_energy.py` (nuevo): publica `sensor.home_orchestrator_energy_grid_imported` y `..._grid_exported`, siempre que Energy esté instalado (no es opcional por dispositivo, es el único plugin que produce este dato).
+- `energy_flow` (API interna) gana `grid_imported_kwh`/`grid_exported_kwh` junto al resto de campos en vivo.
+- El ajuste del cálculo de autoconsumo (energía de red "no facturable" en instalaciones de autoconsumo compartido) queda pendiente de una aclaración del usuario antes de tocar esa fórmula.
+
 ## 0.48.1
 Climate re-pineado al tag `v0.48.0` (fix del ventilador) — resto sin cambios. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
 

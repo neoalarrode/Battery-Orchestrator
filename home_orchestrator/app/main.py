@@ -23,11 +23,14 @@ import ecoflow_ble
 import ecoflow_cloud
 import ecoflow_login
 import forecast_store
+import grid_energy_store
 import ha_client
+import ha_mqtt
 import ha_statistics
 import ha_websocket
 import history_store
 import lifetime_store
+import mqtt_grid_energy
 import pv_source
 import savings_store
 import scheduler
@@ -72,6 +75,12 @@ def _restrict_wallpanel_port():
 # funcionando igual, como respaldo si el WebSocket se cae.
 _reactive_trigger = ha_websocket.ReactiveTrigger(lambda: _run_cycle_locked())
 _ha_ws_client = ha_websocket.HAWebSocketClient(lambda entity_id, new_state: _reactive_trigger.trigger())
+
+# Publica la energia importada/vertida ACUMULADA (ver grid_energy_store.py
+# / mqtt_grid_energy.py) -- a peticion expresa del usuario. Energy es el
+# UNICO productor de este dato (nunca se lee de otro plugin), asi que la
+# conexion vive aqui mismo, no en un plugin puente aparte.
+_mqtt_client = ha_mqtt.HAMqttClient(client_id="home_orchestrator_energy")
 
 _state_lock = threading.Lock()
 _last_status = {
@@ -830,6 +839,15 @@ def run_cycle():
     autoconsumo_pct = 100.0
     if energy_needed_now_w > 0:
         autoconsumo_pct = max(0.0, min(100.0, 100.0 * (1 - grid_total_w / energy_needed_now_w)))
+    # Vertido a red — misma llamada que el campo homologo del dict de mas
+    # abajo, extraida aqui para poder integrarla en el acumulado (ver
+    # grid_energy_store.py) sin llamar a `_live_export_w` dos veces.
+    vertido_now_w = _live_export_w(cfg, known_net_grid_w=net_grid_now_w)
+    grid_totals = grid_energy_store.accumulate(now, grid_total_w, vertido_now_w)
+    try:
+        mqtt_grid_energy.publish_state(_mqtt_client, grid_totals["imported_kwh"], grid_totals["exported_kwh"])
+    except Exception:
+        log.exception("Fallo publicando energia importada/vertida acumulada por MQTT")
     energy_flow = {
         # TODOS estos en vivo (ver flow_pv_w/flow_load_w/flow_charge_w/
         # flow_discharge_w mas arriba) — antes usaban `now_hp` (la
@@ -851,7 +869,12 @@ def run_cycle():
         # cuenta en `load_w`/`grid_w` ni en el margen de potencia contratada,
         # justo porque el excedente vertido no pasa por esa linea. `None`
         # si no hay sensor de vertido declarado (no un 0 inventado).
-        "vertido_w": (lambda v: round(v) if v is not None else None)(_live_export_w(cfg, known_net_grid_w=net_grid_now_w)),
+        "vertido_w": round(vertido_now_w) if vertido_now_w is not None else None,
+        # Acumulados desde que el addon lleva funcionando (o desde que se
+        # reinicio, ver grid_energy_store.py) -- lo mismo que se publica
+        # por MQTT como sensor.*_grid_imported/_grid_exported.
+        "grid_imported_kwh": round(grid_totals["imported_kwh"], 3),
+        "grid_exported_kwh": round(grid_totals["exported_kwh"], 3),
     }
 
     # Energia (Wh) movida desde el ultimo ciclo, por bateria — potencia
@@ -2108,6 +2131,8 @@ def start_background_threads() -> None:
     threading.Thread(target=_run_wallpanel_server, daemon=True).start()
     threading.Thread(target=_ha_ws_client.run_forever, daemon=True).start()
     threading.Thread(target=_reactive_trigger.worker_loop, daemon=True).start()
+    if _mqtt_client.connect():
+        mqtt_grid_energy.publish_discovery(_mqtt_client)
 
 
 if __name__ == "__main__":

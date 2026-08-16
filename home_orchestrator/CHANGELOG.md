@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.35.0
+**Lighting: nuevo sensor de lux, opcional — enciende/apaga según la luz ambiente real, no solo la presencia.** A petición expresa del usuario. Primer intento (descartado a mitad, el usuario corrigió el enfoque): un "boost" de brillo por encima de la curva solar cuando había poca luz real. Lo que se pedía de verdad era más simple: que la presencia por sí sola no encienda la luz si ya hay suficiente luz natural, y que se apague sola si se hace de día mientras la zona sigue ocupada.
+
+- Dos campos nuevos por zona (ambos opcionales): **Sensor de lux** (`sensor.*` de iluminancia) y **"Luz suficiente a partir de" (lux)**, 300 por defecto.
+- Con presencia, una luz solo se enciende si además el sensor confirma que está oscuro de verdad (por debajo del umbral).
+- Si se hace de día (o entra sol) con la zona ocupada, las luces que la propia zona había encendido se apagan solas — no hace falta esperar a que la habitación se quede vacía.
+- Nunca decide apagar una luz que el usuario encendió a mano estando ya claro, ni bloquea el encendido por un sensor sin configurar o con lectura no fiable (`unavailable`/`unknown`) — en ambos casos se comporta exactamente igual que antes de esta versión.
+- Verificado con pruebas reales de la función de decisión (`lighting/schedule.py:lux_dark_enough`) antes de desplegar.
+
+Documentado en la [wiki de Lighting](https://github.com/neoalarrode/Home-Orchestrator/wiki/Lighting).
+
 ## 0.34.1
 Energy/Climate/Lighting/Tuya/TP-Link re-pineados al tag `v0.34.0` (nueva cabecera) — Starlink NO se toca, no cambió. Verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

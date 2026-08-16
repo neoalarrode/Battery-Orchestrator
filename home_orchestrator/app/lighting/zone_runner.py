@@ -125,6 +125,12 @@ class ZoneRunner:
         cfg = self.zone
         out = {e for e in (cfg.get("presence_entities") or []) if e}
         out |= rules.condition_entities(self._rules)
+        # El sensor de lux (si hay) NO entra aqui a proposito: muchos
+        # sensores de iluminancia reportan cada pocos segundos, y
+        # dispararia un ciclo reactivo entero por cada fluctuacion menor.
+        # El boost de brillo por lux real (ver schedule.py) se recoge
+        # igual en el siguiente reajuste periodico (`reapply_minutes`) o
+        # en el proximo ciclo reactivo que dispare por otra razon.
         return out
 
     def _snapshot_states(self) -> dict[str, dict]:
@@ -372,7 +378,36 @@ class ZoneRunner:
         selected_brightness_only = set(selected.get("brightness_only") or []) if selected else set()
         selected_on_off_only = set(selected.get("on_off_only") or []) if selected else set()
 
-        transitioned = (not was_occupied) or (selected_name != self.active_rule)
+        # Sensor de lux (opcional): con presencia, solo se enciende de
+        # verdad si ademas esta oscuro segun la lectura REAL -- entrar a
+        # una habitacion ya bien iluminada por luz natural no debe
+        # encender nada. Sin sensor declarado (o con lectura no fiable),
+        # `lux_dark_enough` devuelve True siempre: se comporta igual que
+        # antes de esta funcion, el encendido depende solo de la
+        # presencia. "Se acaba de hacer de noche" (dark_enough pasa de
+        # False a True) cuenta como su PROPIA transicion -- si no, alguien
+        # que entra con luz natural y se queda hasta que oscurece nunca
+        # veria encenderse la luz sola, `transitioned` ya llevaria un rato
+        # en False. Nunca decide APAGAR una luz ya encendida, solo si se
+        # enciende una nueva -- ver schedule.lux_dark_enough.
+        dark_enough = schedule.lux_dark_enough(
+            states.get(cfg.get("lux_sensor") or ""), float(cfg.get("target_lux", schedule.DEFAULT_TARGET_LUX)),
+        )
+        # `None` (no `self._state.setdefault`, sin valor por defecto a
+        # ciegas) es "todavia sin una lectura previa de verdad" -- ni
+        # encender ni apagar nada solo porque el sensor se acaba de
+        # configurar o el add-on se acaba de reiniciar. Se necesita un
+        # cambio observado de verdad (oscuro->claro o claro->oscuro entre
+        # dos ciclos), no una comparacion contra un valor inventado.
+        was_dark_enough = self._state.get("lux_dark_enough")
+        just_got_dark_enough = dark_enough and was_dark_enough is False
+        # Simetrico al encendido: si se hace de dia (o entra sol de golpe)
+        # con la zona ocupada y la luz encendida por la propia zona, se
+        # apaga -- sin esperar a que la zona se quede vacia.
+        just_got_bright_enough = (not dark_enough) and was_dark_enough is True
+        self._state["lux_dark_enough"] = dark_enough
+
+        transitioned = (not was_occupied) or (selected_name != self.active_rule) or just_got_dark_enough
         self.active_rule = selected_name
         self._state["active_rule"] = selected_name
 
@@ -381,6 +416,17 @@ class ZoneRunner:
                 if self._is_on(states, entity_id):
                     self._turn_off(entity_id)
 
+        if just_got_bright_enough:
+            # Apaga TODAS las luces de la zona que sigan encendidas, no
+            # solo las de la regla activa -- mismo alcance que el apagado
+            # por "sin presencia" (auto_off), aplicado aqui a "ya hay luz
+            # natural de sobra" en vez de "no queda nadie".
+            for entity_id in all_zone_lights:
+                if self._is_on(states, entity_id):
+                    self._turn_off(entity_id)
+            self.reason = "luz natural suficiente -> apagado"
+            return
+
         values = self.current_values
 
         if selected is None:
@@ -388,13 +434,14 @@ class ZoneRunner:
             return
 
         # `auto_on` solo dispara el ENCENDIDO en la propia transicion
-        # (entrada fresca en la zona, o cambio de regla activa) -- si el
-        # usuario apaga a mano una luz de la regla activa mientras sigue
-        # habiendo presencia, se respeta (no se vuelve a encender sola en
-        # cada ciclo periodico, seria pelearse con quien la acaba de
-        # apagar aposta). Las que ya estan encendidas SI se reajustan
-        # (color/brillo de la curva) salvo que esten marcadas como
-        # tocadas a mano.
+        # (entrada fresca en la zona, cambio de regla activa, o "se acaba
+        # de hacer de noche" -- ver mas arriba) -- si el usuario apaga a
+        # mano una luz de la regla activa mientras sigue habiendo
+        # presencia, se respeta (no se vuelve a encender sola en cada
+        # ciclo periodico, seria pelearse con quien la acaba de apagar
+        # aposta). Las que ya estan encendidas SI se reajustan (color/
+        # brillo de la curva) salvo que esten marcadas como tocadas a
+        # mano.
         auto_on = cfg.get("auto_on", True)
         overrides = self._state.get("manual_override") or {}
         # BUG REAL, confirmado por el usuario: con varias luces en la
@@ -423,7 +470,7 @@ class ZoneRunner:
                     continue
                 if not overrides.get(entity_id):
                     pending.append((entity_id, values, False, only_brightness, None, False))
-            elif auto_on and transitioned:
+            elif auto_on and transitioned and dark_enough:
                 pending.append((entity_id, values, True, only_brightness, None, only_on_off))
         if len(pending) == 1:
             self._apply_values(*pending[0])

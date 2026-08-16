@@ -179,6 +179,17 @@
       </div>
       <div class="grid2">
         <div>
+          <label for="zf-lux-sensor">Sensor de lux (opcional)</label>
+          <input id="zf-lux-sensor" placeholder="sensor.salon_iluminancia">
+        </div>
+        <div>
+          <label for="zf-target-lux">Luz suficiente a partir de (lux)</label>
+          <input id="zf-target-lux" type="number" step="1" min="0" value="300">
+        </div>
+      </div>
+      <p class="help">Con presencia, solo enciende si además está oscuro de verdad según este sensor — y se apaga sola si se hace de día (o entra sol) mientras sigue ocupada. Déjalo vacío para que el encendido dependa solo de la presencia, como hasta ahora.</p>
+      <div class="grid2">
+        <div>
           <label for="zf-off-delay">Margen antes de apagar (segundos)</label>
           <input id="zf-off-delay" type="number" step="1" value="120">
         </div>
@@ -450,6 +461,8 @@ function readZoneForm() {
     occupied_states: csvToList("zf-occupied-states").length ? csvToList("zf-occupied-states") : ["on", "home", "playing", "open"],
     auto_on: document.getElementById("zf-auto-on").checked,
     auto_off: document.getElementById("zf-auto-off").checked,
+    lux_sensor: document.getElementById("zf-lux-sensor").value.trim(),
+    target_lux: parseFloat(document.getElementById("zf-target-lux").value) || 0,
     off_delay_seconds: parseFloat(document.getElementById("zf-off-delay").value) || 0,
     reapply_minutes: parseFloat(document.getElementById("zf-reapply").value) || 5,
     respect_manual_changes: document.getElementById("zf-respect-manual").checked,
@@ -647,6 +660,8 @@ function fillZoneForm(cfg) {
   document.getElementById("zf-occupied-states").value = listToCsv(cfg.occupied_states);
   document.getElementById("zf-auto-on").checked = cfg.auto_on !== false;
   document.getElementById("zf-auto-off").checked = cfg.auto_off !== false;
+  document.getElementById("zf-lux-sensor").value = cfg.lux_sensor || "";
+  document.getElementById("zf-target-lux").value = cfg.target_lux ?? 300;
   document.getElementById("zf-off-delay").value = cfg.off_delay_seconds ?? 120;
   document.getElementById("zf-reapply").value = cfg.reapply_minutes ?? 5;
   document.getElementById("zf-respect-manual").checked = cfg.respect_manual_changes !== false;

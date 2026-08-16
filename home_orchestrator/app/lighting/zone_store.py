@@ -42,6 +42,14 @@ DEFAULT_ZONE_CONFIG = {
     "max_brightness_pct": schedule.DEFAULT_MAX_BRIGHTNESS_PCT,
     "min_color_temp_kelvin": schedule.DEFAULT_MIN_COLOR_TEMP_KELVIN,
     "max_color_temp_kelvin": schedule.DEFAULT_MAX_COLOR_TEMP_KELVIN,
+    # Sensor de luz ambiente REAL (opcional) -- sube el brillo de la curva
+    # solar por encima de lo que le tocaria segun la hora si la luz real
+    # medida esta por debajo del objetivo (dia nublado, persiana bajada,
+    # habitacion interior...). Sin sensor declarado, la curva sigue
+    # dependiendo solo de la posicion del sol, igual que siempre. Ver
+    # lighting/schedule.py:_lux_boosted_brightness_pct.
+    "lux_sensor": "",
+    "target_lux": schedule.DEFAULT_TARGET_LUX,
     # reglas condicionales, primera que coincide gana -- texto declarado
     # por el usuario, ver lighting/rules.py:parse_rules_text.
     "rules_text": "",

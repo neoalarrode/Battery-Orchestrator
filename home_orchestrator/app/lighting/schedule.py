@@ -43,6 +43,7 @@ DEFAULT_MIN_BRIGHTNESS_PCT = 25
 DEFAULT_MAX_BRIGHTNESS_PCT = 100
 DEFAULT_MIN_COLOR_TEMP_KELVIN = 2200
 DEFAULT_MAX_COLOR_TEMP_KELVIN = 5000
+DEFAULT_TARGET_LUX = 300  # nivel tipico de "bien iluminado" para lectura/estar
 
 _EVENT_ATTRS = (
     ("rising", "next_rising"),
@@ -128,3 +129,22 @@ def value_at(cfg: dict, sun_state: dict | None, now: datetime | None = None) -> 
         "color_temp_kelvin": _color_temp_kelvin(position, min_k, max_k),
         "sun_position": round(position, 3),
     }
+
+
+def lux_dark_enough(lux_state: dict | None, target_lux: float) -> bool:
+    """`True` si la luz ambiente REAL medida (sensor de lux de la zona)
+    esta por debajo del objetivo -- o si no hay lectura util (sensor sin
+    declarar, "unavailable"/"unknown", `target_lux` <= 0): sin dato fiable
+    se deja pasar, el encendido por presencia se comporta como si no
+    hubiera sensor de lux en absoluto, nunca se bloquea por un sensor
+    roto. Ver ZoneRunner.decide_and_act, unico sitio que la usa -- solo
+    condiciona si se ENCIENDE una luz al entrar presencia, nunca decide
+    apagar una que ya esta encendida."""
+    if target_lux <= 0:
+        return True
+    lux_value = (lux_state or {}).get("state")
+    try:
+        lux = float(lux_value) if lux_value is not None else None
+    except (TypeError, ValueError):
+        lux = None
+    return True if lux is None else lux < target_lux

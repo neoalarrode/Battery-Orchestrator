@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.48.0
+BUG REAL, reportado por el usuario y confirmado contra hardware real (AC Tuya "AirClima 12000" del Salón): "toda la tarde enfriando muy poco y con el ventilador al mínimo" pese a estar 2.4°C por encima de la consigna (24°C, deadband 0.3). Verificado en producción: `mode_dp="wind"` (fan_only, por la pausa correcta de puerta/ventana abierta — ese mecanismo funciona bien, es reactivo al estado en vivo, sin bug de "enganche") y, más revelador, `fan_dp="mid_low"` incluso en los tramos SIN puerta abierta.
+
+Causa raíz real, en `climate/zone_runner.py`: la variable `urgent` que decide si el ventilador va fuerte o suave solo se ponía a `True` cuando la zona saltaba sus LÍMITES DE SEGURIDAD (`min_temp`/`max_temp`, 15°C/30°C en esta zona — un caso de emergencia) — nunca por estar simplemente lejos de la consigna normal de confort. En la práctica, en un día caluroso corriente "urgent" no se activaba JAMÁS, y el ventilador se quedaba siempre en modo "gentle" sin importar cuánto faltase para llegar a la consigna.
+
+- `URGENT_TEMP_DEVIATION_DEG = 1.0`: `urgent` ahora también se activa cuando la desviación real (temperatura actual vs. consigna ACTIVA del modo que se va a ejecutar) supera 1°C — además del caso de límites de seguridad, que se mantiene.
+- Bug secundario, en `_pick_fan_mode`: con las velocidades del fabricante en orden de más fuerte a más suave (`strong, high, mid_high, mid, mid_low, low, mute, auto`), buscar la PRIMERA que contuviera una palabra clave "gentle" hacía que `mid_low` (contiene "low") ganara por delante del `low`/`mute` de verdad, que aparecen después en la lista — se elegía una velocidad media-baja creyendo que era la más suave disponible. Ahora la búsqueda "gentle" recorre la lista al revés (se queda con la última coincidencia, la más suave real); "urgent" sigue recorriendo hacia delante (ya elegía bien, "strong" es la primera).
+- Confirmado con el usuario: el AC NUNCA decide por su cuenta en modo "auto" del propio aparato — la orden real siempre pasa por esta selección explícita de palabra clave; "auto" del dispositivo solo se usaría como último recurso si ninguna palabra clave encajase con ninguna velocidad (no es el caso de este AC).
+
 ## 0.47.3
 Shelly re-pineado al tag `v0.47.2` (timeout de barrido a 0.8s) — resto sin cambios. Confirmado con el usuario: de los 4 Shelly reales, 1 se encuentra siempre (alimentado); los otros 3 son a batería y solo se conectan a intervalos -- no encontrarlos en un barrido puntual es el comportamiento esperado, no un fallo del escaneo. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
 

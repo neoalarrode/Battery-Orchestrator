@@ -89,6 +89,19 @@ OVERSHOOT_STRIKES_THRESHOLD = 2
 
 FAN_MODE_URGENT_KEYWORDS = ("high", "max", "turbo", "strong", "fast", "boost")
 FAN_MODE_GENTLE_KEYWORDS = ("low", "quiet", "silent", "eco", "min", "sleep")
+# BUG REAL, confirmado en produccion contra hardware real (AC Tuya del
+# Salon, "AirClima 12000"): con el salon a 26.4°C y objetivo 24°C (2.4°C
+# de desviacion, deadband 0.3 -- de sobra "urgente" a ojo), el ventilador
+# se quedaba en "mid_low" toda la tarde. Causa raiz: `urgent` (ver
+# decide_and_act) solo se ponia a True cuando la zona saltaba sus LIMITES
+# DE SEGURIDAD (min_temp/max_temp, un caso de emergencia -- 15°C/30°C en
+# esta zona), nunca por estar simplemente lejos de la consigna normal --
+# en la practica, "urgent" no se activaba JAMAS en un dia caluroso
+# corriente, y el ventilador se quedaba siempre en modo "gentle" sin
+# importar cuanto faltase para llegar. Este umbral (grados de desviacion
+# real respecto a la consigna activa) es el que de verdad decide si hace
+# falta ventilar fuerte -- ver decide_and_act.
+URGENT_TEMP_DEVIATION_DEG = 1.0
 
 _ACTION_MAP = {"heat": "heating", "cool": "cooling", "idle": "idle", "dry": "drying", "fan_only": "fan"}
 _PASSTHROUGH_MODES = {"dry": "dry", "fan_only": "fan_only"}  # hvac_mode -> action, en este puerto ambos son el mismo string
@@ -110,8 +123,20 @@ def _pick_fan_mode(fan_modes: list[str], urgent: bool, manual: str | None) -> st
         return None
     if manual and manual in fan_modes:
         return manual
+    # BUG REAL, confirmado contra hardware real (ver URGENT_TEMP_DEVIATION_DEG
+    # mas arriba): con `fan_modes` en el orden real de fabricante (de mas
+    # fuerte a mas suave -- "strong, high, mid_high, mid, mid_low, low,
+    # mute, auto" en el AC del Salon), recorrer la lista de PRINCIPIO A FIN
+    # y quedarse con el PRIMER match funciona bien para "urgent" (el
+    # primero que coincide con las palabras fuertes YA es el mas fuerte),
+    # pero para "gentle" hacia que "mid_low" (contiene "low") ganara por
+    # delante del "low"/"mute" de VERDAD, que aparecen despues en la
+    # lista -- se estaba eligiendo una velocidad media-baja creyendo que
+    # era la mas suave disponible. Recorrer la lista AL REVES para
+    # "gentle" hace que se quede con el ULTIMO match, el mas suave real.
     keywords = FAN_MODE_URGENT_KEYWORDS if urgent else FAN_MODE_GENTLE_KEYWORDS
-    for mode in fan_modes:
+    ordered = fan_modes if urgent else list(reversed(fan_modes))
+    for mode in ordered:
         if any(k in mode.lower() for k in keywords):
             return mode
     for mode in fan_modes:
@@ -924,7 +949,19 @@ class ZoneRunner:
                 occupancy_now_likely=occupancy_now_likely, occupancy_forecast_likely=occupancy_forecast_likely,
             )
             self.reason = f"{preset_reason} — {decide_reason}"
+            # BUG REAL, confirmado en produccion (ver URGENT_TEMP_DEVIATION_DEG):
+            # "de seguridad de la zona" SOLO aparece en decide_reason cuando
+            # se saltan min_temp/max_temp (un caso de emergencia) -- en el
+            # dia a dia, por lejos que este la zona de su consigna normal
+            # (aqui: 2.4°C por encima, con deadband 0.3), "urgent" nunca se
+            # activaba y el ventilador se quedaba siempre en modo suave. La
+            # desviacion real respecto a la consigna ACTIVA (la del modo que
+            # se va a ejecutar de verdad, no la del otro lado de heat_cool)
+            # es la que de verdad importa aqui.
             urgent = "de seguridad de la zona" in decide_reason
+            active_target = heat_target if action == "heat" else cool_target if action == "cool" else None
+            if not urgent and current_temp is not None and active_target is not None:
+                urgent = abs(current_temp - active_target) >= URGENT_TEMP_DEVIATION_DEG
             if action == "idle" and self.hvac_mode == self._default_hvac_mode(self._last_full_capability):
                 smart_action, smart_reason = self._smart_idle_action(current_temp, heat_target, deadband)
                 if smart_reason:

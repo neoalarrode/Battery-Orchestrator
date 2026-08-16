@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.36.0
+**Corrige bug real del sensor de lux de Lighting (v0.35.0): el apagado por luz suficiente solo reaccionaba al FLANCO oscuro→claro, no al nivel actual.** Confirmado por el usuario en producción: una luz que estaba encendida mientras ya había luz de sobra (por ejemplo, encendida antes de configurar el sensor, o el propio ciclo de arranque) nunca se re-evaluaba y se quedaba encendida indefinidamente — el código solo comprobaba "¿acaba de pasar de oscuro a claro?", nunca "¿está claro AHORA?".
+
+Corregido: "hay luz de sobra" ahora se comprueba **cada ciclo** mientras la zona está ocupada (exactamente el mismo criterio que ya usaba el apagado por "sin presencia") — si el sensor de lux marca más del umbral configurado, cualquier luz de la zona que siga encendida se apaga, sin esperar a un cambio. El encendido sigue disparándose solo en el momento en que hace falta (entrada fresca, cambio de regla, o "se acaba de hacer de noche"), sin re-pelearse con una luz que el usuario apagó a mano — eso no cambia.
+
 ## 0.35.1
 Re-pin de Lighting al tag `v0.35.0` (sensor de lux) en `plugin_loader.py` — y de paso corregido el campo `"version"` (solo informativo, se muestra en la tienda de plugins) de Energy/Climate/Tuya/TP-Link, que se había quedado desincronizado de la versión real de cada plugin en el último despliegue (v0.34.x, cabecera). No afecta a la descarga en sí (esa depende de `tag`/`sha256`, correctos), solo al número que se veía en la tienda. Verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.40.0
+Ajuste del rediseño de v0.39.0 tras feedback real del usuario comparando lado a lado con el Dishylink de producción: los tokens de color ya coincidían, pero la estructura seguía siendo la de la vieja identidad "app individual" (cabecera grande de dos líneas, tarjetas con borde visible y mucho relleno) — el Dishylink real es un panel denso de una sola fila de cabecera y tarjetas casi sin borde. Cambios, todos en `design-system.css` (fichero núcleo, se propagan solos a las 5 páginas):
+
+- `.topbar` pasa de dos filas (H1 grande + párrafo de subtítulo) a una sola fila compacta (~34px), sin línea separadora inferior — igual que la cabecera real de Dishylink. El H1 baja a `.92rem` en mayúsculas con tracking, como una marca de panel, no un titular de landing page.
+- `.subtitle` se reduce a una línea de ayuda discreta bajo la cabecera compacta, en vez de competir en peso visual con el H1.
+- `--border` baja de `.09` a `.055` de opacidad — el borde de tarjeta pasa a ser casi invisible, como en el Dishylink real.
+- `.card` reduce relleno (22px 24px → 18px 20px) y separación entre tarjetas (16px → 12px); `.card h2` baja de `.95rem` a `.82rem` y pasa a `--text-2` en vez de blanco puro — título de tarjeta como etiqueta discreta, no como titular.
+- `.plugin-badge` más pequeño y ligero.
+- `body` pierde 8px de relleno superior — la cabecera se pega más al borde, como en el panel real.
+
+No se toca ningún fichero de plugin individual (todo vive en el CSS compartido) ni Starlink.
+
 ## 0.39.1
 Energy/Climate/Tuya/Lighting/TP-Link re-pineados al tag `v0.39.0` (rediseño con la estética de Dishylink) — Starlink NO se toca. Verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

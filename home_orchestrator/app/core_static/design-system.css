@@ -50,11 +50,11 @@ aplica) -- esto no es una caja negra que se imponga por encima del propio
 :root {
   color-scheme: dark light;
   --bg: #000000; --bg-alt: #0a0a0a; --card: #0c0c0c; --text: #ffffff; --text-2: #b9b9b9; --muted: #7c7c7c;
-  --border: rgba(255, 255, 255, .09); --accent: #e0a422; --accent-2: #e0a422; --accent-soft: #e0a42222; --accent-ink: #14100a;
+  --border: rgba(255, 255, 255, .055); --accent: #e0a422; --accent-2: #e0a422; --accent-soft: #e0a42222; --accent-ink: #14100a;
   --glow: 0 0 0 1px #e0a42255;
   --green: #3fb97e; --amber: #e0a422; --red: #e5586a;
   --green-soft: #3fb97e1f; --amber-soft: #e0a4221f; --red-soft: #e5586a1f;
-  --radius: 16px; --shadow: none;
+  --radius: 14px; --shadow: none;
   /* Ya no hay cristal/desenfoque de verdad (Dishylink es plano, superficies
      solidas) -- se dejan estas variables con los MISMOS nombres para que
      cada regla que ya las usaba (.card, .pill, inputs...) siga funcionando
@@ -92,7 +92,7 @@ aplica) -- esto no es una caja negra que se imponga por encima del propio
 }
 :root[data-theme="dark"] {
   --bg: #000000; --bg-alt: #0a0a0a; --card: #0c0c0c; --text: #ffffff; --text-2: #b9b9b9; --muted: #7c7c7c;
-  --border: rgba(255, 255, 255, .09); --accent: #e0a422; --accent-2: #e0a422; --accent-soft: #e0a42222; --accent-ink: #14100a;
+  --border: rgba(255, 255, 255, .055); --accent: #e0a422; --accent-2: #e0a422; --accent-soft: #e0a42222; --accent-ink: #14100a;
   --glow: 0 0 0 1px #e0a42255;
   --green: #3fb97e; --amber: #e0a422; --red: #e5586a;
   --green-soft: #3fb97e1f; --amber-soft: #e0a4221f; --red-soft: #e5586a1f;
@@ -108,7 +108,7 @@ body {
   font-family: var(--font-body);
   background: var(--bg);
   color: var(--text);
-  max-width: 1080px; margin: 0 auto; padding: 28px 20px 90px;
+  max-width: 1080px; margin: 0 auto; padding: 20px 20px 90px;
   line-height: 1.5; -webkit-font-smoothing: antialiased;
   position: relative;
   font-variant-numeric: tabular-nums;
@@ -120,19 +120,26 @@ a { color: var(--accent); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 ::selection { background: var(--accent); color: var(--accent-ink); }
 
+/* Cabecera compacta al estilo Dishylink real: una sola fila de ~40px de
+   alto, marca a la izquierda, estado/navegacion a la derecha -- nada de
+   H1 grande + parrafo de subtitulo apilados (eso era la vieja identidad
+   "app individual", Dishylink es un panel denso, no una landing page).
+   Sin borde inferior: en el Dishylink real la cabecera no lleva una
+   linea separadora, el espacio en blanco ya la separa del contenido. */
 .topbar {
-  display: flex; align-items: flex-start; justify-content: space-between;
-  margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid var(--border); gap: 12px; flex-wrap: wrap;
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 22px; padding-bottom: 0; border-bottom: none; gap: 12px; flex-wrap: wrap;
+  min-height: 34px;
 }
 .topbar h1 {
-  font-family: var(--font-display); font-size: 1.6rem; font-weight: 600; margin: 0;
-  letter-spacing: -0.01em; text-wrap: balance;
+  font-family: var(--font-display); font-size: .92rem; font-weight: 600; margin: 0;
+  letter-spacing: .06em; text-transform: uppercase; text-wrap: balance;
 }
 .brand-mark {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 34px; height: 34px; border-radius: 10px;
+  width: 26px; height: 26px; border-radius: 7px;
   background: var(--accent); color: var(--accent-ink);
-  font-size: 1rem; margin-right: 10px; vertical-align: middle; position: relative; top: -2px;
+  font-size: .8rem; margin-right: 9px; vertical-align: middle; position: relative; top: -1px;
 }
 .eyebrow {
   font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .12em;
@@ -146,13 +153,17 @@ a { color: var(--accent); }
    pero al reves de la identidad real del producto: un usuario nuevo veia
    "Energy"/"Climate"/etc. como la app, nunca "Home Orchestrator". */
 .plugin-badge {
-  display: inline-flex; align-items: center; padding: 3px 11px; border-radius: 20px;
-  font-size: .74rem; font-weight: 600; letter-spacing: .02em; font-family: var(--font-mono);
+  display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 20px;
+  font-size: .65rem; font-weight: 600; letter-spacing: .04em; font-family: var(--font-mono);
   background: var(--accent-soft); color: var(--accent); vertical-align: middle;
-  margin-left: 10px; position: relative; top: -3px;
+  margin-left: 8px; position: relative; top: -1px;
 }
-.subtitle { color: var(--muted); font-size: 0.92rem; margin-top: 6px; max-width: 52ch; }
-.topbar-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+/* En el Dishylink real no hay subtitulo -- la cabecera es una sola linea.
+   Se mantiene el texto (util para quien no conoce el plugin) pero fuera
+   del flujo de la cabecera, mucho mas discreto: una linea de ayuda bajo
+   la fila compacta, no un parrafo que compita en peso con ella. */
+.subtitle { color: var(--muted); font-size: .78rem; margin-top: 4px; max-width: 62ch; }
+.topbar-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 /* Selector de plugins -- mismo patron en TODAS las paginas, para que
    moverse entre plugins se sienta como un unico sistema, no apps
@@ -177,12 +188,12 @@ a { color: var(--accent); }
 
 .card {
   background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
-  box-shadow: var(--shadow); padding: 22px 24px; margin-bottom: 16px;
+  box-shadow: var(--shadow); padding: 18px 20px; margin-bottom: 12px;
   position: relative; overflow: hidden;
 }
 .card h2 {
-  font-family: var(--font-display); font-size: .95rem; font-weight: 600; margin: 0 0 16px;
-  display: flex; align-items: center; gap: 8px; letter-spacing: -.005em;
+  font-family: var(--font-display); font-size: .82rem; font-weight: 600; margin: 0 0 13px;
+  display: flex; align-items: center; gap: 8px; letter-spacing: -.005em; color: var(--text-2);
 }
 .card h2 .hint { font-weight: 400; color: var(--muted); font-size: 0.78rem; margin-left: auto; font-family: var(--font-body); }
 

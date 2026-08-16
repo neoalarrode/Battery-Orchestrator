@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.33.1
+Los 6 plugins re-pineados al tag `v0.33.0` — TODOS, sin excepción: el renombrado de carpeta cambia el prefijo dentro del tarball del que `plugin_downloader.py` extrae el código (`SUBPATH`), así que un tag antiguo rompería la descarga/instalación de cualquier plugin, no solo de Energy. Verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
 ## 0.33.0
 **CAMBIO ESTRUCTURAL, con migración manual — carpeta y slug del addon renombrados de `battery_orchestrator` a `home_orchestrator`.** A petición expresa del usuario (tarea "revisar el repositorio... y posiblemente renombrar carpetas"): el nombre venía de cuando esto era solo un planificador de baterías; hoy es una plataforma de 6 plugins (Energy, Climate, Lighting, Tuya, TP-Link, Starlink) y el nombre de carpeta/slug se había quedado desalineado con la identidad real "Home Orchestrator" (ya reflejada en `config.yaml:name` y en toda la interfaz).
 

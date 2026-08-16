@@ -45,7 +45,7 @@
   .anomaly-box h3 { margin: 0 0 8px; font-family: var(--font-display); font-size: .88rem; color: var(--red); }
   .anomaly-box .kv { font-size: .82rem; }
 
-  .punta-countdown { font-family: var(--font-mono); font-size: 1.6rem; font-weight: 600; color: var(--accent); }
+  .punta-countdown { font-family: var(--font-body); font-size: 1.6rem; font-weight: 700; color: var(--accent); }
 
   .status-line {
     font-family: var(--font-mono); font-size: 0.78rem; white-space: pre-wrap;
@@ -105,12 +105,18 @@
     backdrop-filter: var(--glass-blur-soft); -webkit-backdrop-filter: var(--glass-blur-soft);
     padding: 12px 14px;
   }
+  /* Tipografia calcada del Dishylink real (getComputedStyle sobre su
+     tarjeta "Download"): la etiqueta NO es mono/mayuscula/diminuta, es
+     Barlow normal, 600, casi tan prominente como el propio valor -- y el
+     numero grande TAMPOCO es mono, es Barlow 700. Antes de esta version
+     ambas heredaban el viejo habito de "mono = numeros/datos" del diseño
+     previo al rediseño Dishylink, nunca verificado contra el DOM real. */
   .stat-tile .stat-label {
-    font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .06em;
-    font-size: .65rem; color: var(--muted); margin-bottom: 6px;
+    font-family: var(--font-body); font-weight: 600;
+    font-size: .82rem; color: var(--text); margin-bottom: 6px;
   }
   .stat-tile .stat-value {
-    font-family: var(--font-mono); font-size: 1.3rem; font-weight: 700;
+    font-family: var(--font-body); font-size: 1.7rem; font-weight: 700; letter-spacing: -.01em;
     font-variant-numeric: tabular-nums; color: var(--text);
   }
   .stat-tile .stat-value.accent { color: var(--accent); }
@@ -124,8 +130,8 @@
 
   /* --- Flujo de energia: barra de reparto, no grafo de nodos --- */
   .flow-source-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
-  .flow-source-name { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .1em; font-size: .68rem; color: var(--accent-2); font-weight: 700; }
-  .flow-source-value { font-family: var(--font-mono); font-size: 1.05rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .flow-source-name { font-family: var(--font-body); text-transform: uppercase; letter-spacing: .08em; font-size: .68rem; color: var(--accent-2); font-weight: 700; }
+  .flow-source-value { font-family: var(--font-body); font-size: 1.05rem; font-weight: 700; font-variant-numeric: tabular-nums; }
   .flow-bar-track { display: flex; height: 10px; border-radius: 6px; overflow: hidden; background: var(--glass-bg); border: 1px solid var(--glass-border); }
   .flow-bar-seg { height: 100%; transition: width .3s ease; position: relative; overflow: hidden; }
   .flow-endpoints { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 14px; }
@@ -146,8 +152,8 @@
      las tres esta realmente aportando algo y cual no. */
   .flow-endpoint.off { opacity: .45; }
   .flow-endpoint.off .dot { background: var(--border) !important; }
-  .flow-endpoint-label { font-family: var(--font-mono); font-size: .64rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
-  .flow-endpoint-value { font-family: var(--font-mono); font-size: .86rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .flow-endpoint-label { font-family: var(--font-body); font-size: .64rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; }
+  .flow-endpoint-value { font-family: var(--font-body); font-size: .86rem; font-weight: 700; font-variant-numeric: tabular-nums; }
   .autoconsumo-chip {
     display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: .68rem;
     font-weight: 700; color: var(--green); background: var(--green-soft); border-radius: 20px; padding: 4px 11px; margin-top: 12px;
@@ -173,7 +179,7 @@
   .battery-mini .bm-bar-track { flex: 2 1 70px; height: 7px; border-radius: 5px; background: var(--border); overflow: hidden; min-width: 50px; }
   .battery-mini .bm-bar-fill { height: 100%; border-radius: 5px; position: relative; overflow: hidden; }
   .battery-mini .bm-pct { font-family: var(--font-mono); font-size: .8rem; font-weight: 700; min-width: 42px; text-align: right; font-variant-numeric: tabular-nums; }
-  .battery-mini .bm-status { font-family: var(--font-mono); font-size: .62rem; padding: 3px 8px; border-radius: 20px; white-space: nowrap; }
+  .battery-mini .bm-status { font-family: var(--font-body); font-weight: 600; font-size: .62rem; padding: 3px 8px; border-radius: 20px; white-space: nowrap; }
   .bm-status.charge { background: var(--accent-soft); color: var(--accent); }
   .bm-status.discharge { background: var(--amber-soft); color: var(--amber); }
   .bm-status.idle { background: var(--border); color: var(--muted); }

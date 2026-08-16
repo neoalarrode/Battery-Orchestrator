@@ -34,7 +34,7 @@
   .pill-sim { background: var(--accent-soft); color: var(--accent); box-shadow: 0 0 0 1px var(--accent-soft); }
   @media (prefers-reduced-motion: no-preference) { .pill-heat::before, .pill-cool::before { animation: pulse 1.8s ease-in-out infinite; } }
 
-  .conn-dot { display: inline-flex; align-items: center; gap: 6px; font-size: .72rem; font-family: var(--font-mono); color: var(--muted); }
+  .conn-dot { display: inline-flex; align-items: center; gap: 6px; font-size: .72rem; font-family: var(--font-body); font-weight: 600; color: var(--muted); }
   .conn-dot .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--red); }
   .conn-dot.ok .dot { background: var(--green); }
 
@@ -47,8 +47,8 @@
   .zone-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
   .zone-name { font-family: var(--font-display); font-weight: 700; font-size: 1rem; }
   .zone-temps { display: flex; align-items: baseline; gap: 10px; margin: 10px 0 6px; }
-  .zone-temp-now { font-family: var(--font-mono); font-size: 1.9rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .zone-temp-target { font-family: var(--font-mono); font-size: 0.9rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .zone-temp-now { font-family: var(--font-body); font-size: 1.9rem; font-weight: 700; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+  .zone-temp-target { font-family: var(--font-body); font-weight: 500; font-size: 0.9rem; color: var(--muted); font-variant-numeric: tabular-nums; }
   .zone-reason { font-size: 0.78rem; color: var(--muted); margin-top: 6px; min-height: 2.6em; }
   .zone-actions { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
   .zone-actions button { padding: 6px 11px; font-size: .76rem; }
@@ -64,7 +64,7 @@
   .therm-stepper { display: flex; align-items: center; gap: 8px; }
   .therm-stepper button { width: 30px; height: 30px; padding: 0; border-radius: 50%; font-size: 1rem; line-height: 1; font-weight: 700; background: var(--card); color: var(--accent); box-shadow: 0 0 0 1px var(--glass-border); }
   .therm-stepper button:hover { background: var(--accent); color: var(--accent-ink); }
-  .therm-stepper .therm-val { font-family: var(--font-mono); font-size: 1.05rem; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 3.2em; text-align: center; }
+  .therm-stepper .therm-val { font-family: var(--font-body); font-size: 1.05rem; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 3.2em; text-align: center; }
   .therm-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .therm-controls select { width: auto; padding: 6px 9px; font-size: .78rem; }
 

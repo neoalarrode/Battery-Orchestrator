@@ -32,7 +32,7 @@
   .pill-off { background: var(--glass-bg); color: var(--muted); box-shadow: 0 0 0 1px var(--border); }
   @media (prefers-reduced-motion: no-preference) { .pill-on::before { animation: pulse 1.8s ease-in-out infinite; } }
 
-  .conn-dot { display: inline-flex; align-items: center; gap: 6px; font-size: .72rem; font-family: var(--font-mono); color: var(--muted); }
+  .conn-dot { display: inline-flex; align-items: center; gap: 6px; font-size: .72rem; font-family: var(--font-body); font-weight: 600; color: var(--muted); }
   .conn-dot .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--red); }
   .conn-dot.ok .dot { background: var(--green); }
 
@@ -53,7 +53,7 @@
     transition: background .3s, box-shadow .3s;
   }
   .zone-swatch .bulb.lit { box-shadow: 0 0 0 1px var(--border), 0 0 18px -2px currentColor; }
-  .zone-swatch .vals { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .zone-swatch .vals { font-family: var(--font-body); font-weight: 600; font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
   .zone-rule { font-size: 0.8rem; color: var(--text); margin-top: 2px; }
   .zone-rule .muted { color: var(--muted); }
   .zone-reason { font-size: 0.78rem; color: var(--muted); margin-top: 6px; min-height: 2.2em; }

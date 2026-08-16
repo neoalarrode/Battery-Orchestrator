@@ -16,13 +16,30 @@ desenfoque, resplandores). Los tokens de aqui abajo estan tomados
 DIRECTAMENTE del Dishylink real en produccion (inspeccionados con
 getComputedStyle contra el DOM real, no adivinados): fondo negro puro,
 tarjetas solidas #0c0c0c sin borde ni desenfoque, texto en 3 niveles de
-gris, un unico acento ambar (#e0a422), tipografia Barlow (texto) + IBM
-Plex Mono (numeros/datos). El resto de paginas (Energy/Climate/Lighting/
-Tuya/TP-Link) siguen con sus MISMAS clases/componentes -- solo cambian
-los tokens y se aplanan los efectos de cristal, para no tener que tocar
-cada plantilla una por una. Starlink (Dishylink de verdad) no enlaza este
-fichero, mantiene su propio CSS intacto -- esto es la "misma estetica",
-no el mismo codigo.
+gris, un unico acento ambar (#e0a422), tipografia Barlow. El resto de
+paginas (Energy/Climate/Lighting/Tuya/TP-Link) siguen con sus MISMAS
+clases/componentes -- solo cambian los tokens y se aplanan los efectos
+de cristal, para no tener que tocar cada plantilla una por una. Starlink
+(Dishylink de verdad) no enlaza este fichero, mantiene su propio CSS
+intacto -- esto es la "misma estetica", no el mismo codigo.
+
+CORRECCION real, tras una comparacion pixel a pixel contra el Dishylink
+en produccion (a peticion del usuario: "sigues copiando el estilo de
+widget original"): la primera pasada de este rediseño asumia que IBM
+Plex Mono era la tipografia de "numeros y datos" (etiquetas, pills,
+tabs, valores de tarjeta...), calcada del PROPIO vocabulario tipografico
+de antes del rediseño (mono para todo lo "tecnico"). Inspeccionando de
+verdad el DOM del Dishylink real (getComputedStyle sobre la tarjeta
+"Download", el titulo "Throughput", el selector de idioma...): el 95%
+del texto -- incluido el numero grande de cada tarjeta de metrica -- es
+Barlow. IBM Plex Mono solo aparece en los TICKS de los ejes de las
+graficas y en el selector de rango temporal (15M/1H/6H) -- contextos
+puramente tabulares, no en etiquetas ni en pills ni en botones de
+navegacion. Por eso `.pill`, `.tier`, `.plugin-switch a`, `.lang-select`,
+`.page-tabs button`, `.eyebrow`, `.plugin-badge`, las cabeceras de tabla
+y `.card h2` pasan de mono a Barlow aqui -- mono se queda SOLO donde ya
+tenia sentido por si mismo (`.kv code`, `.item-card .meta`: IDs/hosts
+tecnicos, lectura de dato crudo).
 
 Qué vive AQUÍ (genérico, reusado tal cual en cualquier página):
   - Tokens de color/tipografía/superficie (:root + claro/oscuro).
@@ -132,8 +149,8 @@ a { color: var(--accent); }
   min-height: 34px;
 }
 .topbar h1 {
-  font-family: var(--font-display); font-size: .92rem; font-weight: 600; margin: 0;
-  letter-spacing: .06em; text-transform: uppercase; text-wrap: balance;
+  font-family: var(--font-display); font-size: .92rem; font-weight: 700; margin: 0;
+  letter-spacing: .16em; text-transform: uppercase; text-wrap: balance;
 }
 .brand-mark {
   display: inline-flex; align-items: center; justify-content: center;
@@ -142,8 +159,8 @@ a { color: var(--accent); }
   font-size: .8rem; margin-right: 9px; vertical-align: middle; position: relative; top: -1px;
 }
 .eyebrow {
-  font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .12em;
-  font-size: .68rem; font-weight: 500; color: var(--muted); margin: 0 0 6px;
+  font-family: var(--font-body); text-transform: uppercase; letter-spacing: .1em;
+  font-size: .68rem; font-weight: 600; color: var(--muted); margin: 0 0 6px;
 }
 /* Insignia del plugin junto al H1 -- "Home Orchestrator" es la marca (el
    H1), el plugin concreto (Energy/Climate/...) es una insignia secundaria,
@@ -154,7 +171,7 @@ a { color: var(--accent); }
    "Energy"/"Climate"/etc. como la app, nunca "Home Orchestrator". */
 .plugin-badge {
   display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 20px;
-  font-size: .65rem; font-weight: 600; letter-spacing: .04em; font-family: var(--font-mono);
+  font-size: .65rem; font-weight: 600; letter-spacing: .04em; font-family: var(--font-body);
   background: var(--accent-soft); color: var(--accent); vertical-align: middle;
   margin-left: 8px; position: relative; top: -1px;
 }
@@ -174,14 +191,14 @@ a { color: var(--accent); }
 }
 .plugin-switch a {
   display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px;
-  font-size: 0.78rem; font-weight: 600; font-family: var(--font-mono); text-decoration: none;
+  font-size: 0.78rem; font-weight: 600; font-family: var(--font-body); text-decoration: none;
   color: var(--muted); transition: background .15s, color .15s;
 }
 .plugin-switch a:hover { color: var(--text); }
 .plugin-switch a.current { background: var(--accent); color: var(--accent-ink); }
 
 .lang-select {
-  width: auto; padding: 6px 10px; font-size: 0.78rem; font-family: var(--font-mono);
+  width: auto; padding: 6px 10px; font-size: 0.78rem; font-family: var(--font-body);
   border-radius: 20px; background: var(--card); border: 1px solid var(--border); color: var(--text);
   cursor: pointer;
 }
@@ -192,8 +209,8 @@ a { color: var(--accent); }
   position: relative; overflow: hidden;
 }
 .card h2 {
-  font-family: var(--font-display); font-size: .82rem; font-weight: 600; margin: 0 0 13px;
-  display: flex; align-items: center; gap: 8px; letter-spacing: -.005em; color: var(--text-2);
+  font-family: var(--font-display); font-size: .95rem; font-weight: 600; margin: 0 0 13px;
+  display: flex; align-items: center; gap: 8px; letter-spacing: -.005em; color: var(--text);
 }
 .card h2 .hint { font-weight: 400; color: var(--muted); font-size: 0.78rem; margin-left: auto; font-family: var(--font-body); }
 
@@ -266,16 +283,16 @@ summary::-webkit-details-marker { display: none; }
 
 table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
 th {
-  text-align: left; padding: 8px 10px; color: var(--muted); font-weight: 500; font-size: .68rem;
+  text-align: left; padding: 8px 10px; color: var(--muted); font-weight: 600; font-size: .68rem;
   text-transform: uppercase; letter-spacing: .06em; border-bottom: 1px solid var(--border);
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
 }
 td { padding: 8px 10px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
 td:last-child { font-family: var(--font-body); }
 tr:last-child td { border-bottom: none; }
 tr:hover td { background: var(--bg-alt); }
 
-.tier { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; letter-spacing: .02em; font-family: var(--font-mono); }
+.tier { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; letter-spacing: .02em; font-family: var(--font-body); }
 .tier-punta { background: var(--red-soft); color: var(--red); }
 .tier-llano { background: var(--amber-soft); color: var(--amber); }
 .tier-valle { background: var(--green-soft); color: var(--green); }
@@ -286,7 +303,7 @@ tr:hover td { background: var(--bg-alt); }
    por completo con `.pill-readonly`. */
 .pill {
   display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px; border-radius: 20px;
-  font-size: 0.76rem; font-weight: 600; letter-spacing: .04em; white-space: nowrap; font-family: var(--font-mono);
+  font-size: 0.76rem; font-weight: 600; letter-spacing: .01em; white-space: nowrap; font-family: var(--font-body);
   background: var(--card); border: 1px solid var(--border); color: var(--text-2);
 }
 .pill-dry { background: var(--amber-soft); color: var(--amber); border-color: transparent; }
@@ -309,7 +326,7 @@ tr:hover td { background: var(--bg-alt); }
 }
 .page-tabs button {
   background: transparent; color: var(--muted); box-shadow: none; padding: 7px 16px; border-radius: 20px;
-  font-family: var(--font-mono); font-size: 0.8rem;
+  font-family: var(--font-body); font-size: 0.8rem; font-weight: 600;
 }
 .page-tabs button:hover { filter: none; color: var(--text); }
 .page-tabs button.current { background: var(--accent); color: var(--accent-ink); }

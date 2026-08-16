@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.42.0
+Correccion real de tipografia tras comparacion pixel a pixel del usuario contra el Dishylink en produccion ("sigues copiando el estilo de widget original en vez del que te he dicho"). v0.40.0/v0.41.0 ya igualaban color, densidad y sparklines, pero el resto de la pagina seguia sonando "tecnica/mono" donde el Dishylink real es casi todo Barlow.
+
+Se volvio a inspeccionar el DOM real de Dishylink con `getComputedStyle` (tarjeta "Download", titulo de seccion "Throughput", selector de idioma, wordmark) en vez de asumir del rediseño anterior — hallazgo real: el 95% del texto de Dishylink, INCLUIDO el numero grande de cada tarjeta de metrica, es Barlow. IBM Plex Mono solo aparece en los ticks de los ejes de las graficas y en el selector de rango temporal (15M/1H/6H) — nunca en etiquetas, pills, pestañas o botones de navegacion. La primera pasada del rediseño heredaba sin darse cuenta el viejo habito "mono = numeros/datos" de ANTES del rediseño, nunca verificado contra el DOM real.
+
+- `design-system.css` (nucleo): `.pill`, `.tier`, `.plugin-switch a`, `.lang-select`, `.page-tabs button`, `.eyebrow`, `.plugin-badge`, cabeceras de tabla y `.card h2` pasan de mono a Barlow. `.card h2` recupera color de texto normal (antes gris apagado). El wordmark de cabecera (`.topbar h1`) sube a peso 700 y tracking `.16em`, calcado del real.
+- **Energy**: `.stat-label`/`.stat-value` de las tarjetas de metrica, `.flow-source-name/value`, `.flow-endpoint-label/value`, `.punta-countdown`, `.bm-status` — todos pasan de mono a Barlow, con el numero grande subiendo de 1.3rem a 1.7rem para acercarse al tamaño real (34px) de Dishylink.
+- **Climate**: `.conn-dot`, `.zone-temp-now/target`, `.therm-stepper .therm-val` pasan a Barlow.
+- **Lighting**: `.conn-dot`, `.zone-swatch .vals` pasan a Barlow.
+- Mono se queda SOLO donde de verdad correspondia por el propio DOM real: ticks de ejes de graficas (SVG), tooltips de grafica, bloques de log/JSON crudo, IDs/hosts tecnicos (`.kv code`, `.item-card .meta`, `.eid`) — Tuya/TP-Link no cambian, son practicamente solo eso.
+
 ## 0.41.1
 Energy/Climate/Lighting re-pineados al tag `v0.41.0` (sparklines) — Tuya/TP-Link/Starlink NO se tocan, siguen apuntando a su tag previo. Verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

@@ -81,10 +81,10 @@ async function renderPluginSwitch(slug, containerId = "plugin-switch-nav") {
         const current = p.slug === slug ? ' class="current"' : "";
         const icon = PLUGIN_ICONS[p.slug] || "";
         const label = PLUGIN_LABELS[p.slug] || p.name;
-        return `<a href="${_pluginHref(p.slug)}"${current}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">${icon}</svg>${label}</a>`;
+        return `<a href="${_pluginHref(p.slug)}"${current}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">${icon}</svg><span>${label}</span></a>`;
       });
     const configHref = `${ingressRoot()}?tab=config`;
-    const configLink = `<a href="${configHref}"${slug === "config" ? ' class="current"' : ""}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">${CONFIG_ICON}</svg>Configuración</a>`;
+    const configLink = `<a href="${configHref}"${slug === "config" ? ' class="current"' : ""}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">${CONFIG_ICON}</svg><span>Configuración</span></a>`;
     nav.innerHTML = [...pluginLinks, configLink].join("");
   } catch (e) {
     /* no bloquea el resto de la pagina */

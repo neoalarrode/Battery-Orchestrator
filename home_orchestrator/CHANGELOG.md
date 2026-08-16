@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.43.0
+Dos bugs reales de layout en movil, encontrados por el usuario con capturas de pantalla comparando Energy contra el Dishylink real lado a lado ("¿tú de verdad crees que esto se parece?") — los tokens/tipografia de v0.42.0 ya coincidian, pero la estructura seguia sin aguantar en pantalla estrecha:
+
+- **`.stat-grid` sin `align-items: start`**: CSS Grid estira por defecto todas las tarjetas de una fila a la altura de la mas alta. En movil, "Precio" envuelve a 2-3 lineas ("0.075 €/" + "kWh") y eso dejaba "SOC agregado"/"Tramo actual" (una linea de contenido) con un hueco vacio enorme debajo del sparkline solo por compartir fila. Cada tarjeta mide ahora lo que su propio contenido necesita.
+- **Cabecera apilada en 3-4 filas en movil** (marca, subtitulo, selector de 5 plugins, idioma+estado) frente a la UNA fila del Dishylink real. No se puede igualar del todo (este sistema tiene un selector de plugins que Dishylink no necesita), pero se acerca mucho: `.subtitle` se oculta por debajo de 720px (es texto de ayuda, no informacion critica) y `.plugin-switch` pasa a solo-icono con scroll horizontal en vez de pastillas de texto que fuerzan el salto de linea -- mismo lenguaje que los botones de icono (campana/corazon/luna) del Dishylink real.
+- `plugin-switch.js` (nucleo) y la copia propia de Energy: la etiqueta de cada plugin pasa a un `<span>` propio para poder ocultarla en movil sin tocar el icono.
+
 ## 0.42.1
 Energy/Climate/Lighting re-pineados al tag `v0.42.0` (correccion de tipografia) — Tuya/TP-Link/Starlink sin cambios. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
 

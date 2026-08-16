@@ -99,7 +99,15 @@
   .tab-panel.active { display: block; }
 
   /* --- Tarjetas de estadistica (resumen del estado actual) --- */
-  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 4px; }
+  /* BUG REAL, visible en movil (capturas del usuario comparando contra
+     Dishylink): sin `align-items: start` la rejilla estira TODAS las
+     tarjetas de una fila a la altura de la mas alta -- "Precio" envuelve
+     a 2-3 lineas ("0.075 €/" + "kWh") en pantallas estrechas, y eso
+     dejaba "SOC agregado"/"Tramo actual" con un hueco vacio enorme
+     debajo del sparkline solo por estar en la misma fila. Cada tarjeta
+     debe medir lo que su propio contenido necesita, no lo que necesite
+     su vecina. */
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 4px; align-items: start; }
   .stat-tile {
     background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 10px;
     backdrop-filter: var(--glass-blur-soft); -webkit-backdrop-filter: var(--glass-blur-soft);
@@ -3507,9 +3515,9 @@ async function renderPluginSwitch() {
       const href = p.slug === 'battery' ? './' : `plugins/${p.slug}/`;
       const current = p.slug === 'battery' && !configActive ? ' class="current"' : '';
       const icon = PLUGIN_SWITCH_ICONS[p.slug] || '';
-      return `<a href="${href}"${current}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">${icon}</svg>${PLUGIN_SWITCH_LABEL[p.slug] || p.name}</a>`;
+      return `<a href="${href}"${current}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">${icon}</svg><span>${PLUGIN_SWITCH_LABEL[p.slug] || p.name}</span></a>`;
     });
-    const configLink = `<a href="?tab=config"${configActive ? ' class="current"' : ''}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">${CONFIG_NAV_ICON}</svg>${t('tab_config')}</a>`;
+    const configLink = `<a href="?tab=config"${configActive ? ' class="current"' : ''}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">${CONFIG_NAV_ICON}</svg><span>${t('tab_config')}</span></a>`;
     nav.innerHTML = [...pluginLinks, configLink].join('');
   } catch (e) { /* la cabecera se queda vacia si /api/core/plugins no responde -- no bloquea el resto */ }
 }

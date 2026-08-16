@@ -188,14 +188,34 @@ a { color: var(--accent); }
 .plugin-switch {
   display: inline-flex; gap: 3px; padding: 3px; border-radius: 24px;
   background: var(--card); border: 1px solid var(--border);
+  max-width: 100%; overflow-x: auto; scrollbar-width: none;
 }
+.plugin-switch::-webkit-scrollbar { display: none; }
 .plugin-switch a {
   display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px;
   font-size: 0.78rem; font-weight: 600; font-family: var(--font-body); text-decoration: none;
-  color: var(--muted); transition: background .15s, color .15s;
+  color: var(--muted); transition: background .15s, color .15s; white-space: nowrap; flex: none;
 }
 .plugin-switch a:hover { color: var(--text); }
 .plugin-switch a.current { background: var(--accent); color: var(--accent-ink); }
+
+/* BUG REAL DE VERDAD, confirmado con capturas de movil del usuario
+   comparando contra el Dishylink real: en movil, la cabecera de este
+   sistema se apilaba en 3-4 filas (marca, subtitulo, selector de
+   plugins, idioma+estado) antes de llegar al contenido -- el Dishylink
+   real es UNA fila, siempre, porque no tiene un selector de 5 apps
+   dentro. No se puede igualar eso al 100% (este sistema SI tiene 5
+   plugins entre los que moverse, Dishylink no), pero se puede acercar
+   mucho: el subtitulo desaparece (ya es un texto de ayuda, no
+   informacion critica) y el selector de plugins pasa a solo-icono con
+   scroll horizontal en vez de apilarse en pastillas de texto -- ocupa
+   una fraccion de la anchura y cabe junto al resto de la cabecera. */
+@media (max-width: 720px) {
+  .subtitle { display: none; }
+  .plugin-switch a span { display: none; }
+  .plugin-switch a { padding: 8px; }
+  .plugin-switch a svg { width: 15px; height: 15px; }
+}
 
 .lang-select {
   width: auto; padding: 6px 10px; font-size: 0.78rem; font-family: var(--font-body);

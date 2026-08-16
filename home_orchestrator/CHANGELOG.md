@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.37.0
+**Corrige bug real, GRAVE: la luz del Salón parpadeó decenas de veces en una hora por el sensor de lux (v0.36.0 no bastaba).** Confirmado por el usuario y verificado contra el histórico real de producción: el sensor Aqara FP300 del Salón saltaba entre 35 y 82 lx alrededor del objetivo de 50 configurado, cruzándolo varias veces por minuto (a veces en 4-9 segundos) — sin margen, cada cruce encendía o apagaba la luz.
+
+Dos capas de protección nuevas, ambas verificadas contra la secuencia real que causó el parpadeo (0 cambios de estado en la simulación, antes eran ~30):
+
+- **Histéresis** (`schedule.lux_dark_enough`, ±20% sobre el objetivo): una vez "oscuro", hace falta subir CLARAMENTE por encima del objetivo para dejar de estarlo, y viceversa — la zona intermedia no cambia nada.
+- **Tiempo mínimo entre cambios** (`ZoneRunner._lux_dark_enough_debounced`, 60s): incluso si la lectura cruza el margen de histéresis, un segundo cambio no se acepta hasta que pase al menos un minuto desde el anterior — mismo criterio que el margen de gracia de presencia (`off_delay_seconds`).
+
 ## 0.36.1
 Re-pin de Lighting al tag `v0.36.0` (corrige apagado por lux) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

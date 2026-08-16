@@ -59,6 +59,12 @@ log = logging.getLogger("lighting.zone_runner")
 BRIGHTNESS_TOLERANCE_PCT = 4
 COLOR_TEMP_TOLERANCE_KELVIN = 150
 
+# Segundo escudo contra el parpadeo por lux (ver ZoneRunner._lux_dark_enough_debounced):
+# ademas de la histeresis de schedule.lux_dark_enough, un cambio de estado
+# "oscuro"/"claro" no cuenta hasta que pase este tiempo desde el ultimo --
+# una lectura que cruza el margen demasiado pronto se ignora sin mas.
+LUX_STATE_MIN_INTERVAL_SECONDS = 60
+
 
 class ZoneRunner:
     def __init__(self, zone_id: str, cfg: dict, ws, mqtt_zone=None, state: dict | None = None, bridges=None) -> None:
@@ -165,6 +171,30 @@ class ZoneRunner:
             return False
         delay = float(self.zone.get("off_delay_seconds", 120) or 0)
         return (now - last) < delay
+
+    def _lux_dark_enough_debounced(self, cfg: dict, states: dict[str, dict], now: float) -> bool:
+        """`schedule.lux_dark_enough` con histeresis, mas un segundo
+        escudo por encima: un cambio de "oscuro" a "claro" (o al reves)
+        no se acepta hasta que haya pasado `LUX_STATE_MIN_INTERVAL_SECONDS`
+        desde el ultimo cambio aceptado -- ver el comentario de la
+        constante. Sin esto, una rafaga de lecturas que cruza igualmente
+        el margen de histeresis en un par de minutos (visto de verdad
+        contra un Aqara FP300: 36 -> 66 -> 36 en menos de un minuto)
+        seguia parpadeando, solo que menos."""
+        was_dark_enough = self._state.get("lux_dark_enough")
+        candidate = schedule.lux_dark_enough(
+            states.get(cfg.get("lux_sensor") or ""),
+            float(cfg.get("target_lux", schedule.DEFAULT_TARGET_LUX)),
+            was_dark_enough,
+        )
+        if was_dark_enough is None or candidate == was_dark_enough:
+            self._state["lux_state_changed_ts"] = now
+            return candidate
+        last_change = self._state.get("lux_state_changed_ts")
+        if last_change is not None and (now - last_change) < LUX_STATE_MIN_INTERVAL_SECONDS:
+            return was_dark_enough  # cambio real, pero demasiado pronto -- se ignora esta vez
+        self._state["lux_state_changed_ts"] = now
+        return candidate
 
     # -------------------------------------------------------------- luz --
     #
@@ -389,9 +419,19 @@ class ZoneRunner:
         # mano...) mientras ya estaba claro nunca se re-evaluaba, se
         # quedaba encendida para siempre. Ahora "hay luz de sobra" se
         # comprueba cada ciclo, igual que "sin presencia -> apagado".
-        dark_enough = schedule.lux_dark_enough(
-            states.get(cfg.get("lux_sensor") or ""), float(cfg.get("target_lux", schedule.DEFAULT_TARGET_LUX)),
-        )
+        #
+        # SEGUNDO BUG REAL, confirmado por el usuario contra un sensor de
+        # verdad (Aqara FP300): sin margen, un umbral unico hacia
+        # PARPADEAR la luz -- el historico real saltaba entre 35 y 82 lx
+        # alrededor de un objetivo de 50, cruzandolo varias veces por
+        # minuto. `lux_dark_enough` ya aplica histeresis (+-20%, ver su
+        # docstring), pero con este sensor en concreto no bastaba del
+        # todo -- se añade ademas un tiempo minimo entre cambios de
+        # estado (`LUX_STATE_MIN_INTERVAL_SECONDS`), igual patron que el
+        # margen de gracia de presencia (`off_delay_seconds`): una
+        # lectura que cruza el margen demasiado pronto despues del ultimo
+        # cambio se ignora, se mantiene el estado anterior.
+        dark_enough = self._lux_dark_enough_debounced(cfg, states, now)
         # "Se acaba de hacer de noche" SI sigue siendo un flanco -- para
         # ENCENDER solo en el momento en que se hace necesario (no en
         # cada ciclo mientras siga oscuro, eso ya lo cubre `transitioned`

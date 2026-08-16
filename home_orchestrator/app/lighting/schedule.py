@@ -131,15 +131,32 @@ def value_at(cfg: dict, sun_state: dict | None, now: datetime | None = None) -> 
     }
 
 
-def lux_dark_enough(lux_state: dict | None, target_lux: float) -> bool:
+# BUG REAL, confirmado por el usuario contra un sensor real (Aqara FP300):
+# un unico umbral sin margen hace que la luz PARPADEE sin parar en cuanto
+# la lectura ronda el objetivo -- el historico real de una tarde normal
+# saltaba entre 35 y 82 lx alrededor de un objetivo de 50, cruzandolo
+# varias veces por MINUTO (a veces en 4-9 segundos), lo que encendia y
+# apagaba la luz del salon decenas de veces en una hora. Ruido normal de
+# este tipo de sensor (nubes pasajeras, alguien moviendose delante,
+# jitter del propio hardware), no algo que se pueda evitar leyendo mejor.
+# Arreglo: histeresis con dos umbrales, no uno -- una vez "oscuro" hace
+# falta subir claramente por encima del objetivo para dejar de estarlo, y
+# viceversa; la zona intermedia no cambia nada, se queda como estaba.
+LUX_HYSTERESIS_FRACTION = 0.2  # objetivo +-20% antes de cruzar de estado
+
+
+def lux_dark_enough(lux_state: dict | None, target_lux: float, was_dark_enough: bool | None = None) -> bool:
     """`True` si la luz ambiente REAL medida (sensor de lux de la zona)
-    esta por debajo del objetivo -- o si no hay lectura util (sensor sin
+    cuenta como "oscuro" -- o si no hay lectura util (sensor sin
     declarar, "unavailable"/"unknown", `target_lux` <= 0): sin dato fiable
     se deja pasar, el encendido por presencia se comporta como si no
     hubiera sensor de lux en absoluto, nunca se bloquea por un sensor
-    roto. Ver ZoneRunner.decide_and_act, unico sitio que la usa -- solo
-    condiciona si se ENCIENDE una luz al entrar presencia, nunca decide
-    apagar una que ya esta encendida."""
+    roto. `was_dark_enough` es el resultado de la LLAMADA ANTERIOR para
+    esta misma zona (`None` si es la primera vez) -- con el, dos lecturas
+    seguidas que digan lo mismo no hacen que la zona cambie de un lado a
+    otro por una sola lectura ruidosa cerca del umbral (ver
+    LUX_HYSTERESIS_FRACTION). Ver ZoneRunner.decide_and_act, unico sitio
+    que la usa."""
     if target_lux <= 0:
         return True
     lux_value = (lux_state or {}).get("state")
@@ -147,4 +164,14 @@ def lux_dark_enough(lux_state: dict | None, target_lux: float) -> bool:
         lux = float(lux_value) if lux_value is not None else None
     except (TypeError, ValueError):
         lux = None
-    return True if lux is None else lux < target_lux
+    if lux is None:
+        return True if was_dark_enough is None else was_dark_enough
+    if was_dark_enough is True:
+        # ya contaba como oscuro -- solo deja de contarlo si sube CLARO
+        # por encima del objetivo, no al primer cruce justo.
+        return lux < target_lux * (1 + LUX_HYSTERESIS_FRACTION)
+    if was_dark_enough is False:
+        # ya contaba como claro -- solo pasa a oscuro si baja CLARO por
+        # debajo del objetivo.
+        return lux < target_lux * (1 - LUX_HYSTERESIS_FRACTION)
+    return lux < target_lux  # primera lectura, sin historial -- umbral simple

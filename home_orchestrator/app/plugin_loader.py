@@ -113,16 +113,17 @@ PLUGIN_CATALOG = {
     "battery": {
         "name": "Energy Orchestrator",
         "description": "Baterías, solar y cargas diferibles — carga y descarga adaptativa por precio, sol y consumo real",
-        "version": "0.11.86",
+        "version": "0.11.87",
         "downloadable": True,
-        "tag": "v0.43.0",
-        "sha256": "0b84a08da4e74b4ba829eeef9b85fea80a68cfea1f788fade54fb74317453391",  # sha256 real del tarball de v0.43.0, verificado contra una descarga real antes de fijarlo aqui (bug de layout en movil: stat-grid + cabecera)
+        "tag": "v0.49.0",
+        "sha256": "5325e9f602e7a5121705f0a179ece3f256e663c8839ec88d6281667454b7b476",  # sha256 real del tarball de v0.49.0, verificado contra una descarga real antes de fijarlo aqui (sensores acumulativos de importacion/vertido a red)
         "files": [
             "main.py", "battery_plugin.py", "battery_exec.py", "anomaly_store.py",
             "capacity_store.py", "climate_link.py", "deferrable_exec.py",
             "deferrable_scheduler.py", "deferrable_store.py", "ecoflow_ble.py",
-            "ecoflow_cloud.py", "ecoflow_login.py", "forecast_store.py", "ha_client.py",
-            "ha_statistics.py", "history_store.py", "lifetime_store.py", "pv_source.py",
+            "ecoflow_cloud.py", "ecoflow_login.py", "forecast_store.py", "grid_energy_store.py",
+            "ha_client.py", "ha_statistics.py", "history_store.py", "lifetime_store.py",
+            "mqtt_grid_energy.py", "pv_source.py",
             "savings_store.py", "scheduler.py", "solar_energy_store.py", "tariff_source.py",
             "templates",
         ],

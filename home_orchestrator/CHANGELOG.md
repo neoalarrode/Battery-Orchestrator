@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.49.1
+Energy re-pineado al tag `v0.49.0` (sensores de importación/vertido) — resto sin cambios. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
+
 ## 0.49.0
 Nuevos sensores acumulativos de energía importada/vertida a red, a petición expresa del usuario. Energy integra, cada ciclo, la potencia de red en vivo que ya calculaba (`grid_total_w`/`vertido_w`) sobre el tiempo real transcurrido desde el último ciclo (nunca un intervalo fijo asumido) y expone el acumulado por MQTT Discovery como dos `sensor.*` de HA con `device_class: energy` y `state_class: total_increasing` — el mismo contrato que un contador nativo, usable directo en el panel de Energía de HA.
 

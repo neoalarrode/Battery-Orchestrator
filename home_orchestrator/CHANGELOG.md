@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.46.1
+Govee y Shelly re-pineados al tag `v0.46.0` (primera version de ambos) — resto de plugins sin cambios. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
+
 ## 0.46.0
 Dos plugins puente nuevos, a peticion expresa del usuario: **Govee** ("https://github.com/wez/govee2mqtt") y **Shelly** ("igual que el original"). Mismo papel que Tuya/TP-Link (consumo interno por Lighting via `light_handle`/`list_light_actuators` + exposición opcional a HA por MQTT Discovery) — ninguno de los dos aparece en el selector de nivel superior, son pura configuración, se acceden desde la rejilla de "Configuración" (mismo criterio que Tuya/TP-Link).
 

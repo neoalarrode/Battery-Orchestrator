@@ -10,6 +10,7 @@
 import { GrpcWebError, grpcWebUnaryCall } from "../core/grpcWeb";
 import type { DishConfigJson } from "../core/dishClient";
 import type { RouterClientUpdate } from "../core/routerClientUpdate";
+import type { WifiConfigChangesJson } from "../core/wifiConfigUpdate";
 
 const AUTH_URL = "https://api.starlink.com/auth-rp/auth/user";
 const API = "https://starlink.com/api";
@@ -52,6 +53,10 @@ export interface CloudHandlerOptions {
   /** Trusted host callback: reads the local dish's identity and encodes exactly
    *  one config change. Renderer-provided protobuf is never accepted. */
   prepareDishConfigUpdate?: (changes: DishConfigJson) => Promise<Uint8Array>;
+  /** Trusted host callback: reads the local router's identity (and, for a DHCP
+   *  range edit, its current network) and encodes exactly one WiFi config
+   *  change. Renderer-provided protobuf is never accepted. */
+  prepareWifiConfigUpdate?: (changes: WifiConfigChangesJson) => Promise<Uint8Array>;
 }
 
 /** The durable half of the session — without it a token refresh can't happen, so
@@ -137,6 +142,7 @@ export function createCloudHandler(options: CloudHandlerOptions = {}) {
   const deviceCallTimeoutMs = options.deviceCallTimeoutMs ?? 15_000;
   const prepareDeviceUpdate = options.prepareDeviceUpdate;
   const prepareDishConfigUpdate = options.prepareDishConfigUpdate;
+  const prepareWifiConfigUpdate = options.prepareWifiConfigUpdate;
 
   let cachedCookie: string | null = null;
   let cachedAt = 0;
@@ -519,5 +525,107 @@ export function createCloudHandler(options: CloudHandlerOptions = {}) {
     return applyDishConfigUpdate(changes);
   }
 
-  return { handle, connect, disconnect, updateClient, updateDishConfig };
+  async function applyWifiConfigUpdate(changes: WifiConfigChangesJson): Promise<CloudResult> {
+    if (!readCookie()) return NOT_CONNECTED;
+    try {
+      if (!prepareWifiConfigUpdate)
+        return { status: 503, body: { error: "wifi_config_update_unavailable" } };
+      const requestBytes = await prepareWifiConfigUpdate(changes);
+      const abortSignal = AbortSignal.timeout(deviceCallTimeoutMs);
+      await withFreshCookie(async (cookie) => {
+        try {
+          await grpcWebUnaryCall(DEVICE_HANDLE, requestBytes, abortSignal, {
+            fetch: doFetch,
+            headers: { cookie },
+          });
+        } catch (error) {
+          if (error instanceof GrpcWebError && error.grpcStatus === 16)
+            throw new SessionExpiredError();
+          throw error;
+        }
+      }, abortSignal);
+      return { status: 200, body: { ok: true } };
+    } catch (error) {
+      if (error instanceof SessionExpiredError) return NOT_CONNECTED;
+      if (error instanceof DOMException && error.name === "TimeoutError") {
+        return {
+          status: 504,
+          body: {
+            error: "device_call_timeout",
+            message: "Starlink did not answer the WiFi config change in time. Try again.",
+          },
+        };
+      }
+      if (error instanceof GrpcWebError && error.grpcStatus === 7) {
+        return {
+          status: 502,
+          body: {
+            error: "wifi_config_denied",
+            message:
+              "Starlink refused this WiFi change (permission denied). This RPC is sometimes " +
+              "blocked outright by firmware, independent of the account's own permissions.",
+          },
+        };
+      }
+      return {
+        status: 502,
+        body: { error: "device_call_failed", message: (error as Error).message },
+      };
+    }
+  }
+
+  // Same 32/64-char WPA2 bounds the router itself enforces; a bypass/DNS
+  // toggle or the DHCP window are refused before the router is ever read.
+  const SSID_RE = /^.{1,32}$/;
+  const WPA2_PASSWORD_RE = /^.{8,63}$/;
+  const COUNTRY_CODE_RE = /^[A-Z]{2}$/;
+
+  /** The renderer names WiFi config fields and their new values, never
+   *  protobuf. Anything outside these shapes is refused before the router is
+   *  read -- same discipline as validDishConfig above. */
+  function validWifiConfig(changes: WifiConfigChangesJson): boolean {
+    if (changes === null || typeof changes !== "object") return false;
+    const entries = Object.entries(changes).filter(([, value]) => value !== undefined);
+    if (entries.length === 0) return false;
+    return entries.every(([field, value]) => {
+      switch (field) {
+        case "networkName":
+        case "networkName5ghz":
+          return typeof value === "string" && SSID_RE.test(value);
+        case "networkPassword":
+          return typeof value === "string" && WPA2_PASSWORD_RE.test(value);
+        case "bypassMode":
+        case "customDnsDisabled":
+        case "secureDns":
+          return typeof value === "boolean";
+        case "nameservers":
+          return (
+            Array.isArray(value) &&
+            value.length <= 4 &&
+            value.every((entry) => typeof entry === "string" && entry.length > 0)
+          );
+        case "dhcpv4Start":
+        case "dhcpv4End":
+          return Number.isInteger(value) && (value as number) >= 0 && (value as number) <= 0xffff_ffff;
+        case "countryCode":
+          return typeof value === "string" && COUNTRY_CODE_RE.test(value);
+        case "disable2ghz":
+        case "disable5ghz":
+        case "disable5ghzHigh":
+        case "disableBandSteering":
+        case "outdoorMode":
+          return typeof value === "boolean";
+        default:
+          return false;
+      }
+    });
+  }
+
+  function updateWifiConfig(changes: WifiConfigChangesJson): Promise<CloudResult> {
+    if (!validWifiConfig(changes))
+      return Promise.resolve({ status: 400, body: { error: "bad_request" } });
+    return applyWifiConfigUpdate(changes);
+  }
+
+  return { handle, connect, disconnect, updateClient, updateDishConfig, updateWifiConfig };
 }

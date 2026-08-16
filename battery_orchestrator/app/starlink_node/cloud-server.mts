@@ -39,6 +39,8 @@ import { prepareDishConfigUpdate } from "./core/dishConfigUpdate.ts";
 import { prepareRouterClientUpdate } from "./core/routerClientUpdate.ts";
 import type { RouterClientUpdate } from "./core/routerClientUpdate.ts";
 import { localNetworkIdentity } from "./core/hostNetworkIdentity.ts";
+import { prepareWifiConfigUpdate } from "./core/wifiConfigUpdate.ts";
+import type { WifiConfigChangesJson } from "./core/wifiConfigUpdate.ts";
 
 const PORT = Number(process.env.CLOUD_PORT ?? 8089);
 const COOKIE_FILE = process.env.CLOUD_COOKIE_FILE ?? "/data/starlink/.starlink-cookie";
@@ -104,6 +106,13 @@ const handler = createCloudHandler({
     });
     return prepareDishConfigUpdate(await dishPromise, changes);
   },
+  prepareWifiConfigUpdate: async (changes) => {
+    routerPromise ??= DishClient.load("router", {
+      handleUrl: ROUTER_URL,
+      protosetBytes: protosetBytes(),
+    });
+    return prepareWifiConfigUpdate(await routerPromise, changes);
+  },
 });
 
 // Sin `isLocalOrigin` (el plugin de desarrollo original la tiene porque su
@@ -147,6 +156,16 @@ createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
       const changes = JSON.parse((await readBody(req)) || "{}") as DishConfigJson;
       const result = await handler.updateDishConfig(changes);
+      return sendJson(res, result.status, result.body);
+    } catch (error) {
+      return sendJson(res, 400, { error: "bad_request", message: (error as Error).message });
+    }
+  }
+
+  if (route === "/cloud/wifi-config" && req.method === "POST") {
+    try {
+      const changes = JSON.parse((await readBody(req)) || "{}") as WifiConfigChangesJson;
+      const result = await handler.updateWifiConfig(changes);
       return sendJson(res, result.status, result.body);
     } catch (error) {
       return sendJson(res, 400, { error: "bad_request", message: (error as Error).message });

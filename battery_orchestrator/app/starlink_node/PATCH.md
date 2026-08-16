@@ -29,6 +29,32 @@ replicando EXACTAMENTE la misma logica de rutas que ya tiene
 `dev/starlinkCloudProxy.ts` (el plugin de Vite real del proyecto) pero
 sin ninguna dependencia de Vite.
 
+Incluye la ruta `/cloud/wifi-config` (POST), que llama a
+`handler.updateWifiConfig` -- ver `cloud/starlinkCloudHandler.ts`
+mas abajo, unico modulo REAL del proyecto que este parche toca (el
+resto de `cloud/`/`core/` sigue sin tocar).
+
+## `cloud/starlinkCloudHandler.ts` -- ÚNICO fichero de Dishylink modificado en este directorio
+
+Añadidos `prepareWifiConfigUpdate` (opción inyectable, mismo patrón que
+`prepareDishConfigUpdate`/`prepareDeviceUpdate` ya existentes) y
+`updateWifiConfig`/`applyWifiConfigUpdate`/`validWifiConfig` -- misma
+disciplina de validación que `updateDishConfig`/`validDishConfig`
+(nunca se acepta protobuf del renderer, solo campos con nombre y su
+valor). Usa `core/wifiConfigUpdate.ts` (NUEVO, ver mas abajo) para
+construir el `wifiSetConfig` -- el resto del fichero, sin tocar.
+
+## `core/wifiConfigUpdate.ts` -- NUEVO fichero
+
+Construye la petición `wifiSetConfig` (nombre/contraseña de red, bypass
+mode, DNS personalizado/seguro, rango DHCP, país, apagado de banda,
+band steering, modo exterior) con los flags `apply_*` reales -- mismo
+patrón que `core/dishConfigUpdate.ts` (`CONFIG_APPLY_FLAG`), pero para
+el `targetId` del router ("Router-...") en vez del dish ("ut..."). Los
+nombres de campo/flag están confirmados contra el `dish.protoset` real
+(`strings dish.protoset | grep '^apply'`) y contra una lectura real de
+`getWifiConfig()` del router en producción -- no son una suposición.
+
 ## Como se ejecutan
 
 `starlink_plugin.py` (`start_background_threads`) lanza dos procesos:

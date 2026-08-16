@@ -86,6 +86,17 @@ CLOUD_PORT = 8089
 _PROXY_TIMEOUT_SECONDS = 10
 _NODE_START_TIMEOUT_SECONDS = 20
 
+# El mapa de satelites en vivo lee las efemerides publicas de CelesTrak
+# (`src/lib/satellites.ts`) -- CelesTrak no manda cabeceras CORS, asi que
+# el proyecto original resuelve esto con un proxy same-origin ("/celestrak",
+# ver su vite.config.ts) que aqui no existia: la app pedia "celestrak/..."
+# (ruta relativa, ver main.tsx) contra ESTE mismo backend, que no tenia
+# ninguna ruta con ese nombre -- 404 silencioso, de ahi el "isn't
+# responding right now" perpetuo en el visor. Mismo patron que _dishy_proxy,
+# pero mas simple (GET puro, sin cuerpo, sin cabeceras especiales que quitar).
+CELESTRAK_BASE_URL = "https://celestrak.org"
+_CELESTRAK_TIMEOUT_SECONDS = 20  # el fichero de TLEs pesa ~1.8 MB
+
 # Mismas cabeceras que quita el proxy de desarrollo REAL de Dishylink
 # (ver su vite.config.ts, evento "proxyReq") -- el dish/router devuelve
 # un 200 vacio (nunca un error claro) si reconoce un Referer/Origin de
@@ -109,7 +120,7 @@ def _router_handle_url() -> str:
 class StarlinkPlugin(Plugin):
     slug = "starlink"
     name = "Starlink Orchestrator"
-    version = "0.2.0"
+    version = "0.3.0"
 
     def __init__(self) -> None:
         self._app = flask.Flask("starlink_plugin", static_folder=_DIST_DIR, static_url_path="")
@@ -246,6 +257,12 @@ class StarlinkPlugin(Plugin):
             """El servidor de cuenta REAL (ver docstring del modulo)."""
             return self._local_proxy(CLOUD_PORT, f"cloud/{sub}", "cloud-server")
 
+        @app.get("/celestrak/<path:sub>")
+        def _celestrak_proxy(sub):
+            """TLEs publicos del mapa de satelites en vivo -- ver comentario
+            de CELESTRAK_BASE_URL mas arriba."""
+            return self._celestrak_response(sub)
+
     @staticmethod
     def _proxy_response(base_url: str, sub: str, target_label: str):
         """Comun a `_dishy_proxy`/`_router_proxy`. `target_label` solo
@@ -273,6 +290,28 @@ class StarlinkPlugin(Plugin):
             if k.lower() not in _STRIP_RESPONSE_HEADERS
         ]
         return flask.Response(upstream.content, status=upstream.status_code, headers=resp_headers)
+
+    @staticmethod
+    def _celestrak_response(sub: str):
+        """GET puro hacia celestrak.org, query string incluida (el TLE_PATH
+        del frontend lleva `?FILE=starlink&FORMAT=tle` como parte de la ruta,
+        no como `flask.request.args` -- se reenvia la URL completa tal
+        cual). Mismo cuidado que el resto de proxies: nunca se filtra el
+        detalle real de la excepcion al cliente."""
+        try:
+            upstream = requests.get(
+                f"{CELESTRAK_BASE_URL}/{sub}",
+                params=flask.request.args,
+                timeout=_CELESTRAK_TIMEOUT_SECONDS,
+            )
+        except requests.RequestException:
+            log.warning("Fallo hablando con CelesTrak (%s)", sub, exc_info=True)
+            return flask.Response("celestrak unreachable", status=502)
+        return flask.Response(
+            upstream.content,
+            status=upstream.status_code,
+            content_type=upstream.headers.get("content-type", "text/plain"),
+        )
 
     @staticmethod
     def _local_proxy(port: int, sub: str, target_label: str):

@@ -17,6 +17,7 @@ arranque:
 ```ts
 import { setApiHost, setRecorderInProcess } from "./lib/apiHost.ts";
 import { setDishHost } from "@core/dishClient.ts";
+import { setSatelliteHost } from "./lib/satellites.ts";
 
 setDishHost({
   dishHandleUrl: "dishy/SpaceX.API.Device.Device/Handle",
@@ -35,6 +36,7 @@ setCloudHost({
     return { status: response.status, body: await response.json().catch(() => ({})) };
   },
 });
+setSatelliteHost("celestrak");
 ```
 
 **Por qué**: `DISH_HANDLE_URL`, el `protosetUrl`/`routerHandleUrl` por
@@ -45,7 +47,13 @@ de `/plugins/starlink/`, nunca de `/`), esas rutas se resuelven contra
 el dominio raíz, no contra este add-on. Síntoma real visto en
 producción: la interfaz mostraba "dish unreachable" con CERO peticiones
 llegando al backend -- el `fetch` del protoset fallaba antes de intentar
-hablar con el dish siquiera.
+hablar con el dish siquiera. La última línea (`setSatelliteHost`) es el
+mismo problema para el mapa de satélites: `satellites.ts` pedía
+`/celestrak/...` (también absoluto de raíz) contra un proxy que en dev
+monta Vite (`vite.config.ts`) y que aquí no existía -- 404 silencioso,
+síntoma real: "The satellite data source isn't responding right now"
+perpetuo. `starlink_plugin.py` añade el proxy real (`/celestrak/<path>`
+-> `celestrak.org`) y esta línea lo apunta ahí, igual que el resto.
 
 ## 2. `src/components/dashboard/TopBar.tsx` -- botón de vuelta
 
@@ -75,6 +83,29 @@ proceso Node de fondo. Une el handler de cuenta REAL del proyecto
 (`cloud/starlinkCloudHandler.ts`, sin tocar) a un servidor `node:http`
 normal en vez de un plugin de Vite (aquí no hay Vite en producción).
 Documentado en `app/starlink_node/PATCH.md`.
+
+## 6. `src/components/settings/RouterSettingsTab.tsx` -- lectura/escritura avanzada del router
+
+Sustituido el aviso estático ("Custom DNS, bypass mode... not exposed
+here") por controles reales de confirmación armada (mismo lenguaje
+visual que `DangerAction`): nombre de red (SSID) por banda combinada o
+solo 5 GHz, contraseña WPA2, bypass mode, DNS personalizado + lista de
+servidores, DNS seguro, rango DHCP, país regulatorio, apagado
+individual de banda 2.4/5 GHz, band steering y modo exterior. Content
+filtering se documenta como NO disponible -- no existe ningún campo así
+en el esquema real del dish (`dish.protoset`), a diferencia del resto,
+que sí son campos reales confirmados contra el dispositivo.
+
+Cada escritura pasa por `src/lib/wifiConfigUpdate.ts` (NUEVO,
+`POST /cloud/wifi-config`, mismo patrón que `dishConfigUpdate.ts`) ->
+`cloud/starlinkCloudHandler.ts` (`updateWifiConfig`, NUEVO en este
+handler pero código real del mismo módulo, sin librería añadida) ->
+`core/wifiConfigUpdate.ts` (NUEVO, construye el `wifiSetConfig` con los
+flags `apply_*` reales del esquema) -> la cuenta cloud del usuario,
+firmada con su cookie de sesión -- el firmware actual rechaza esta RPC
+por LAN (grpc-status 7, ver `LOCAL-API.md` del proyecto original), así
+que cada escritura requiere cuenta conectada, exactamente igual que un
+cambio de configuración del dish.
 
 ## Para reconstruir tras una actualización de Dishylink
 

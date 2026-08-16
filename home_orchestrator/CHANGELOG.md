@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.34.1
+Energy/Climate/Lighting/Tuya/TP-Link re-pineados al tag `v0.34.0` (nueva cabecera) — Starlink NO se toca, no cambió. Verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
 ## 0.34.0
 **Cabecera: "Home Orchestrator" pasa a ser la marca principal (H1 grande), el plugin concreto (Energy/Climate/Lighting/Tuya/TP-Link) pasa a insignia secundaria junto al título — antes era al revés.** A petición expresa del usuario, revisando el trabajo de renombrado de la sesión: *"te centras solo en Energy no en Home"*. Antes cada página llevaba el nombre del plugin como H1 grande y "Home Orchestrator" como una etiqueta diminuta ("eyebrow") encima — correcto según la jerarquía visual habitual (lo grande es lo importante), pero al revés de la identidad real del producto: un usuario nuevo veía "Energy"/"Climate"/etc. como la app en sí, nunca "Home Orchestrator" como la marca que las agrupa a todas.
 

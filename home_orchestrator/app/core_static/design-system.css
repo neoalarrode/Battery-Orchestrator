@@ -130,6 +130,19 @@ a { color: var(--accent); }
   font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .12em;
   font-size: .68rem; font-weight: 600; color: var(--accent-2); margin: 0 0 6px;
 }
+/* Insignia del plugin junto al H1 -- "Home Orchestrator" es la marca (el
+   H1), el plugin concreto (Energy/Climate/...) es una insignia secundaria,
+   no al reves. Antes cada pagina llevaba el nombre del plugin como H1
+   grande y "Home Orchestrator" como eyebrow diminuto encima -- correcto
+   segun la jerarquia visual habitual (lo grande es lo mas importante),
+   pero al reves de la identidad real del producto: un usuario nuevo veia
+   "Energy"/"Climate"/etc. como la app, nunca "Home Orchestrator". */
+.plugin-badge {
+  display: inline-flex; align-items: center; padding: 3px 11px; border-radius: 20px;
+  font-size: .74rem; font-weight: 700; letter-spacing: .02em; font-family: var(--font-mono);
+  background: var(--accent-soft); color: var(--accent); vertical-align: middle;
+  margin-left: 10px; position: relative; top: -3px;
+}
 .subtitle { color: var(--muted); font-size: 0.92rem; margin-top: 6px; max-width: 52ch; }
 .topbar-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 

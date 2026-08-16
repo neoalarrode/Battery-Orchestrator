@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.34.0
+**Cabecera: "Home Orchestrator" pasa a ser la marca principal (H1 grande), el plugin concreto (Energy/Climate/Lighting/Tuya/TP-Link) pasa a insignia secundaria junto al título — antes era al revés.** A petición expresa del usuario, revisando el trabajo de renombrado de la sesión: *"te centras solo en Energy no en Home"*. Antes cada página llevaba el nombre del plugin como H1 grande y "Home Orchestrator" como una etiqueta diminuta ("eyebrow") encima — correcto según la jerarquía visual habitual (lo grande es lo importante), pero al revés de la identidad real del producto: un usuario nuevo veía "Energy"/"Climate"/etc. como la app en sí, nunca "Home Orchestrator" como la marca que las agrupa a todas.
+
+- Nueva clase `.plugin-badge` en `design-system.css` (fichero núcleo, compartido) — una insignia pequeña junto al H1.
+- Las 5 páginas afectadas (Energy, Climate, Lighting, Tuya, TP-Link — Starlink mantiene su propio diseño, a propósito): el H1 pasa a decir "Home Orchestrator", con el nombre del plugin como insignia justo al lado. Quitada la etiqueta "eyebrow" que decía lo mismo por duplicado.
+- Starlink NO se toca — sigue con el diseño original de Dishylink intacto, decisión ya tomada anteriormente en esta sesión.
+
+Como cambia `design-system.css` (fichero núcleo compartido), esta versión SÍ lleva Release en GitHub.
+
 ## 0.33.1
 Los 6 plugins re-pineados al tag `v0.33.0` — TODOS, sin excepción: el renombrado de carpeta cambia el prefijo dentro del tarball del que `plugin_downloader.py` extrae el código (`SUBPATH`), así que un tag antiguo rompería la descarga/instalación de cualquier plugin, no solo de Energy. Verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

@@ -177,8 +177,8 @@ PLUGIN_CATALOG = {
         "description": "Puente de ingesta para bombillas Govee — LAN API local del propio dispositivo (sin cuenta ni nube) — consumo interno por Lighting y/o exposición opcional a HA por MQTT",
         "version": "0.1.0",
         "downloadable": True,
-        "tag": "v0.46.0",
-        "sha256": "a27c33deae1236f67549e1510dc47d3cc1114e67f39a0e0aada93758f0f13d76",  # sha256 real del tarball de v0.46.0, verificado contra una descarga real antes de fijarlo aqui (primera version del plugin)
+        "tag": "v0.46.2",
+        "sha256": "8b5d102654f878a7fb0103e501e31d371652f8f46ed87ead2b242fd2d5d01813",  # sha256 real del tarball de v0.46.2, verificado contra una descarga real antes de fijarlo aqui (HOTFIX: OSError sin atrapar tiraba el addon entero abajo)
         "files": ["govee_plugin.py", "govee", "govee_templates", "govee_store.py"],
     },
     "shelly": {

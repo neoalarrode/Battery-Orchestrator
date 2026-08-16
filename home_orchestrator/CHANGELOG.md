@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.46.3
+Govee re-pineado al tag `v0.46.2` (hotfix del crash-loop) — resto sin cambios. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
+
 ## 0.46.2 -- HOTFIX (crash-loop en produccion)
 Instalar Govee dejaba el addon ENTERO (Energy/Climate/Lighting/Tuya/TP-Link, no solo Govee) en un bucle de reinicio infinito, confirmado en produccion: `GoveeDeviceManager.start()` fallaba con `OSError: Address already in use` al enlazar el puerto UDP 4002 (fijo, del propio protocolo -- otro proceso del host ya lo tenia tomado, `host_network: true` hace que esto compita por puertos con TODO el host, no solo con este addon) y esa excepcion, sin atrapar, tiraba abajo el proceso completo desde `core_app.py: main()`.
 

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.45.1
+Lighting re-pineado al tag `v0.45.0` (fader de brillo/color) — resto de plugins sin cambios. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
+
 ## 0.45.0
 Rediseño real de los controles de brillo/color de Lighting, a peticion expresa del usuario tras rechazar el intento anterior ("es horroroso estéticamente... haz putas cards de iluminación... un diseño moderno, minimalista"). El `<input type=range>` nativo de 4px con un thumb -- lo que llevaba esta tarjeta desde siempre, solo repintado de colores en v0.40-0.44 -- se sustituye por un "fader": una capsula gruesa (46px) donde el propio RELLENO es el valor y la cifra va superpuesta encima, mismo lenguaje visual que los controles de Apple Home / Philips Hue.
 

@@ -74,10 +74,23 @@ def _starlink():
     return StarlinkPlugin()
 
 
+def _govee():
+    _prefer_downloaded("govee")
+    from govee_plugin import GoveePlugin
+    return GoveePlugin()
+
+
+def _shelly():
+    _prefer_downloaded("shelly")
+    from shelly_plugin import ShellyPlugin
+    return ShellyPlugin()
+
+
 # Slug -> constructor.
 PLUGIN_REGISTRY = {
     "battery": _battery, "climate": _climate, "tuya": _tuya,
     "lighting": _lighting, "tplink": _tplink, "starlink": _starlink,
+    "govee": _govee, "shelly": _shelly,
 }
 
 # Metadatos + procedencia verificada para la tienda de plugins de la
@@ -158,6 +171,24 @@ PLUGIN_CATALOG = {
         "tag": "v0.33.0",
         "sha256": "546a54ad34ee4e34c84be20d3c06490d71afa6c3ba6942f3bbc21648fa26af90",  # sha256 real del tarball de v0.33.0, verificado contra una descarga real antes de fijarlo aqui (renombrado battery_orchestrator -> home_orchestrator, todas las descargas dependen de este tag ahora)
         "files": ["starlink_plugin.py", "starlink_store.py", "starlink_dist", "starlink_node"],
+    },
+    "govee": {
+        "name": "Govee Orchestrator",
+        "description": "Puente de ingesta para bombillas Govee — LAN API local del propio dispositivo (sin cuenta ni nube) — consumo interno por Lighting y/o exposición opcional a HA por MQTT",
+        "version": "0.1.0",
+        "downloadable": True,
+        "tag": "PENDIENTE",
+        "sha256": "PENDIENTE",  # se rellena tras el primer tag real que incluya este plugin
+        "files": ["govee_plugin.py", "govee", "govee_templates", "govee_store.py"],
+    },
+    "shelly": {
+        "name": "Shelly Orchestrator",
+        "description": "Puente de ingesta para dispositivos Shelly — API local del propio fabricante (Gen1 HTTP / Gen2+ RPC), sin cuenta ni nube — consumo interno por Lighting y/o exposición opcional a HA por MQTT",
+        "version": "0.1.0",
+        "downloadable": True,
+        "tag": "PENDIENTE",
+        "sha256": "PENDIENTE",  # se rellena tras el primer tag real que incluya este plugin
+        "files": ["shelly_plugin.py", "shelly", "shelly_templates", "shelly_store.py"],
     },
 }
 

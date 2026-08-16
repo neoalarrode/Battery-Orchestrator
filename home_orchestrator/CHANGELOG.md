@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.46.0
+Dos plugins puente nuevos, a peticion expresa del usuario: **Govee** ("https://github.com/wez/govee2mqtt") y **Shelly** ("igual que el original"). Mismo papel que Tuya/TP-Link (consumo interno por Lighting via `light_handle`/`list_light_actuators` + exposición opcional a HA por MQTT Discovery) — ninguno de los dos aparece en el selector de nivel superior, son pura configuración, se acceden desde la rejilla de "Configuración" (mismo criterio que Tuya/TP-Link).
+
+- **Govee** (`govee_plugin.py`, `govee/device_manager.py`, `govee/mqtt_govee.py`): protocolo LAN de Govee reimplementado en crudo (UDP 4001/4002/4003, JSON `scan`/`turn`/`brightness`/`colorwc`/`devStatus`) — SOLO la vía local, a propósito: govee2mqtt combina LAN + AWS IoT no documentado (usa el email/contraseña de la cuenta) + API REST oficial (pide una API key al fabricante) — ninguna de las dos últimas encaja con el "sin cajas negras" del resto de Home Orchestrator, mismo criterio que ya se aplicó a Tuya (LAN únicamente, nunca la nube del fabricante). Cada bombilla necesita la "Govee LAN API" activada a mano en la app oficial — sin eso no responde, no hay forma de rodearlo sin la nube.
+- **Shelly** (`shelly_plugin.py`, `shelly/device_manager.py`, `shelly/mqtt_shelly.py`): API HTTP local oficial y documentada — Gen1 por querystring (`/light`, `/color`, `/relay`) y Gen2/3 por RPC JSON (`/rpc/<Método>`), con detección automática de generación y de capacidad (relé simple / atenuador blanco / RGBW) al añadir el dispositivo. Descubrimiento por barrido activo de la subred propia (Shelly no tiene un broadcast tan simple como Govee/Tuya, y añadir `zeroconf` solo para esto no compensaba). **Sin hardware Shelly real para verificar** — los payloads son los de la documentación oficial, no verificados contra un dispositivo físico todavía (documentado en el propio código).
+- Ninguno de los dos añade dependencias nuevas a la imagen — Govee es UDP+JSON puro (stdlib), Shelly reutiliza `requests` (ya instalado para el resto del núcleo).
+- `plugin-switch.js` (núcleo) y la copia propia de Energy: iconos/etiquetas para los dos plugins nuevos en la rejilla de "Configuración".
+
 ## 0.45.1
 Lighting re-pineado al tag `v0.45.0` (fader de brillo/color) — resto de plugins sin cambios. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
 

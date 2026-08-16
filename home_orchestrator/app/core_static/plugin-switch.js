@@ -45,8 +45,10 @@ const PLUGIN_ICONS = {
   lighting: '<path d="M12 2a7 7 0 0 0-4 12.74V17a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-2.26A7 7 0 0 0 12 2Zm-2 17h4v1a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-1Z" fill="currentColor"/>',
   tplink: '<path d="M12 5a7 7 0 0 0-4.95 11.95l1.41-1.41a5 5 0 1 1 7.08 0l1.41 1.41A7 7 0 0 0 12 5Zm0 4a3 3 0 0 0-2.12 5.12l1.41-1.41a1 1 0 1 1 1.42 0l1.41 1.41A3 3 0 0 0 12 9Z" fill="currentColor"/>',
   starlink: '<path d="M12 3a9 9 0 0 1 9 9h-2a7 7 0 0 0-7-7V3Z" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><path d="M12 14v7M9 21h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/>',
+  govee: '<circle cx="12" cy="12" r="4" fill="currentColor"/><path d="M12 4v2.5M12 17.5V20M4 12h2.5M17.5 12H20M6.5 6.5l1.8 1.8M15.7 15.7l1.8 1.8M6.5 17.5l1.8-1.8M15.7 8.3l1.8-1.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/>',
+  shelly: '<path d="M12 2 3 8v13h6v-6h6v6h6V8L12 2Z" fill="currentColor"/>',
 };
-const PLUGIN_LABELS = { battery: "Energy", climate: "Climate", tuya: "Tuya", lighting: "Lighting", tplink: "TP-Link", starlink: "Starlink" };
+const PLUGIN_LABELS = { battery: "Energy", climate: "Climate", tuya: "Tuya", lighting: "Lighting", tplink: "TP-Link", starlink: "Starlink", govee: "Govee", shelly: "Shelly" };
 
 // "Configuración" no es un plugin -- vive en la pagina de Energy (rejilla
 // con la config de cada plugin instalado), pero es alcanzable desde el

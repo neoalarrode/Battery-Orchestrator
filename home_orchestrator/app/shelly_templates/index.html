@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home Orchestrator — Shelly</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%3E%3Crect%20width%3D%2724%27%20height%3D%2724%27%20rx%3D%276%27%20fill%3D%27%23e0a422%27%2F%3E%3Cpath%20d%3D%27M12%202%203%208v13h6v-6h6v6h6V8L12%202Z%27%20fill%3D%27%23000000%27%2F%3E%3C%2Fsvg%3E">
+<link rel="stylesheet" href="../../shared/design-system.css">
+<style>
+  /* Mismo lenguaje visual que el resto de Home Orchestrator, via el
+     sistema de diseño compartido (ver /shared/design-system.css) --
+     aquí solo lo especifico de esta página. Icono de marca: una casa,
+     para diferenciar del resto (rele/switch domestico). */
+  button:disabled { opacity: .5; cursor: default; }
+
+  .pill-mqtt { background: var(--accent-soft); color: var(--accent); }
+
+  .device-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+  .device-card { border: 1px solid var(--glass-border); border-radius: var(--radius); padding: 16px 18px; background: var(--glass-bg); box-shadow: var(--shadow); }
+  .device-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+  .device-name { font-family: var(--font-display); font-weight: 700; font-size: 1rem; }
+  .device-meta { font-size: .76rem; color: var(--muted); font-family: var(--font-mono); margin-top: 2px; }
+  .device-actions { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+  .device-actions button { padding: 6px 11px; font-size: .76rem; }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 18px; border-radius: 9px; font-size: 0.85rem; opacity: 0; transition: opacity .25s; }
+  .toast.show { opacity: 0.95; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <h1><span class="brand-mark" aria-hidden="true">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2 3 8v13h6v-6h6v6h6V8L12 2Z" fill="currentColor"/>
+      </svg>
+    </span>Home Orchestrator<span class="plugin-badge">Shelly</span></h1>
+    <div class="subtitle">Puente de ingesta para dispositivos Shelly — API local del propio fabricante (Gen1 HTTP / Gen2+ RPC), sin cuenta ni nube — consumidos internamente por Lighting y/o expuestos a Home Assistant por MQTT.</div>
+  </div>
+  <div class="topbar-right">
+    <nav class="plugin-switch" id="plugin-switch-nav" aria-label="Cambiar de plugin"></nav>
+  </div>
+</div>
+
+<div class="card">
+  <h2><span>Escanear la red</span> <span class="hint">solo informativo — tú decides si añadir alguno</span></h2>
+  <p class="help">Shelly no anuncia sus dispositivos por broadcast como Govee/Tuya — esto sondea cada IP de tu propia subred en paralelo, puede tardar unos segundos. No es un listener permanente, pulsa "Escanear" cada vez que quieras ver qué hay.</p>
+  <div class="actions">
+    <button type="button" id="scan-btn" onclick="scanNow()">Escanear ahora</button>
+  </div>
+  <div id="discovered-grid" class="device-grid" style="margin-top:14px"></div>
+  <div id="discovered-empty" class="empty" style="display:none">Nada visto todavía — pulsa "Escanear ahora".</div>
+</div>
+
+<div class="card">
+  <h2>
+    <span>Dispositivos</span>
+    <span class="hint" id="conn-mqtt">MQTT: —</span>
+  </h2>
+  <div id="device-grid" class="device-grid"></div>
+  <div id="device-empty" class="empty" style="display:none">Todavía no hay ningún dispositivo dado de alta — añade el primero abajo, o "Añadir" uno de los escaneados arriba.</div>
+</div>
+
+<div class="card">
+  <details id="add-device-details">
+    <summary><span class="add-toggle">＋ Nuevo dispositivo</span></summary>
+    <form id="device-form" style="margin-top:16px" onsubmit="return submitDeviceForm(event)">
+      <input type="hidden" id="df-id" value="">
+
+      <label for="df-name">Nombre</label>
+      <input id="df-name" required placeholder="Rele lavadora">
+
+      <label for="df-host">Dirección IP en la LAN</label>
+      <input id="df-host" required placeholder="192.168.1.80">
+      <p class="help">Se detecta solo si es Gen1 o Gen2/3, y si es un rele simple, un atenuador blanco o un RGBW — no hace falta indicarlo a mano.</p>
+
+      <div class="checkline">
+        <input type="checkbox" id="df-expose-mqtt">
+        <label for="df-expose-mqtt">Exponer a Home Assistant por MQTT (además de poder usarse en Lighting)</label>
+      </div>
+
+      <div class="actions">
+        <button type="submit" id="df-submit-btn">Añadir dispositivo</button>
+        <button type="button" class="ghost" onclick="cancelDeviceForm()">Cancelar</button>
+      </div>
+    </form>
+  </details>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="../../shared/plugin-switch.js"></script>
+<script>
+const API = "api";
+
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2200);
+}
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function jsAttr(s) { return esc(String(s ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'")); }
+
+const CAPABILITY_LABEL = { switch: "rele", light: "atenuador", rgbw: "RGBW" };
+
+let lastDevices = [];
+
+function renderDevices(devices) {
+  const grid = document.getElementById("device-grid");
+  const empty = document.getElementById("device-empty");
+  if (!devices.length) { grid.innerHTML = ""; empty.style.display = "block"; return; }
+  empty.style.display = "none";
+  grid.innerHTML = devices.map(d => {
+    const live = d.live || {};
+    const metaBits = [esc(d.config.host)];
+    if (live.model) metaBits.push(esc(live.model));
+    if (live.gen) metaBits.push("Gen" + live.gen);
+    if (live.capability) metaBits.push(CAPABILITY_LABEL[live.capability] || live.capability);
+    return `
+    <div class="device-card">
+      <div class="device-card-head">
+        <span class="device-name">${esc(d.config.name || d.id)}</span>
+        <span class="pill ${live.connected ? 'pill-ok' : 'pill-off'}">${live.connected ? (live.is_on ? 'encendido' : 'apagado') : 'sin conexión'}</span>
+      </div>
+      <div class="device-meta">${metaBits.join(' · ')}</div>
+      ${d.config.expose_mqtt ? '<span class="pill pill-mqtt" style="margin-top:8px">expuesto por MQTT</span>' : ''}
+      <div class="device-actions">
+        <button class="ghost" onclick="editDevice('${d.id}')">Editar</button>
+        <button class="danger" onclick="deleteDevice('${d.id}', '${jsAttr(d.config.name || d.id)}')">Eliminar</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+async function loadDevices() {
+  try {
+    const r = await fetch(`${API}/devices`);
+    lastDevices = await r.json();
+    renderDevices(lastDevices);
+  } catch (e) { /* red temporalmente caida */ }
+}
+
+async function loadStatus() {
+  try {
+    const r = await fetch(`${API}/status`);
+    const s = await r.json();
+    document.getElementById("conn-mqtt").textContent = "MQTT: " + (s.mqtt_connected ? "conectado" : "desconectado");
+  } catch (e) { /* idem */ }
+}
+
+// -------------------------------------------------------------- escaneo -
+
+function renderDiscovered(devices) {
+  const grid = document.getElementById("discovered-grid");
+  const empty = document.getElementById("discovered-empty");
+  const notAdded = devices.filter(d => !d.already_added);
+  if (!notAdded.length) { grid.innerHTML = ""; empty.style.display = devices.length ? "none" : "block"; return; }
+  empty.style.display = "none";
+  grid.innerHTML = notAdded.map(d => `
+    <div class="device-card">
+      <div class="device-card-head">
+        <span class="device-name">${esc(d.model || d.host)}</span>
+      </div>
+      <div class="device-meta">${esc(d.host)}${d.gen ? ' · Gen' + d.gen : ''}</div>
+      <div class="device-actions">
+        <button onclick="addFromDiscovered('${jsAttr(d.host)}', '${jsAttr(d.model || '')}')">Añadir</button>
+      </div>
+    </div>`).join("");
+}
+
+async function scanNow() {
+  const btn = document.getElementById("scan-btn");
+  btn.disabled = true; btn.textContent = "Escaneando…";
+  try {
+    const r = await fetch(`${API}/discover`, {method: "POST"});
+    const found = r.ok ? await r.json() : [];
+    renderDiscovered(found);
+    if (!r.ok) toast("Fallo al escanear la red");
+  } catch (e) {
+    toast("Fallo al escanear la red");
+  }
+  btn.disabled = false; btn.textContent = "Escanear ahora";
+}
+
+function addFromDiscovered(host, model) {
+  cancelDeviceForm();
+  fillDeviceForm({name: model || "", host});
+  document.getElementById("add-device-details").open = true;
+  document.getElementById("add-device-details").scrollIntoView({behavior: "smooth", block: "start"});
+}
+
+async function deleteDevice(id, name) {
+  if (!confirm(`¿Eliminar "${name}"? Se cierra la conexión y, si estaba expuesto, se retira de Home Assistant.`)) return;
+  const r = await fetch(`${API}/devices/${id}`, {method: "DELETE"});
+  if (r.ok) { toast("Dispositivo eliminado"); loadDevices(); } else { toast("Fallo al eliminar"); }
+}
+
+function readDeviceForm() {
+  return {
+    name: document.getElementById("df-name").value.trim(),
+    host: document.getElementById("df-host").value.trim(),
+    expose_mqtt: document.getElementById("df-expose-mqtt").checked,
+  };
+}
+
+function fillDeviceForm(cfg) {
+  document.getElementById("df-name").value = cfg.name || "";
+  document.getElementById("df-host").value = cfg.host || "";
+  document.getElementById("df-expose-mqtt").checked = !!cfg.expose_mqtt;
+}
+
+function editDevice(id) {
+  const d = lastDevices.find(x => x.id === id);
+  if (!d) return;
+  document.getElementById("df-id").value = id;
+  fillDeviceForm(d.config);
+  document.getElementById("df-submit-btn").textContent = "Guardar cambios";
+  document.getElementById("add-device-details").open = true;
+  document.getElementById("add-device-details").scrollIntoView({behavior: "smooth", block: "start"});
+}
+
+function cancelDeviceForm() {
+  document.getElementById("device-form").reset();
+  document.getElementById("df-id").value = "";
+  document.getElementById("df-submit-btn").textContent = "Añadir dispositivo";
+  document.getElementById("add-device-details").open = false;
+}
+
+async function submitDeviceForm(ev) {
+  ev.preventDefault();
+  const id = document.getElementById("df-id").value;
+  const payload = readDeviceForm();
+  if (!payload.name || !payload.host) {
+    toast("Nombre y dirección IP son obligatorios");
+    return false;
+  }
+  const url = id ? `${API}/devices/${id}` : `${API}/devices`;
+  const method = id ? "PUT" : "POST";
+  const r = await fetch(url, {method, headers: {"Content-Type": "application/json"}, body: JSON.stringify(payload)});
+  if (r.ok) {
+    toast(id ? "Dispositivo actualizado" : "Dispositivo añadido");
+    cancelDeviceForm();
+    loadDevices();
+  } else {
+    const body = await r.json().catch(() => ({}));
+    toast(body.error || "Fallo al guardar el dispositivo");
+  }
+  return false;
+}
+
+loadDevices();
+loadStatus();
+renderPluginSwitch("shelly");
+setInterval(loadDevices, 8000);
+setInterval(loadStatus, 8000);
+</script>
+</body>
+</html>

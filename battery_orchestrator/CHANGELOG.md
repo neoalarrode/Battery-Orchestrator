@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.32.1
+Sha256 de Climate/Tuya/Lighting/TP-Link re-pineados al tag `v0.32.0` (fix de `js/incomplete-sanitization`) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
 ## 0.32.0
 **Corrige las 5 alertas `js/incomplete-sanitization` de CodeQL (climate/lighting/tplink×2/tuya) — bug real, no solo de patrón.** Las tarjetas de zona/dispositivo construyen su botón "Eliminar" como `onclick="deleteX('id', '${...}')"`; el nombre que va dentro pasaba por `esc(...)` (escapa `&<>"'` para HTML) y luego un `.replace(/'/g, "\\'")` que ya no hacía nada (esc() no dejaba ninguna comilla suelta que reemplazar) — pero nunca escapaba la barra invertida. Un nombre terminado en `\` hace que, tras decodificar el HTML, la secuencia `\'` se lea como una comilla ESCAPADA dentro del string JS en vez de su cierre: el string se sigue "comiendo" el resto del atributo hasta la siguiente comilla suelta que encuentre en la página — la vía real para inyectar JS con un nombre de zona/dispositivo bien elegido, no una alerta cosmética.
 

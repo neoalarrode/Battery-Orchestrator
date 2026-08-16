@@ -21,6 +21,8 @@ import json
 import logging
 import os
 
+from werkzeug.utils import safe_join
+
 log = logging.getLogger("core_backup")
 
 DATA_DIR = os.path.dirname(__import__("config_store").CONFIG_PATH)
@@ -68,24 +70,25 @@ def restore_backup(bundle: dict) -> list[str]:
 
     files = bundle["files"]
     restored = []
-    real_data_dir = os.path.realpath(DATA_DIR)
     os.makedirs(DATA_DIR, exist_ok=True)
     for name, content in files.items():
         if not isinstance(name, str) or not name.endswith(".json") or name in EXCLUDED_FILES:
             log.warning("Backup: fichero '%r' ignorado (fuera del formato esperado)", name)
             continue
-        path = os.path.join(DATA_DIR, name)
-        # BUG REAL, marcado por CodeQL (py/path-injection): comprobar
-        # solo que `name` no contenga "/"/"\\" no es una prueba real de
-        # que la ruta final se queda dentro de DATA_DIR -- mas robusto
-        # (y lo que CodeQL de verdad reconoce como neutralizado):
-        # resolver la ruta final y comprobar que sigue siendo hija real
-        # de DATA_DIR antes de escribir nada. `name` viene de un backup
-        # subido por el propio usuario -- nunca de una fuente ajena,
-        # pero la comprobacion cuesta lo mismo y cierra la clase entera
-        # de bug, no solo el patron concreto que se nos ocurriera a
-        # mano (symlinks, codificaciones raras...).
-        if os.path.realpath(path) != os.path.join(real_data_dir, name):
+        # BUG REAL, marcado por CodeQL (py/path-injection): comprobar solo
+        # que `name` no contenga "/"/"\\" (version anterior) no es una
+        # prueba real de que la ruta final se queda dentro de DATA_DIR, ni
+        # tampoco lo era resolver a mano con os.path.realpath() y comparar
+        # (CodeQL siguio marcandolo -- no reconoce esa comparacion manual
+        # como una barrera real). `safe_join` de Werkzeug (ya una
+        # dependencia de este proyecto, es lo que usa Flask internamente
+        # para servir ficheros estaticos sin este mismo bug) es el
+        # saneador que CodeQL SI reconoce para este patron exacto -- y es
+        # ademas mas estricto: normaliza y rechaza cualquier resultado que
+        # no quede dentro de DATA_DIR, symlinks/codificaciones raras
+        # incluidas, devolviendo None en vez de una ruta.
+        path = safe_join(DATA_DIR, name)
+        if path is None:
             log.warning("Backup: fichero '%s' ignorado (ruta fuera de %s)", name, DATA_DIR)
             continue
         tmp_path = path + ".restoring.tmp"

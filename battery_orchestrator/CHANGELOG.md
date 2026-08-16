@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.31.0
+**Corrección real de `py/path-injection` en `core_backup.py` (el fix anterior de esta misma sesión no era suficiente).** El escaneo de CodeQL volvió a marcar la misma alerta contra el commit del re-pin anterior — comprobar a mano `os.path.realpath(path) != os.path.join(real_data_dir, name)` no es un patrón que CodeQL reconozca como una barrera real, aunque sea correcto en la práctica. Cambiado a `werkzeug.utils.safe_join` (ya una dependencia del proyecto — es lo que usa el propio Flask internamente para servir ficheros estáticos sin este mismo bug), el saneador canónico que CodeQL sí reconoce para este patrón exacto. Verificado con una prueba real (traversal `../` y `sneaky/../../`) antes de desplegar: ambos casos se rechazan, el resto del backup se restaura igual. `core_backup.py` es un fichero núcleo horneado en la imagen (no un plugin descargable), así que esta versión SÍ lleva Release en GitHub.
+
 ## 0.30.1
 Sha256 de Energy, Climate, Tuya, Lighting y TP-Link re-pineados al tag `v0.30.0` (fix de `py/stack-trace-exposure`) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

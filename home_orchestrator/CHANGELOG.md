@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.52.0
+Contrapartida instantánea (W) de los sensores de energía importada/vertida, a petición expresa del usuario — mismo patrón que ya existía para solar (`sensor.battery_orchestrator_solar_power` junto a `..._solar_energy`), que grid import/export no tenía todavía.
+
+- Nuevos `sensor.battery_orchestrator_grid_imported_power` / `..._grid_exported_power` (W, `device_class: power`, `state_class: measurement`).
+- Reutilizan `grid_total_w`/`vertido_now_w`, ya calculados cada ciclo — sin lectura nueva a HA.
+- Throttle de 15s (más corto que el resto de sensores publicados desde `run_cycle`, 120s) para que sea una potencia "instantánea" de verdad, sin llegar al ritmo de 10s de `_live_sensor_loop` (que no tiene ahí las variables de flujo que hacen falta para este cálculo).
+
 ## 0.51.1
 Energy re-pineado al tag `v0.51.0` (sensores de red unificados al mecanismo REST) — resto sin cambios. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
 

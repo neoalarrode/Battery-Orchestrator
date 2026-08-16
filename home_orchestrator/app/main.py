@@ -868,8 +868,36 @@ def run_cycle():
                 "unit_of_measurement": "kWh", "friendly_name": "Battery Orchestrator Energía vertida a red",
             },
         )
+        # Contrapartida INSTANTANEA (W) de los dos sensores de arriba --
+        # a peticion expresa del usuario, mismo patron que ya existe para
+        # solar (sensor.battery_orchestrator_solar_power junto a
+        # ..._solar_energy): el acumulado (kWh) sirve para el Panel de
+        # Energia, la potencia (W) para ver "cuanto estoy importando/
+        # vertiendo AHORA MISMO" en cualquier tarjeta normal de HA.
+        # Throttle mas corto que el resto de _publish_sensor_throttled de
+        # esta funcion (120s por defecto) -- una potencia instantanea que
+        # solo se refresca cada 2 minutos no es "instantanea" de verdad;
+        # 15s es mas que de sobra sin llegar al ritmo de _live_sensor_loop
+        # (10s, ver mas abajo), que no tiene aqui el resto de variables de
+        # flujo (solar_to_batt_w, etc.) que hacen falta para este calculo.
+        _publish_sensor_throttled(
+            "sensor.battery_orchestrator_grid_imported_power", round(grid_total_w),
+            {
+                "device_class": "power", "state_class": "measurement",
+                "unit_of_measurement": "W", "friendly_name": "Battery Orchestrator Potencia importada de red",
+            },
+            min_interval=15,
+        )
+        _publish_sensor_throttled(
+            "sensor.battery_orchestrator_grid_exported_power", round(vertido_now_w),
+            {
+                "device_class": "power", "state_class": "measurement",
+                "unit_of_measurement": "W", "friendly_name": "Battery Orchestrator Potencia vertida a red",
+            },
+            min_interval=15,
+        )
     except Exception:
-        log.exception("Fallo publicando energia importada/vertida acumulada")
+        log.exception("Fallo publicando potencia/energia importada/vertida")
     energy_flow = {
         # TODOS estos en vivo (ver flow_pv_w/flow_load_w/flow_charge_w/
         # flow_discharge_w mas arriba) — antes usaban `now_hp` (la

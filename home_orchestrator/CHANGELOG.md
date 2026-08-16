@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.42.1
+Energy/Climate/Lighting re-pineados al tag `v0.42.0` (correccion de tipografia) — Tuya/TP-Link/Starlink sin cambios. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
+
 ## 0.42.0
 Correccion real de tipografia tras comparacion pixel a pixel del usuario contra el Dishylink en produccion ("sigues copiando el estilo de widget original en vez del que te he dicho"). v0.40.0/v0.41.0 ya igualaban color, densidad y sparklines, pero el resto de la pagina seguia sonando "tecnica/mono" donde el Dishylink real es casi todo Barlow.
 

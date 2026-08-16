@@ -135,26 +135,26 @@ _CATALOG_PAGE = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Home Orchestrator</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%3E%3Cdefs%3E%3ClinearGradient%20id%3D%27g%27%20x1%3D%270%27%20y1%3D%270%27%20x2%3D%2724%27%20y2%3D%2724%27%20gradientUnits%3D%27userSpaceOnUse%27%3E%3Cstop%20offset%3D%270%27%20stop-color%3D%27%238b5cf6%27%2F%3E%3Cstop%20offset%3D%271%27%20stop-color%3D%27%2322d3ee%27%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%2724%27%20height%3D%2724%27%20rx%3D%276%27%20fill%3D%27url%28%23g%29%27%2F%3E%3C%2Fsvg%3E">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2024%2024%27%3E%3Crect%20width%3D%2724%27%20height%3D%2724%27%20rx%3D%276%27%20fill%3D%27%23e0a422%27/%3E%3C/svg%3E">
 <style>
   :root {
     color-scheme: dark light;
-    --bg:#0b0a16; --card:#14132a; --text:#eae8f7; --muted:#8b87ab; --border:#2a2850;
-    --accent:#8b5cf6; --accent-2:#22d3ee; --accent-soft:#8b5cf626; --accent-ink:#0b0a16;
-    --glow: 0 0 0 1px #8b5cf64d, 0 0 24px -6px #8b5cf673;
-    --green:#34d399; --green-soft:#34d39920; --red:#fb7185; --red-soft:#fb718520;
-    --radius:12px; --font: -apple-system,"Segoe UI",Arial,sans-serif;
-    --font-mono: ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --bg:#000; --card:#0c0c0c; --text:#fff; --muted:#7c7c7c; --border:rgba(255,255,255,.09);
+    --accent:#e0a422; --accent-2:#e0a422; --accent-soft:#e0a42222; --accent-ink:#14100a;
+    --glow: 0 0 0 1px #e0a42255;
+    --green:#3fb97e; --green-soft:#3fb97e1f; --red:#e5586a; --red-soft:#e5586a1f;
+    --radius:16px; --font: "Barlow", -apple-system,"Segoe UI",Arial,sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace,"SF Mono",Menlo,Consolas,monospace;
   }
   @media (prefers-color-scheme: light) {
-    :root { --bg:#f2f1fa; --card:#fff; --text:#1c1a2e; --muted:#68648c; --border:#dcd9f2;
-      --accent:#7c3aed; --accent-2:#0891b2; --accent-soft:#7c3aed15; --accent-ink:#fff;
-      --green:#159a67; --green-soft:#159a6715; --red:#e0475f; --red-soft:#e0475f15; }
+    :root { --bg:#f7f7f5; --card:#fff; --text:#141414; --muted:#78766e; --border:#e4e2dc;
+      --accent:#b9800a; --accent-2:#b9800a; --accent-soft:#b9800a15; --accent-ink:#fff;
+      --green:#1f8a5c; --green-soft:#1f8a5c15; --red:#c73f52; --red-soft:#c73f5215; }
   }
   * { box-sizing: border-box; }
   body { font-family: var(--font); background: var(--bg); color: var(--text); max-width: 720px; margin: 0 auto; padding: 48px 20px 90px; line-height: 1.5; }
   h1 { font-size: 1.5rem; margin: 0 0 6px; display: flex; align-items: center; gap: 10px; }
-  .brand-mark { width: 32px; height: 32px; border-radius: 9px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); display: inline-flex; align-items: center; justify-content: center; color: var(--accent-ink); box-shadow: var(--glow); }
+  .brand-mark { width: 32px; height: 32px; border-radius: 10px; background: var(--accent); display: inline-flex; align-items: center; justify-content: center; color: var(--accent-ink); }
   .subtitle { color: var(--muted); font-size: .92rem; margin-bottom: 32px; }
   .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 22px; margin-bottom: 16px; }
   .card h2 { font-size: .92rem; margin: 0 0 4px; }

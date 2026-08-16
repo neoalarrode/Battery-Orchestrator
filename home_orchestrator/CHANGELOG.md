@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.39.0
+**Rediseño real: se aplica la estética de Dishylink (el plugin Starlink) al resto de Home Orchestrator.** A petición expresa del usuario, tras conectar Claude a su navegador para revisar Starlink en producción: *"aplica la misma estética de Dishylink a todo"*. Los tokens de abajo se sacaron DIRECTAMENTE del Dishylink real en producción (`getComputedStyle` contra el DOM real, no adivinados): fondo negro puro, tarjetas sólidas sin desenfoque, texto en 3 niveles de gris, un único acento ámbar, tipografía Barlow + IBM Plex Mono.
+
+- `design-system.css` (fichero núcleo, compartido por las 5 páginas): nuevos tokens de color (`--bg:#000`, `--card:#0c0c0c`, `--accent:#e0a422`...) y tipografía (Barlow/IBM Plex Mono, vía Google Fonts). Las variables `--glass-*` (antes cristal con desenfoque real) pasan a resolver a superficies sólidas sin blur — así cada regla que ya las usaba (`.card`, `.pill`, inputs...) se aplana sola, sin tocarla una por una.
+- **Energy** tenía, además, una copia COMPLETA y redundante del vocabulario compartido pegada en su propio `<style>` (topbar, card, botones, tabla, pill... — más de 200 líneas) que se había quedado sin detectar en el dedup de una tarea anterior de esta sesión — se quita del todo, ahora depende solo del fichero compartido como el resto.
+- Favicons de las 5 páginas y de la pantalla de catálogo sin plugins instalados (`core_shell.py`): el degradado violeta→cian se sustituye por el ámbar sólido.
+- Resto de hex sueltos del acento antiguo (`.pill-cool`/`.pill-sim` de Climate) reemplazados por los tokens nuevos.
+- **Starlink NO se toca** — sigue siendo Dishylink de verdad, con su propio CSS intacto; esto es "la misma estética", no "el mismo fichero".
+
+Como cambia `design-system.css` y `core_shell.py` (ficheros núcleo), esta versión SÍ lleva Release en GitHub.
+
 ## 0.38.1
 Re-pin de TP-Link al tag `v0.38.0` (corrige KeyError 'color_temp' real en producción) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

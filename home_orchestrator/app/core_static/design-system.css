@@ -8,6 +8,22 @@ pegada del mismo diseño (mismos --accent, mismo .card, mismo .plugin-switch...)
 repetida 5 veces con pequeñas diferencias que se iban desincronizando --
 un cambio de paleta en un sitio nunca llegaba a los demás.
 
+REDISEÑO (a peticion expresa del usuario): "aplica la misma estetica de
+Dishylink a todo" -- Starlink integra tal cual el build de Dishylink (ver
+starlink_plugin.py) con su propia identidad visual, deliberadamente
+distinta del resto hasta ahora (violeta/cian, superficies en cristal con
+desenfoque, resplandores). Los tokens de aqui abajo estan tomados
+DIRECTAMENTE del Dishylink real en produccion (inspeccionados con
+getComputedStyle contra el DOM real, no adivinados): fondo negro puro,
+tarjetas solidas #0c0c0c sin borde ni desenfoque, texto en 3 niveles de
+gris, un unico acento ambar (#e0a422), tipografia Barlow (texto) + IBM
+Plex Mono (numeros/datos). El resto de paginas (Energy/Climate/Lighting/
+Tuya/TP-Link) siguen con sus MISMAS clases/componentes -- solo cambian
+los tokens y se aplanan los efectos de cristal, para no tener que tocar
+cada plantilla una por una. Starlink (Dishylink de verdad) no enlaza este
+fichero, mantiene su propio CSS intacto -- esto es la "misma estetica",
+no el mismo codigo.
+
 Qué vive AQUÍ (genérico, reusado tal cual en cualquier página):
   - Tokens de color/tipografía/superficie (:root + claro/oscuro).
   - Layout base (body, retícula de fondo, manchas ambiente).
@@ -29,84 +45,77 @@ aplica) -- esto no es una caja negra que se imponga por encima del propio
 <style> de la pagina, es la base sobre la que se construye.
 */
 
+@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
 :root {
   color-scheme: dark light;
-  --bg: #0b0a16; --bg-alt: #131226; --card: #14132a; --text: #eae8f7; --muted: #8b87ab;
-  --border: #2a2850; --accent: #8b5cf6; --accent-2: #22d3ee; --accent-soft: #8b5cf626; --accent-ink: #0b0a16;
-  --glow: 0 0 0 1px #8b5cf64d, 0 0 24px -6px #8b5cf673;
-  --green: #34d399; --amber: #fbbf24; --red: #fb7185;
-  --green-soft: #34d39920; --amber-soft: #fbbf2420; --red-soft: #fb718520;
-  --radius: 12px; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 28px -8px rgba(139,92,246,.18);
-  --glass-bg: rgba(20, 19, 42, .48); --glass-bg-strong: rgba(20, 19, 42, .7);
-  --glass-border: rgba(255, 255, 255, .1); --glass-sheen: rgba(255, 255, 255, .08);
-  --glass-blur: blur(22px) saturate(170%); --glass-blur-soft: blur(14px) saturate(150%);
-  --font-display: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-  --font-body: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  --bg: #000000; --bg-alt: #0a0a0a; --card: #0c0c0c; --text: #ffffff; --text-2: #b9b9b9; --muted: #7c7c7c;
+  --border: rgba(255, 255, 255, .09); --accent: #e0a422; --accent-2: #e0a422; --accent-soft: #e0a42222; --accent-ink: #14100a;
+  --glow: 0 0 0 1px #e0a42255;
+  --green: #3fb97e; --amber: #e0a422; --red: #e5586a;
+  --green-soft: #3fb97e1f; --amber-soft: #e0a4221f; --red-soft: #e5586a1f;
+  --radius: 16px; --shadow: none;
+  /* Ya no hay cristal/desenfoque de verdad (Dishylink es plano, superficies
+     solidas) -- se dejan estas variables con los MISMOS nombres para que
+     cada regla que ya las usaba (.card, .pill, inputs...) siga funcionando
+     sin tocarla, pero resueltas a un color solido y sin blur. */
+  --glass-bg: var(--card); --glass-bg-strong: #141414;
+  --glass-border: var(--border); --glass-sheen: rgba(255, 255, 255, .03);
+  --glass-blur: none; --glass-blur-soft: none;
+  --font-display: "Barlow", -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Barlow", -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: light) {
   :root {
-    --bg:#f2f1fa; --bg-alt:#e7e5f6; --card:#ffffff; --text:#1c1a2e; --muted:#68648c;
-    --border:#dcd9f2; --accent:#7c3aed; --accent-2:#0891b2; --accent-soft:#7c3aed15; --accent-ink:#ffffff;
-    --glow: 0 0 0 1px #7c3aed33, 0 0 20px -8px #7c3aed4d;
-    --green:#159a67; --amber:#b3790a; --red:#e0475f;
-    --green-soft:#159a6715; --amber-soft:#b3790a15; --red-soft:#e0475f15;
-    --shadow: 0 1px 2px rgba(28,26,46,.05), 0 8px 24px -10px rgba(124,58,237,.15);
-    --glass-bg: rgba(255, 255, 255, .52); --glass-bg-strong: rgba(255, 255, 255, .8);
-    --glass-border: rgba(255, 255, 255, .75); --glass-sheen: rgba(255, 255, 255, .9);
-    --glass-blur: blur(20px) saturate(180%); --glass-blur-soft: blur(12px) saturate(160%);
+    --bg:#f7f7f5; --bg-alt:#eeeeec; --card:#ffffff; --text:#141414; --text-2:#4a4a4a; --muted:#78766e;
+    --border:#e4e2dc; --accent:#b9800a; --accent-2:#b9800a; --accent-soft:#b9800a15; --accent-ink:#ffffff;
+    --glow: 0 0 0 1px #b9800a33;
+    --green:#1f8a5c; --amber:#b9800a; --red:#c73f52;
+    --green-soft:#1f8a5c15; --amber-soft:#b9800a15; --red-soft:#c73f5215;
+    --shadow: 0 1px 2px rgba(20,20,20,.04), 0 8px 20px -12px rgba(20,20,20,.10);
+    --glass-bg: var(--card); --glass-bg-strong: #f0efe9;
+    --glass-border: var(--border); --glass-sheen: rgba(255, 255, 255, .5);
+    --glass-blur: none; --glass-blur-soft: none;
   }
 }
 :root[data-theme="light"] {
-  --bg:#f2f1fa; --bg-alt:#e7e5f6; --card:#ffffff; --text:#1c1a2e; --muted:#68648c;
-  --border:#dcd9f2; --accent:#7c3aed; --accent-2:#0891b2; --accent-soft:#7c3aed15; --accent-ink:#ffffff;
-  --glow: 0 0 0 1px #7c3aed33, 0 0 20px -8px #7c3aed4d;
-  --green:#159a67; --amber:#b3790a; --red:#e0475f;
-  --green-soft:#159a6715; --amber-soft:#b3790a15; --red-soft:#e0475f15;
-  --shadow: 0 1px 2px rgba(28,26,46,.05), 0 8px 24px -10px rgba(124,58,237,.15);
-  --glass-bg: rgba(255, 255, 255, .52); --glass-bg-strong: rgba(255, 255, 255, .8);
-  --glass-border: rgba(255, 255, 255, .75); --glass-sheen: rgba(255, 255, 255, .9);
-  --glass-blur: blur(20px) saturate(180%); --glass-blur-soft: blur(12px) saturate(160%);
+  --bg:#f7f7f5; --bg-alt:#eeeeec; --card:#ffffff; --text:#141414; --text-2:#4a4a4a; --muted:#78766e;
+  --border:#e4e2dc; --accent:#b9800a; --accent-2:#b9800a; --accent-soft:#b9800a15; --accent-ink:#ffffff;
+  --glow: 0 0 0 1px #b9800a33;
+  --green:#1f8a5c; --amber:#b9800a; --red:#c73f52;
+  --green-soft:#1f8a5c15; --amber-soft:#b9800a15; --red-soft:#c73f5215;
+  --shadow: 0 1px 2px rgba(20,20,20,.04), 0 8px 20px -12px rgba(20,20,20,.10);
+  --glass-bg: var(--card); --glass-bg-strong: #f0efe9;
+  --glass-border: var(--border); --glass-sheen: rgba(255, 255, 255, .5);
+  --glass-blur: none; --glass-blur-soft: none;
 }
 :root[data-theme="dark"] {
-  --bg: #0b0a16; --bg-alt: #131226; --card: #14132a; --text: #eae8f7; --muted: #8b87ab;
-  --border: #2a2850; --accent: #8b5cf6; --accent-2: #22d3ee; --accent-soft: #8b5cf626; --accent-ink: #0b0a16;
-  --glow: 0 0 0 1px #8b5cf64d, 0 0 24px -6px #8b5cf673;
-  --green: #34d399; --amber: #fbbf24; --red: #fb7185;
-  --green-soft: #34d39920; --amber-soft: #fbbf2420; --red-soft: #fb718520;
-  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 28px -8px rgba(139,92,246,.18);
-  --glass-bg: rgba(20, 19, 42, .48); --glass-bg-strong: rgba(20, 19, 42, .7);
-  --glass-border: rgba(255, 255, 255, .1); --glass-sheen: rgba(255, 255, 255, .08);
-  --glass-blur: blur(22px) saturate(170%); --glass-blur-soft: blur(14px) saturate(150%);
+  --bg: #000000; --bg-alt: #0a0a0a; --card: #0c0c0c; --text: #ffffff; --text-2: #b9b9b9; --muted: #7c7c7c;
+  --border: rgba(255, 255, 255, .09); --accent: #e0a422; --accent-2: #e0a422; --accent-soft: #e0a42222; --accent-ink: #14100a;
+  --glow: 0 0 0 1px #e0a42255;
+  --green: #3fb97e; --amber: #e0a422; --red: #e5586a;
+  --green-soft: #3fb97e1f; --amber-soft: #e0a4221f; --red-soft: #e5586a1f;
+  --shadow: none;
+  --glass-bg: var(--card); --glass-bg-strong: #141414;
+  --glass-border: var(--border); --glass-sheen: rgba(255, 255, 255, .03);
+  --glass-blur: none; --glass-blur-soft: none;
 }
 
 * { box-sizing: border-box; }
 html, body { overflow-x: hidden; }
 body {
   font-family: var(--font-body);
-  background:
-    linear-gradient(var(--bg-alt) 1px, transparent 1px) 0 0 / 100% 34px,
-    linear-gradient(90deg, var(--bg-alt) 1px, transparent 1px) 0 0 / 34px 100%,
-    var(--bg);
-  background-attachment: fixed;
+  background: var(--bg);
   color: var(--text);
   max-width: 1080px; margin: 0 auto; padding: 28px 20px 90px;
   line-height: 1.5; -webkit-font-smoothing: antialiased;
   position: relative;
+  font-variant-numeric: tabular-nums;
 }
-body::before {
-  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-  opacity: .22;
-  background:
-    radial-gradient(560px 420px at 10% 6%, var(--accent) 0%, transparent 65%),
-    radial-gradient(620px 480px at 90% 16%, var(--accent-2) 0%, transparent 60%),
-    radial-gradient(520px 520px at 26% 96%, var(--red) 0%, transparent 65%),
-    radial-gradient(560px 460px at 84% 90%, var(--green) 0%, transparent 62%);
-  filter: blur(10px);
-}
-@media (prefers-color-scheme: light) { body::before { opacity: .28; } }
-:root[data-theme="light"] body::before { opacity: .28; }
-:root[data-theme="dark"] body::before { opacity: .22; }
+/* Dishylink es plano de verdad -- sin retícula de fondo ni manchas de
+   color ambiente detrás del contenido (eso era parte del lenguaje visual
+   "cristal futurista" anterior, no de este). */
 a { color: var(--accent); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 ::selection { background: var(--accent); color: var(--accent-ink); }
@@ -116,19 +125,18 @@ a { color: var(--accent); }
   margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid var(--border); gap: 12px; flex-wrap: wrap;
 }
 .topbar h1 {
-  font-family: var(--font-display); font-size: 1.6rem; font-weight: 700; margin: 0;
+  font-family: var(--font-display); font-size: 1.6rem; font-weight: 600; margin: 0;
   letter-spacing: -0.01em; text-wrap: balance;
 }
 .brand-mark {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 34px; height: 34px; border-radius: 9px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: var(--accent-ink);
-  box-shadow: var(--glow);
+  width: 34px; height: 34px; border-radius: 10px;
+  background: var(--accent); color: var(--accent-ink);
   font-size: 1rem; margin-right: 10px; vertical-align: middle; position: relative; top: -2px;
 }
 .eyebrow {
   font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .12em;
-  font-size: .68rem; font-weight: 600; color: var(--accent-2); margin: 0 0 6px;
+  font-size: .68rem; font-weight: 500; color: var(--muted); margin: 0 0 6px;
 }
 /* Insignia del plugin junto al H1 -- "Home Orchestrator" es la marca (el
    H1), el plugin concreto (Energy/Climate/...) es una insignia secundaria,
@@ -139,7 +147,7 @@ a { color: var(--accent); }
    "Energy"/"Climate"/etc. como la app, nunca "Home Orchestrator". */
 .plugin-badge {
   display: inline-flex; align-items: center; padding: 3px 11px; border-radius: 20px;
-  font-size: .74rem; font-weight: 700; letter-spacing: .02em; font-family: var(--font-mono);
+  font-size: .74rem; font-weight: 600; letter-spacing: .02em; font-family: var(--font-mono);
   background: var(--accent-soft); color: var(--accent); vertical-align: middle;
   margin-left: 10px; position: relative; top: -3px;
 }
@@ -151,46 +159,37 @@ a { color: var(--accent); }
    sueltas. Ver /shared/plugin-switch.js para la logica que lo rellena. */
 .plugin-switch {
   display: inline-flex; gap: 3px; padding: 3px; border-radius: 24px;
-  background: var(--glass-bg); border: 1px solid var(--glass-border);
-  backdrop-filter: var(--glass-blur-soft); -webkit-backdrop-filter: var(--glass-blur-soft);
+  background: var(--card); border: 1px solid var(--border);
 }
 .plugin-switch a {
   display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px;
-  font-size: 0.78rem; font-weight: 700; font-family: var(--font-mono); text-decoration: none;
+  font-size: 0.78rem; font-weight: 600; font-family: var(--font-mono); text-decoration: none;
   color: var(--muted); transition: background .15s, color .15s;
 }
 .plugin-switch a:hover { color: var(--text); }
-.plugin-switch a.current { background: var(--accent); color: var(--accent-ink); box-shadow: var(--glow); }
+.plugin-switch a.current { background: var(--accent); color: var(--accent-ink); }
 
 .lang-select {
   width: auto; padding: 6px 10px; font-size: 0.78rem; font-family: var(--font-mono);
-  border-radius: 20px; background: var(--glass-bg); border: 1px solid var(--glass-border); color: var(--text);
-  backdrop-filter: var(--glass-blur-soft); -webkit-backdrop-filter: var(--glass-blur-soft);
+  border-radius: 20px; background: var(--card); border: 1px solid var(--border); color: var(--text);
   cursor: pointer;
 }
 
 .card {
-  background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius);
-  backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
-  box-shadow: var(--shadow), inset 0 1px 0 var(--glass-sheen); padding: 22px 24px; margin-bottom: 16px;
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 22px 24px; margin-bottom: 16px;
   position: relative; overflow: hidden;
 }
-.card::before {
-  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px;
-  background: linear-gradient(90deg, transparent, var(--accent) 30%, var(--accent-2) 70%, transparent);
-  opacity: .55;
-}
 .card h2 {
-  font-family: var(--font-display); font-size: .95rem; font-weight: 700; margin: 0 0 16px;
+  font-family: var(--font-display); font-size: .95rem; font-weight: 600; margin: 0 0 16px;
   display: flex; align-items: center; gap: 8px; letter-spacing: -.005em;
 }
 .card h2 .hint { font-weight: 400; color: var(--muted); font-size: 0.78rem; margin-left: auto; font-family: var(--font-body); }
 
-label { font-size: 0.76rem; font-weight: 600; color: var(--muted); display: block; margin: 10px 0 4px; letter-spacing: .01em; }
+label { font-size: 0.76rem; font-weight: 500; color: var(--muted); display: block; margin: 10px 0 4px; letter-spacing: .01em; }
 input, select {
-  width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--glass-border);
-  background: var(--glass-bg); color: var(--text); font-size: 0.9rem; font-family: var(--font-body);
-  backdrop-filter: var(--glass-blur-soft); -webkit-backdrop-filter: var(--glass-blur-soft);
+  width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg-alt); color: var(--text); font-size: 0.9rem; font-family: var(--font-body);
   transition: border-color .15s;
 }
 input:hover, select:hover { border-color: var(--muted); }
@@ -206,21 +205,15 @@ input[type=checkbox] { width: auto; accent-color: var(--accent); }
 .help.warn { color: var(--red); font-weight: 500; }
 
 button {
-  padding: 9px 16px; border-radius: 8px; border: none; cursor: pointer;
+  padding: 9px 16px; border-radius: 10px; border: none; cursor: pointer;
   background: var(--accent); color: var(--accent-ink); font-size: 0.85rem; font-weight: 600;
-  transition: filter .15s, transform .05s, box-shadow .15s; font-family: var(--font-body);
+  transition: filter .15s, transform .05s; font-family: var(--font-body);
 }
-button:hover { filter: brightness(1.1); box-shadow: var(--glow); }
+button:hover { filter: brightness(1.12); }
 button:active { transform: translateY(1px); }
-button.secondary {
-  background: var(--accent-soft); color: var(--accent);
-  backdrop-filter: var(--glass-blur-soft); -webkit-backdrop-filter: var(--glass-blur-soft);
-}
+button.secondary { background: var(--accent-soft); color: var(--accent); }
 button.danger { background: var(--red-soft); color: var(--red); }
-button.ghost {
-  background: var(--glass-bg); color: var(--muted); border: 1px solid var(--glass-border);
-  backdrop-filter: var(--glass-blur-soft); -webkit-backdrop-filter: var(--glass-blur-soft);
-}
+button.ghost { background: var(--card); color: var(--muted); border: 1px solid var(--border); }
 .actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
 
 summary { list-style: none; }
@@ -231,9 +224,8 @@ summary::-webkit-details-marker { display: none; }
 }
 
 .item-card {
-  border: 1px solid var(--glass-border); border-radius: 10px; padding: 12px 14px; margin-bottom: 8px;
-  display: flex; justify-content: space-between; align-items: center; gap: 12px; background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur-soft); -webkit-backdrop-filter: var(--glass-blur-soft);
+  border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 8px;
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; background: var(--card);
 }
 .item-card .meta { font-size: 0.78rem; color: var(--muted); margin-top: 2px; font-family: var(--font-mono); }
 .item-name { font-weight: 600; font-family: var(--font-display); }
@@ -257,7 +249,7 @@ summary::-webkit-details-marker { display: none; }
 
 table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
 th {
-  text-align: left; padding: 8px 10px; color: var(--accent-2); font-weight: 700; font-size: .68rem;
+  text-align: left; padding: 8px 10px; color: var(--muted); font-weight: 500; font-size: .68rem;
   text-transform: uppercase; letter-spacing: .06em; border-bottom: 1px solid var(--border);
   font-family: var(--font-mono);
 }
@@ -266,7 +258,7 @@ td:last-child { font-family: var(--font-body); }
 tr:last-child td { border-bottom: none; }
 tr:hover td { background: var(--bg-alt); }
 
-.tier { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 700; letter-spacing: .02em; font-family: var(--font-mono); }
+.tier { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; letter-spacing: .02em; font-family: var(--font-mono); }
 .tier-punta { background: var(--red-soft); color: var(--red); }
 .tier-llano { background: var(--amber-soft); color: var(--amber); }
 .tier-valle { background: var(--green-soft); color: var(--green); }
@@ -277,14 +269,14 @@ tr:hover td { background: var(--bg-alt); }
    por completo con `.pill-readonly`. */
 .pill {
   display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px; border-radius: 20px;
-  font-size: 0.76rem; font-weight: 700; letter-spacing: .04em; white-space: nowrap; font-family: var(--font-mono);
-  backdrop-filter: var(--glass-blur-soft); -webkit-backdrop-filter: var(--glass-blur-soft);
+  font-size: 0.76rem; font-weight: 600; letter-spacing: .04em; white-space: nowrap; font-family: var(--font-mono);
+  background: var(--card); border: 1px solid var(--border); color: var(--text-2);
 }
-.pill-dry { background: var(--amber-soft); color: var(--amber); box-shadow: 0 0 0 1px #fbbf2433; }
-.pill-live { background: var(--red-soft); color: var(--red); box-shadow: 0 0 0 1px #fb718533, 0 0 16px -4px #fb718580; }
-.pill-ok { background: var(--green-soft); color: var(--green); box-shadow: 0 0 0 1px #34d39933; }
-.pill-anomaly { background: var(--red-soft); color: var(--red); box-shadow: 0 0 0 1px #fb718533, 0 0 16px -4px #fb718580; }
-.pill-readonly { background: var(--bg-alt); color: var(--muted); box-shadow: 0 0 0 1px var(--border); }
+.pill-dry { background: var(--amber-soft); color: var(--amber); border-color: transparent; }
+.pill-live { background: var(--red-soft); color: var(--red); border-color: transparent; }
+.pill-ok { background: var(--green-soft); color: var(--green); border-color: transparent; }
+.pill-anomaly { background: var(--red-soft); color: var(--red); border-color: transparent; }
+.pill-readonly { background: var(--bg-alt); color: var(--muted); }
 .pill-readonly::before { display: none; }
 .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 @media (prefers-reduced-motion: no-preference) { .pill-live::before, .pill-anomaly::before { animation: pulse 1.8s ease-in-out infinite; } }
@@ -296,12 +288,11 @@ tr:hover td { background: var(--bg-alt); }
    Dashboard, no hace falta logica especial aqui para eso. */
 .page-tabs {
   display: inline-flex; gap: 3px; padding: 3px; border-radius: 24px; margin-bottom: 20px;
-  background: var(--glass-bg); border: 1px solid var(--glass-border);
-  backdrop-filter: var(--glass-blur-soft); -webkit-backdrop-filter: var(--glass-blur-soft);
+  background: var(--card); border: 1px solid var(--border);
 }
 .page-tabs button {
   background: transparent; color: var(--muted); box-shadow: none; padding: 7px 16px; border-radius: 20px;
   font-family: var(--font-mono); font-size: 0.8rem;
 }
-.page-tabs button:hover { filter: none; box-shadow: none; color: var(--text); }
-.page-tabs button.current { background: var(--accent); color: var(--accent-ink); box-shadow: var(--glow); }
+.page-tabs button:hover { filter: none; color: var(--text); }
+.page-tabs button.current { background: var(--accent); color: var(--accent-ink); }

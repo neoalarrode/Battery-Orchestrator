@@ -6,7 +6,7 @@
 <title>Home Orchestrator — Energy</title>
 <!-- Favicon en linea (mismo cuadrado degradado violeta->cian y rayo que el
      "brand-mark" de la cabecera) — sin depender de servir un archivo aparte. -->
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%3E%3Cdefs%3E%3ClinearGradient%20id%3D%27g%27%20x1%3D%270%27%20y1%3D%270%27%20x2%3D%2724%27%20y2%3D%2724%27%20gradientUnits%3D%27userSpaceOnUse%27%3E%3Cstop%20offset%3D%270%27%20stop-color%3D%27%238b5cf6%27%2F%3E%3Cstop%20offset%3D%271%27%20stop-color%3D%27%2322d3ee%27%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%2724%27%20height%3D%2724%27%20rx%3D%276%27%20fill%3D%27url%28%23g%29%27%2F%3E%3Cpath%20d%3D%27M13%202%204%2014h6l-1%208%209-12h-6l1-8Z%27%20fill%3D%27%230b0a16%27%2F%3E%3C%2Fsvg%3E">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2024%2024%27%3E%3Crect%20width%3D%2724%27%20height%3D%2724%27%20rx%3D%276%27%20fill%3D%27%23e0a422%27/%3E%3Cpath%20d%3D%27M13%202%204%2014h6l-1%208%209-12h-6l1-8Z%27%20fill%3D%27%23000000%27/%3E%3C/svg%3E">
 <!-- Sistema de diseño compartido (ver app/core_static/design-system.css).
      Dedup real (tarea "verificar que todas las pestañas siguen la misma
      estetica"): esta pagina mantenia su PROPIA copia completa de los
@@ -21,236 +21,35 @@
 <link rel="stylesheet" href="shared/design-system.css">
 <style>
   /*
-    Direccion: panel de control futurista. Violeta electrico sobre grafito
-    casi negro con tinte azul, retícula sutil de fondo tipo HUD, resplandor
-    en los elementos vivos/interactivos. Los colores semanticos de tarifa
-    (verde/ambar/rojo = valle/llano/punta) son independientes del acento
-    violeta, a proposito. Superficies en Liquid Glass: desenfoque real
-    (backdrop-filter) sobre las manchas de color ambiente de `body::before`
-    — sin esas manchas detras, el desenfoque no se nota en nada (ver
-    --glass-* mas abajo, y `.card`/`.stat-tile`/etc que lo usan). Tokens
-    (--bg/--accent/--glass-*/--font-*...) definidos en design-system.css,
-    enlazado arriba -- ya no se redeclaran aqui, ver comentario del <link>.
+    Tokens/componentes compartidos (topbar, card, botones, tablas, pill,
+    tier...) definidos en design-system.css, enlazado arriba -- ya no se
+    redeclaran aqui (dedup real: esta pagina llevaba una copia COMPLETA
+    del vocabulario compartido ademas de sus propios tokens, mismo riesgo
+    de deriva que la tarea de consistencia estetica ya habia encontrado y
+    corregido a medias). Lo unico que se queda aqui abajo es lo realmente
+    propio de Energy: rejilla de estadisticas, grafica, franjas
+    historicas/futuras de la tabla, caja de anomalia, cuenta atras...
   */
 
-  * { box-sizing: border-box; }
-  html, body { overflow-x: hidden; }
-  body {
-    font-family: var(--font-body);
-    background:
-      linear-gradient(var(--bg-alt) 1px, transparent 1px) 0 0 / 100% 34px,
-      linear-gradient(90deg, var(--bg-alt) 1px, transparent 1px) 0 0 / 34px 100%,
-      var(--bg);
-    background-attachment: fixed;
-    color: var(--text);
-    max-width: 1080px; margin: 0 auto; padding: 28px 20px 90px;
-    line-height: 1.5; -webkit-font-smoothing: antialiased;
-    position: relative;
-  }
-  /* Manchas de color ambiente FIJAS tras todo el contenido — sin esto el
-     backdrop-filter de las superficies en vidrio no tendria nada que
-     desenfocar/refractar y el efecto seria invisible. Discretas a
-     proposito (opacidad baja): dan color de fondo, no protagonismo. */
-  body::before {
-    content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-    opacity: .22;
-    background:
-      radial-gradient(560px 420px at 10% 6%, var(--accent) 0%, transparent 65%),
-      radial-gradient(620px 480px at 90% 16%, var(--accent-2) 0%, transparent 60%),
-      radial-gradient(520px 520px at 26% 96%, var(--red) 0%, transparent 65%),
-      radial-gradient(560px 460px at 84% 90%, var(--green) 0%, transparent 62%);
-    filter: blur(10px);
-  }
-  @media (prefers-color-scheme: light) { body::before { opacity: .28; } }
-  :root[data-theme="light"] body::before { opacity: .28; }
-  :root[data-theme="dark"] body::before { opacity: .22; }
-  a { color: var(--accent); }
-  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  ::selection { background: var(--accent); color: var(--accent-ink); }
+  #health-pill { margin-left: 10px; }
 
-  .topbar {
-    display: flex; align-items: flex-start; justify-content: space-between;
-    margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid var(--border); gap: 12px; flex-wrap: wrap;
-  }
-  .topbar h1 {
-    font-family: var(--font-display); font-size: 1.6rem; font-weight: 700; margin: 0;
-    letter-spacing: -0.01em; text-wrap: balance;
-  }
-  .brand-mark {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 34px; height: 34px; border-radius: 9px;
-    background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: var(--accent-ink);
-    box-shadow: var(--glow);
-    font-size: 1rem; margin-right: 10px; vertical-align: middle; position: relative; top: -2px;
-  }
-  .eyebrow {
-    font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .12em;
-    font-size: .68rem; font-weight: 600; color: var(--accent-2); margin: 0 0 6px;
-  }
-  .subtitle { color: var(--muted); font-size: 0.92rem; margin-top: 6px; max-width: 52ch; }
-
-  .topbar-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-
-  /* --- Selector de plugins: mismo patron en todas las paginas de Home
-     Orchestrator, para que cambiar de Battery a Climate (y a lo que
-     venga despues) se sienta como un unico sistema, no apps sueltas. --- */
-  .plugin-switch {
-    display: inline-flex; gap: 3px; padding: 3px; border-radius: 24px;
-    background: var(--glass-bg); border: 1px solid var(--glass-border);
-    backdrop-filter: var(--glass-blur-soft); -webkit-backdrop-filter: var(--glass-blur-soft);
-  }
-  .plugin-switch a {
-    display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px;
-    font-size: 0.78rem; font-weight: 700; font-family: var(--font-mono); text-decoration: none;
-    color: var(--muted); transition: background .15s, color .15s;
-  }
-  .plugin-switch a:hover { color: var(--text); }
-  .plugin-switch a.current { background: var(--accent); color: var(--accent-ink); box-shadow: var(--glow); }
-
-  .lang-select {
-    width: auto; padding: 6px 10px; font-size: 0.78rem; font-family: var(--font-mono);
-    border-radius: 20px; background: var(--glass-bg); border: 1px solid var(--glass-border); color: var(--text);
-    backdrop-filter: var(--glass-blur-soft); -webkit-backdrop-filter: var(--glass-blur-soft);
-    cursor: pointer;
-  }
-
-  .card {
-    background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius);
-    backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
-    box-shadow: var(--shadow), inset 0 1px 0 var(--glass-sheen); padding: 22px 24px; margin-bottom: 16px;
-    position: relative; overflow: hidden;
-  }
-  .card::before {
-    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px;
-    background: linear-gradient(90deg, transparent, var(--accent) 30%, var(--accent-2) 70%, transparent);
-    opacity: .55;
-  }
-  .card h2 {
-    font-family: var(--font-display); font-size: .95rem; font-weight: 700; margin: 0 0 16px;
-    display: flex; align-items: center; gap: 8px; letter-spacing: -.005em;
-  }
-  .card h2 .hint { font-weight: 400; color: var(--muted); font-size: 0.78rem; margin-left: auto; font-family: var(--font-body); }
-
-  label { font-size: 0.76rem; font-weight: 600; color: var(--muted); display: block; margin: 10px 0 4px; letter-spacing: .01em; }
-  input, select {
-    width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--glass-border);
-    background: var(--glass-bg); color: var(--text); font-size: 0.9rem; font-family: var(--font-body);
-    backdrop-filter: var(--glass-blur-soft); -webkit-backdrop-filter: var(--glass-blur-soft);
-    transition: border-color .15s;
-  }
-  input:hover, select:hover { border-color: var(--muted); }
-  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
-  input[type=checkbox] { width: auto; accent-color: var(--accent); }
-  .checkline { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 0.85rem; }
-  .checkline label { margin: 0; }
-
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
-  @media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
-
-  .help { font-size: 0.78rem; color: var(--muted); margin-top: 5px; }
-  .help.warn { color: var(--red); font-weight: 500; }
-
-  button {
-    padding: 9px 16px; border-radius: 8px; border: none; cursor: pointer;
-    background: var(--accent); color: var(--accent-ink); font-size: 0.85rem; font-weight: 600;
-    transition: filter .15s, transform .05s, box-shadow .15s; font-family: var(--font-body);
-  }
-  button:hover { filter: brightness(1.1); box-shadow: var(--glow); }
-  button:active { transform: translateY(1px); }
-  button.secondary {
-    background: var(--accent-soft); color: var(--accent);
-    backdrop-filter: var(--glass-blur-soft); -webkit-backdrop-filter: var(--glass-blur-soft);
-  }
-  button.danger { background: var(--red-soft); color: var(--red); }
-  button.ghost {
-    background: var(--glass-bg); color: var(--muted); border: 1px solid var(--glass-border);
-    backdrop-filter: var(--glass-blur-soft); -webkit-backdrop-filter: var(--glass-blur-soft);
-  }
-  .actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
-
-  summary { list-style: none; }
-  summary::-webkit-details-marker { display: none; }
-  .add-toggle {
-    cursor: pointer; font-size: 0.82rem; color: var(--accent); font-weight: 600;
-    margin-top: 10px; display: inline-flex; align-items: center; gap: 5px;
-  }
-
-  .item-card {
-    border: 1px solid var(--glass-border); border-radius: 10px; padding: 12px 14px; margin-bottom: 8px;
-    display: flex; justify-content: space-between; align-items: center; gap: 12px; background: var(--glass-bg);
-    backdrop-filter: var(--glass-blur-soft); -webkit-backdrop-filter: var(--glass-blur-soft);
-  }
-  .item-card .meta { font-size: 0.78rem; color: var(--muted); margin-top: 2px; font-family: var(--font-mono); }
-  .item-name { font-weight: 600; font-family: var(--font-display); }
-  .empty { color: var(--muted); font-size: 0.85rem; padding: 10px 0; }
-
-  .item-details { display: block; }
-  .item-details summary {
-    display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    cursor: pointer; list-style: none;
-  }
-  .item-details summary::-webkit-details-marker { display: none; }
-  .item-details summary::after {
-    content: "▾"; color: var(--muted); font-size: .7rem; transition: transform .15s; margin-left: auto;
-  }
-  .item-details[open] summary::after { transform: rotate(180deg); }
-  .item-details summary .meta { margin-top: 0; margin-left: 4px; }
-  .item-body { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); display: grid; gap: 6px; }
-  .kv { display: flex; justify-content: space-between; gap: 12px; font-size: 0.8rem; }
-  .kv span { color: var(--muted); }
-  .kv code { font-family: var(--font-mono); font-size: 0.78rem; text-align: right; word-break: break-all; }
-
-  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
-  th {
-    text-align: left; padding: 8px 10px; color: var(--accent-2); font-weight: 700; font-size: .68rem;
-    text-transform: uppercase; letter-spacing: .06em; border-bottom: 1px solid var(--border);
-    font-family: var(--font-mono);
-  }
-  td { padding: 8px 10px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
-  td:last-child { font-family: var(--font-body); }
-  tr:last-child td { border-bottom: none; }
-  tr:hover td { background: var(--bg-alt); }
   .row-historical td { opacity: .55; }
   .row-historical:hover td { opacity: .85; }
   .row-badge { color: var(--green); font-weight: 700; }
   .row-future td:first-child { border-left: 2px solid var(--accent); }
 
-  .tier { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 700; letter-spacing: .02em; font-family: var(--font-mono); }
-  .tier-punta { background: var(--red-soft); color: var(--red); }
-  .tier-llano { background: var(--amber-soft); color: var(--amber); }
-  .tier-valle { background: var(--green-soft); color: var(--green); }
-
-  .pill {
-    display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px; border-radius: 20px;
-    font-size: 0.76rem; font-weight: 700; letter-spacing: .04em; white-space: nowrap; font-family: var(--font-mono);
-    backdrop-filter: var(--glass-blur-soft); -webkit-backdrop-filter: var(--glass-blur-soft);
-  }
-  .pill-dry { background: var(--amber-soft); color: var(--amber); box-shadow: 0 0 0 1px #fbbf2433; }
-  .pill-live { background: var(--red-soft); color: var(--red); box-shadow: 0 0 0 1px #fb718533, 0 0 16px -4px #fb718580; }
-  .pill-ok { background: var(--green-soft); color: var(--green); box-shadow: 0 0 0 1px #34d39933; }
-  .pill-anomaly { background: var(--red-soft); color: var(--red); box-shadow: 0 0 0 1px #fb718533, 0 0 16px -4px #fb718580; }
-  .pill-readonly { background: var(--bg-alt); color: var(--muted); box-shadow: 0 0 0 1px var(--border); }
-  .pill-readonly::before { display: none; }
-  .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-  @media (prefers-reduced-motion: no-preference) { .pill-live::before, .pill-anomaly::before { animation: pulse 1.8s ease-in-out infinite; } }
-  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
-
-  #health-pill { margin-left: 10px; }
-
   .anomaly-box {
     border: 1px solid var(--red); background: var(--red-soft); border-radius: var(--radius);
     padding: 18px 22px; margin-bottom: 16px;
-    backdrop-filter: var(--glass-blur-soft); -webkit-backdrop-filter: var(--glass-blur-soft);
   }
   .anomaly-box h3 { margin: 0 0 8px; font-family: var(--font-display); font-size: .88rem; color: var(--red); }
   .anomaly-box .kv { font-size: .82rem; }
 
-  .punta-countdown { font-family: var(--font-mono); font-size: 1.6rem; font-weight: 700; color: var(--accent); }
+  .punta-countdown { font-family: var(--font-mono); font-size: 1.6rem; font-weight: 600; color: var(--accent); }
 
   .status-line {
     font-family: var(--font-mono); font-size: 0.78rem; white-space: pre-wrap;
-    background: var(--glass-bg); border: 1px solid var(--glass-border); border-left: 2px solid var(--accent); border-radius: 9px;
-    backdrop-filter: var(--glass-blur-soft); -webkit-backdrop-filter: var(--glass-blur-soft);
+    background: var(--card); border: 1px solid var(--border); border-left: 2px solid var(--accent); border-radius: 9px;
     padding: 12px 14px; max-height: 220px; overflow-y: auto;
   }
 

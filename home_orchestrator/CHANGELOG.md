@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.47.3
+Shelly re-pineado al tag `v0.47.2` (timeout de barrido a 0.8s) — resto sin cambios. Confirmado con el usuario: de los 4 Shelly reales, 1 se encuentra siempre (alimentado); los otros 3 son a batería y solo se conectan a intervalos -- no encontrarlos en un barrido puntual es el comportamiento esperado, no un fallo del escaneo. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
+
 ## 0.47.2
 Ajuste tras verificar el fix de v0.47.0 contra la LAN real del usuario: con la subred correcta, el timeout POR HOST del barrido (0.25s) seguia siendo demasiado corto -- con 254 IPs y 64 workers en paralelo, la cola de espera de un worker puede empujar la respuesta de un dispositivo real fuera de su propio margen aunque el dispositivo en si conteste rapido. Sube a 0.8s (barrido total ~3s, mismo orden de magnitud que el descubrimiento de TP-Link/Govee).
 

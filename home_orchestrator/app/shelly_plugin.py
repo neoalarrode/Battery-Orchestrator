@@ -40,7 +40,7 @@ log = logging.getLogger("shelly_plugin")
 class ShellyPlugin(Plugin):
     slug = "shelly"
     name = "Shelly Orchestrator"
-    version = "0.1.1"
+    version = "0.1.2"
 
     def __init__(self) -> None:
         self._manager = ShellyDeviceManager(on_any_change=self._on_device_change)

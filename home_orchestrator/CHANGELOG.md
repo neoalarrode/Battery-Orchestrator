@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.47.2
+Ajuste tras verificar el fix de v0.47.0 contra la LAN real del usuario: con la subred correcta, el timeout POR HOST del barrido (0.25s) seguia siendo demasiado corto -- con 254 IPs y 64 workers en paralelo, la cola de espera de un worker puede empujar la respuesta de un dispositivo real fuera de su propio margen aunque el dispositivo en si conteste rapido. Sube a 0.8s (barrido total ~3s, mismo orden de magnitud que el descubrimiento de TP-Link/Govee).
+
 ## 0.47.1
 Shelly re-pineado al tag `v0.47.0` (fix del escaneo) — resto sin cambios. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
 

@@ -134,7 +134,7 @@ class ShellyDeviceManager:
 
     # --------------------------------------------------------- descubrimiento
 
-    def discover(self, timeout_seconds: float = 0.25) -> list[dict]:
+    def discover(self, timeout_seconds: float = 0.8) -> list[dict]:
         """Barrido ACTIVO de la subred /24 propia del contenedor (sondas
         HTTP en paralelo a `/shelly`) -- Shelly no tiene un broadcast LAN
         tan simple como Govee/Tuya (su descubrimiento real es mDNS,

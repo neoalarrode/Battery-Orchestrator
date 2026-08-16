@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.43.1
+Energy re-pineado al tag `v0.43.0` (bug de layout en movil) — resto de plugins sin cambios. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
+
 ## 0.43.0
 Dos bugs reales de layout en movil, encontrados por el usuario con capturas de pantalla comparando Energy contra el Dishylink real lado a lado ("¿tú de verdad crees que esto se parece?") — los tokens/tipografia de v0.42.0 ya coincidian, pero la estructura seguia sin aguantar en pantalla estrecha:
 

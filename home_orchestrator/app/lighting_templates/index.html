@@ -84,18 +84,46 @@
      en un panel entero pintado de color. El boton de texto "Encender/
      Apagar" pasa a un interruptor de verdad (pista + circulo), lenguaje
      de control mas reconocible que un boton que cambia de texto. --- */
-  .zone-lightctl { display: flex; flex-direction: column; gap: 10px; margin: 14px 0 4px; padding-top: 14px; border-top: 1px solid var(--border); }
-  .light-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-  .light-switch { position: relative; width: 42px; height: 24px; border-radius: 12px; background: var(--bg-alt); box-shadow: 0 0 0 1px var(--border); border: none; padding: 0; cursor: pointer; flex: none; }
-  .light-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: var(--muted); transition: transform .15s, background .15s; }
-  .light-switch.on { background: var(--accent-soft); }
-  .light-switch.on::after { transform: translateX(18px); background: var(--accent); }
-  .light-slider { display: flex; align-items: center; gap: 8px; }
-  .light-slider label { font-size: .7rem; color: var(--muted); width: 60px; flex: none; margin: 0; }
-  .light-slider input[type=range] { flex: 1; accent-color: var(--accent); height: 4px; }
-  .light-color { width: 26px; height: 26px; padding: 0; border: none; border-radius: 50%; background: none; cursor: pointer; flex: none; }
-  .light-color::-webkit-color-swatch-wrapper { padding: 0; border-radius: 50%; }
-  .light-color::-webkit-color-swatch { border: 1px solid var(--glass-border); border-radius: 50%; }
+  .zone-lightctl { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 4px; padding-top: 14px; border-top: 1px solid var(--border); }
+  .light-toggle-row { display: flex; align-items: center; gap: 10px; margin-bottom: 2px; }
+  .light-switch { position: relative; width: 44px; height: 25px; border-radius: 13px; background: var(--bg-alt); box-shadow: inset 0 0 0 1px var(--border); border: none; padding: 0; cursor: pointer; flex: none; transition: background .2s; }
+  .light-switch::after { content: ""; position: absolute; top: 2.5px; left: 2.5px; width: 20px; height: 20px; border-radius: 50%; background: var(--muted); transition: transform .2s cubic-bezier(.4,0,.2,1), background .2s; }
+  .light-switch.on { background: var(--accent); box-shadow: none; }
+  .light-switch.on::after { transform: translateX(19px); background: #fff; }
+  .light-color { width: 25px; height: 25px; padding: 2px; border: none; border-radius: 8px; background: var(--bg-alt); box-shadow: 0 0 0 1px var(--border); cursor: pointer; flex: none; }
+  .light-color::-webkit-color-swatch-wrapper { padding: 0; border-radius: 6px; }
+  .light-color::-webkit-color-swatch { border: none; border-radius: 6px; }
+
+  /* --- "Fader": capsula rellenable con la cifra superpuesta, mismo
+     lenguaje visual que los controles de brillo/color de Apple Home o
+     Philips Hue -- sustituye el <input type=range> nativo de toda la
+     vida (una linea fina de 4px sin personalidad, la version anterior
+     de esta tarjeta) por una pista gruesa donde el relleno ES el valor.
+     El <input> real sigue ahi, transparente, ocupando toda la capsula
+     -- se puede arrastrar/hacer click en cualquier punto (comportamiento
+     nativo del navegador) y seguir navegando por teclado (el foco visible
+     vive en el propio contenedor via :focus-within, no en un div falso).
+     `oninput` (cada frame del arrastre) solo repinta el relleno/cifra en
+     LOCAL; `onchange` (al soltar) es lo unico que manda la orden real --
+     mismo criterio de "repintado optimista" que ya usaba esta tarjeta. */
+  .fader { position: relative; height: 46px; border-radius: 14px; overflow: hidden; background: var(--bg-alt); box-shadow: inset 0 0 0 1px var(--border); }
+  .fader:focus-within { box-shadow: inset 0 0 0 1px var(--border), 0 0 0 2px var(--accent); }
+  .fader-fill { position: absolute; inset: 0; width: 50%; background: var(--accent); border-radius: inherit; pointer-events: none; }
+  .fader.kelvin { background: linear-gradient(90deg, #ff9d42 0%, #ffe7c2 48%, #cfe2ff 100%); }
+  .fader-marker { position: absolute; top: 0; bottom: 0; width: 3px; background: rgba(10,10,10,.55); border-radius: 2px; transform: translateX(-50%); pointer-events: none; z-index: 2; }
+  .fader-label {
+    position: absolute; inset: 0; z-index: 3; pointer-events: none;
+    display: flex; align-items: center; justify-content: space-between; padding: 0 14px;
+  }
+  .fader-label .name { font-size: .76rem; font-weight: 600; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.35); }
+  .fader-label .val { font-size: .92rem; font-weight: 700; font-variant-numeric: tabular-nums; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.35); }
+  .fader input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    position: absolute; inset: 0; width: 100%; height: 100%; margin: 0;
+    background: transparent; opacity: 0; z-index: 4; cursor: pointer;
+  }
+  .fader input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 1px; height: 1px; }
+  .fader input[type=range]::-moz-range-thumb { width: 1px; height: 1px; border: none; background: transparent; }
 
   .lights-ref { margin-top: 6px; }
   .lights-ref summary { font-size: .76rem; color: var(--muted); }
@@ -420,6 +448,7 @@ function renderLightControl(id, group, cfg) {
   const minK = cfg.min_color_temp_kelvin ?? 2200, maxK = cfg.max_color_temp_kelvin ?? 5000;
   const brightness = group.brightness_pct ?? 50;
   const kelvin = group.color_temp_kelvin ?? maxK;
+  const kelvinPct = Math.round(((kelvin - minK) / Math.max(1, maxK - minK)) * 100);
   const colorHex = group.hs_color ? hsToHex(group.hs_color[0], group.hs_color[1]) : "#ffffff";
   return `
   <div class="zone-lightctl">
@@ -427,15 +456,37 @@ function renderLightControl(id, group, cfg) {
       <button type="button" class="light-switch ${on ? "on" : ""}" role="switch" aria-checked="${on}" aria-label="${on ? "Apagar" : "Encender"}" onclick="toggleZoneLight('${id}', ${!on})"></button>
       <input type="color" class="light-color" value="${colorHex}" title="Color manual" onchange="setZoneColor('${id}', this.value)">
     </div>
-    <div class="light-slider">
-      <label for="br-${id}">Brillo</label>
-      <input type="range" id="br-${id}" min="1" max="100" value="${brightness}" onchange="setZoneBrightness('${id}', this.value)">
+    <div class="fader">
+      <div class="fader-fill" id="fader-br-fill-${id}" style="width:${brightness}%"></div>
+      <div class="fader-label"><span class="name">Brillo</span><span class="val" id="fader-br-val-${id}">${brightness}%</span></div>
+      <input type="range" min="1" max="100" value="${brightness}" aria-label="Brillo"
+        oninput="updateFaderFill('${id}', this.value)" onchange="setZoneBrightness('${id}', this.value)">
     </div>
-    <div class="light-slider">
-      <label for="kv-${id}">Blancos</label>
-      <input type="range" id="kv-${id}" min="${minK}" max="${maxK}" value="${kelvin}" onchange="setZoneColorTemp('${id}', this.value)">
+    <div class="fader kelvin">
+      <div class="fader-marker" id="fader-kv-mark-${id}" style="left:${kelvinPct}%"></div>
+      <div class="fader-label"><span class="name">Blancos</span><span class="val" id="fader-kv-val-${id}">${kelvin}K</span></div>
+      <input type="range" min="${minK}" max="${maxK}" value="${kelvin}" aria-label="Temperatura de color"
+        oninput="updateFaderKelvin('${id}', this.value, ${minK}, ${maxK})" onchange="setZoneColorTemp('${id}', this.value)">
     </div>
   </div>`;
+}
+
+// Repintado LOCAL en cada frame de arrastre (ver comentario de .fader en
+// el <style>) -- nunca manda la orden real, eso solo pasa en `onchange`
+// (al soltar), que sigue llamando a setZoneBrightness/setZoneColorTemp
+// exactamente igual que antes.
+function updateFaderFill(id, val) {
+  const fill = document.getElementById(`fader-br-fill-${id}`);
+  const label = document.getElementById(`fader-br-val-${id}`);
+  if (fill) fill.style.width = val + "%";
+  if (label) label.textContent = val + "%";
+}
+function updateFaderKelvin(id, val, min, max) {
+  const pct = Math.round(((val - min) / Math.max(1, max - min)) * 100);
+  const mark = document.getElementById(`fader-kv-mark-${id}`);
+  const label = document.getElementById(`fader-kv-val-${id}`);
+  if (mark) mark.style.left = pct + "%";
+  if (label) label.textContent = val + "K";
 }
 
 async function sendManualCommand(id, body, errMsg) {

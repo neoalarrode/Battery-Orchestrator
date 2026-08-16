@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.45.0
+Rediseño real de los controles de brillo/color de Lighting, a peticion expresa del usuario tras rechazar el intento anterior ("es horroroso estéticamente... haz putas cards de iluminación... un diseño moderno, minimalista"). El `<input type=range>` nativo de 4px con un thumb -- lo que llevaba esta tarjeta desde siempre, solo repintado de colores en v0.40-0.44 -- se sustituye por un "fader": una capsula gruesa (46px) donde el propio RELLENO es el valor y la cifra va superpuesta encima, mismo lenguaje visual que los controles de Apple Home / Philips Hue.
+
+- **Brillo**: capsula rellena de ambar solido hasta el % actual, cifra "86%" superpuesta en blanco.
+- **Blancos**: capsula con gradiente FIJO ambar→blanco→azul-frio (el propio espectro de temperatura de color) y un marcador vertical en la posicion actual -- se ve de un vistazo si esta calido o frio, no solo un numero suelto.
+- Arrastrable/pulsable en cualquier punto de la capsula (el `<input type=range>` real sigue ahi, transparente, ocupando toda la pista -- comportamiento nativo del navegador, no una reimplementacion a mano del gesto). `oninput` repinta relleno/cifra en cada frame del arrastre SIN mandar nada a red; `onchange` (al soltar) sigue siendo lo unico que manda la orden real -- mismo "repintado optimista" que ya tenia esta tarjeta.
+- Interruptor de encendido con la pista llena de ambar solido en el estado "on" (antes ambar-soft, mas apagado) y circulo blanco -- mas contraste, mas iOS/HomeKit.
+- El selector de color pasa de circulo a cuadrado redondeado, mismo radio que el resto de controles de la tarjeta.
+
 ## 0.44.1
 Climate/Lighting re-pineados al tag `v0.44.0` (rediseño de tarjetas de zona) — Energy/Tuya/TP-Link/Starlink sin cambios. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
 

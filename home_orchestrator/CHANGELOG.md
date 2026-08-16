@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.51.1
+Energy re-pineado al tag `v0.51.0` (sensores de red unificados al mecanismo REST) — resto sin cambios. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
+
 ## 0.51.0
 Unificación: los sensores de energía importada/vertida (v0.49.0/v0.50.0, publicados por MQTT Discovery con un cliente MQTT nuevo dedicado a esto) pasan al MISMO mecanismo ya probado que `sensor.battery_orchestrator_solar_energy` (existente desde antes de esta sesión) — REST directo a HA (`ha_client.publish_sensor`/`_publish_sensor_throttled`), no MQTT. Descubierto al revisar cómo integrar mejor con el Panel de Energía oficial de HA: había DOS mecanismos de publicación de sensores en el mismo plugin haciendo el mismo trabajo.
 

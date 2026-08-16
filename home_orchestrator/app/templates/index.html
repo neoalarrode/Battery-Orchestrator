@@ -2581,9 +2581,9 @@ function renderStatTiles(status, savings) {
   const tiles = [
     { id: 'stat-soc-value', label: t('stat_soc'), value: socNow + '%', accent: true, extraHtml: renderSocSparkline(status) },
     { label: t('stat_tier'), value: `<span class="tier tier-${now.tier}">${translateTier(now.tier)}</span>`, raw: true },
-    { label: t('stat_price'), value: now.price.toFixed(3) + ' €/kWh' },
-    { id: 'stat-solar-value', label: t('stat_solar'), value: now.pv_w + ' W' },
-    { id: 'stat-consumption-value', label: t('stat_consumption'), value: now.load_w + ' W' },
+    { label: t('stat_price'), value: now.price.toFixed(3) + ' €/kWh', extraHtml: renderMetricSparkline(status, 'price', now.price, '--amber') },
+    { id: 'stat-solar-value', label: t('stat_solar'), value: now.pv_w + ' W', extraHtml: renderMetricSparkline(status, 'pv_w', now.pv_w, '--green') },
+    { id: 'stat-consumption-value', label: t('stat_consumption'), value: now.load_w + ' W', extraHtml: renderMetricSparkline(status, 'load_w', now.load_w, '--red') },
     { id: 'stat-power-value', label: actionLabel, value: (netW === 0 ? '0' : (netW > 0 ? '+' : '') + netW) + ' W', accent: netW !== 0 },
   ];
   if (savings) {
@@ -2620,10 +2620,16 @@ function renderStatTiles(status, savings) {
     </div>`).join('');
 }
 
-function renderSocSparkline(status) {
+// Generica: cualquier campo numerico del plan horario (soc_pct, price,
+// pv_w, load_w...) + el valor "ahora mismo" si lo hay -- mismo lenguaje
+// visual en TODAS las tarjetas de metrica (linea fina + punto en el
+// valor mas reciente), igual que las tarjetas Download/Upload/Latencia
+// del Dishylink real. `nowVal` es opcional: para price/pv_w/load_w el
+// ultimo tramo del propio plan YA es "ahora", solo SOC tiene un valor
+// en vivo mas preciso que el tramo (`current_soc_pct`).
+function renderMetricSparkline(status, field, nowVal, colorVar) {
   const hist = (status.plan || []).filter(hp => hp.historical);
-  const recent = hist.slice(-7).map(hp => hp.soc_pct);
-  const nowVal = status.current_soc_pct;
+  const recent = hist.slice(-7).map(hp => hp[field]);
   if (nowVal !== null && nowVal !== undefined) recent.push(nowVal);
   if (recent.length < 2) return '';
   const min = Math.min(...recent), max = Math.max(...recent);
@@ -2635,11 +2641,16 @@ function renderSocSparkline(status) {
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   });
   const [lx, ly] = pts[pts.length - 1].split(',');
+  const c = `var(${colorVar || '--accent'})`;
   return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" class="sparkline" preserveAspectRatio="none" aria-hidden="true">
-    <polyline points="${pts.join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline>
-    <circle cx="${lx}" cy="${ly}" r="2.4" fill="var(--accent)"></circle>
+    <polyline points="${pts.join(' ')}" fill="none" stroke="${c}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline>
+    <circle cx="${lx}" cy="${ly}" r="2.4" fill="${c}"></circle>
   </svg>
   <div class="stat-sub">${t('sparkline_last_hours')}</div>`;
+}
+
+function renderSocSparkline(status) {
+  return renderMetricSparkline(status, 'soc_pct', status.current_soc_pct, '--accent');
 }
 
 function fmtEur(v) {

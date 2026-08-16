@@ -325,6 +325,7 @@ function renderZones(zones) {
         <span class="zone-temp-now">${fmtTemp(live.current_temperature)}</span>
         <span class="zone-temp-target">objetivo ${targetLabel}</span>
       </div>
+      ${renderSparkline(live.temp_history, { colorVar: "--accent" })}
       <div>
         <span class="pill pill-idle" style="text-transform:capitalize">${esc(live.hvac_mode || "—")}</span>
         ${cfg.simulate ? '<span class="pill pill-sim">simulación</span>' : ""}

@@ -212,6 +212,12 @@ input[type=checkbox] { width: auto; accent-color: var(--accent); }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
 @media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
 
+/* Mini-grafica de tendencia generica (ver renderSparkline en
+   /shared/plugin-switch.js) -- misma clase que Energy ya usaba dentro de
+   sus propias tarjetas de metrica, ahora disponible para cualquier
+   pagina sin redefinirla. */
+.sparkline { display: block; margin-top: 6px; }
+
 .help { font-size: 0.78rem; color: var(--muted); margin-top: 5px; }
 .help.warn { color: var(--red); font-weight: 500; }
 

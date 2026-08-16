@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.41.0
+Sparklines reales en tarjetas de metrica -- lo que faltaba del rediseño Dishylink (v0.40.0 ya igualaba la estructura de cabecera/tarjetas, pero ninguna pagina que no fuera Energy llevaba el tipo de tarjeta con mini-grafica que caracteriza al Dishylink real, Download/Upload/Latencia/Power draw con su linea de tendencia).
+
+- Nuevo `renderSparkline(values, opts)` GENERICO en `/shared/plugin-switch.js` (fichero núcleo) — misma linea fina sin ejes + punto en el ultimo valor que Energy ya usaba para el SOC, ahora reutilizable desde cualquier pagina sin reimplementarla. `.sparkline` pasa a `design-system.css` (antes solo vivia dentro del `<style>` propio de Energy).
+- **Climate**: cada tarjeta de zona lleva ahora un sparkline de temperatura interior reciente. `ZoneRunner` (climate/zone_runner.py) guarda una serie corta en memoria (`temp_history`, 24 puntos, se pierde al reiniciar — no pretende sustituir el historial real de HA) que se actualiza en cada ciclo; expuesta en `/api/zones` junto a `current_temperature`.
+- **Lighting**: cada tarjeta de zona CON sensor de lux configurado lleva un sparkline de la lectura cruda de lux (sin histeresis ni debounce — se ve la oscilación real del sensor, la decisión de encender/apagar sigue aplicando la histeresis de v0.37.0 por separado). Mismo patron: `lux_history` en `ZoneRunner` (lighting/zone_runner.py), expuesto en `/api/zones`.
+- **Energy**: las tarjetas de Precio, Solar y Consumo ganan su propio sparkline (antes solo SOC lo tenia) — se generaliza `renderSocSparkline` a `renderMetricSparkline(status, field, nowVal, colorVar)`, reutilizada por las 4 tarjetas.
+- Tuya/TP-Link no ganan sparklines en esta versión — son puentes de configuración de dispositivos, no vistas de monitorización con una métrica de tendencia clara por tarjeta.
+
 ## 0.40.0
 Ajuste del rediseño de v0.39.0 tras feedback real del usuario comparando lado a lado con el Dishylink de producción: los tokens de color ya coincidían, pero la estructura seguía siendo la de la vieja identidad "app individual" (cabecera grande de dos líneas, tarjetas con borde visible y mucho relleno) — el Dishylink real es un panel denso de una sola fila de cabecera y tarjetas casi sin borde. Cambios, todos en `design-system.css` (fichero núcleo, se propagan solos a las 5 páginas):
 

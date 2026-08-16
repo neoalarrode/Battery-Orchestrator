@@ -323,6 +323,7 @@ function renderZones(zones) {
         <span class="bulb ${lit ? "lit" : ""}" style="background:${lit ? color : "var(--glass-bg)"};color:${color}"></span>
         <span class="vals">${esc(valsLabel)}</span>
       </div>
+      ${cfg.lux_sensor ? renderSparkline(live.lux_history, { colorVar: "--accent-2" }) : ""}
       <div class="zone-rule">${live.active_rule ? `regla activa: <strong>${esc(live.active_rule)}</strong>` : '<span class="muted">ninguna regla activa</span>'}</div>
       ${renderLightControl(z.id, live.group || {}, cfg)}
       <div class="zone-reason">${esc(live.reason || "")}</div>

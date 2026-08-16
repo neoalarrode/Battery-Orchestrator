@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from collections import deque
 from datetime import datetime, timezone
 
 from . import ema as ema_module, grid_signal, occupancy, outdoor, power_model, presets as presets_module, scheduler, thermal_model, window_algorithm, zone_forecast
@@ -77,6 +78,7 @@ _LOGGER = logging.getLogger("climate.zone_runner")
 
 TEMP_EMA_HALFLIFE_SECONDS = 120
 STALE_SENSOR_HARD_TIMEOUT_SECONDS = 5400  # 90 min
+TEMP_HISTORY_MAXLEN = 24  # puntos para el sparkline del dashboard, no una serie historica de verdad (esa vive en HA)
 WRITE_MIN_INTERVAL_SECONDS = 20
 MODEL_RECOMPUTE_MIN_INTERVAL_SECONDS = 21600  # 6 h
 TEMP_SEND_TOLERANCE_DEG = 0.1
@@ -170,6 +172,10 @@ class ZoneRunner:
         self.hvac_action = "off" if self.hvac_mode == "off" else "idle"
         self.current_temperature: float | None = None
         self.current_humidity: float | None = None
+        # Serie corta en memoria (se pierde al reiniciar el plugin) solo
+        # para el sparkline del dashboard -- no pretende ser un historial
+        # de verdad, para eso esta la propia HA (recorder).
+        self.temp_history: deque[float] = deque(maxlen=TEMP_HISTORY_MAXLEN)
 
         self._min_humidity = DEFAULT_MIN_HUMIDITY
         self._max_humidity = DEFAULT_MAX_HUMIDITY
@@ -833,6 +839,8 @@ class ZoneRunner:
 
         current_temp = self._read_current_temp()
         self.current_temperature = current_temp
+        if current_temp is not None:
+            self.temp_history.append(current_temp)
         humidity = self._read_humidity_now()
         self.current_humidity = round(humidity) if humidity is not None else None
         if current_temp is None:

@@ -90,3 +90,35 @@ async function renderPluginSwitch(slug, containerId = "plugin-switch-nav") {
     /* no bloquea el resto de la pagina */
   }
 }
+
+/*
+Mini-grafica de tendencia COMPARTIDA (sparkline), mismo patron visual que
+las tarjetas de metrica del Dishylink real (Download/Upload/Latencia...):
+una linea fina sin ejes ni rejilla, con un punto en el valor mas reciente.
+Antes de esta version cada plugin que queria una de estas se la escribia
+a mano (Energy ya llevaba la suya, para el SOC) -- esta es la version
+generica para el resto (Climate, Lighting...), sin depender de que cada
+pagina reimplemente el mismo SVG.
+
+`values`: array de numeros, en orden cronologico (el ultimo es "ahora").
+`opts.colorVar`: variable CSS a usar de color de linea/punto (por defecto
+--accent). Devuelve "" si no hay al menos 2 puntos (nada que dibujar).
+*/
+function renderSparkline(values, opts = {}) {
+  const pts = (values || []).filter(v => v !== null && v !== undefined && !Number.isNaN(v));
+  if (pts.length < 2) return "";
+  const colorVar = opts.colorVar || "--accent";
+  const min = Math.min(...pts), max = Math.max(...pts);
+  const range = Math.max(1e-6, max - min);
+  const w = 100, h = 22, pad = 3;
+  const coords = pts.map((v, i) => {
+    const x = pts.length === 1 ? 0 : (i / (pts.length - 1)) * w;
+    const y = pad + (1 - (v - min) / range) * (h - pad * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const [lx, ly] = coords[coords.length - 1].split(",");
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" class="sparkline" preserveAspectRatio="none" aria-hidden="true">
+    <polyline points="${coords.join(" ")}" fill="none" stroke="var(${colorVar})" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline>
+    <circle cx="${lx}" cy="${ly}" r="2.4" fill="var(${colorVar})"></circle>
+  </svg>`;
+}

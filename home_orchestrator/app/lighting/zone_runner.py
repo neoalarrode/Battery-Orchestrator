@@ -45,6 +45,7 @@ from __future__ import annotations
 import concurrent.futures
 import logging
 import time
+from collections import deque
 
 from lighting import rules, schedule
 
@@ -102,6 +103,10 @@ class ZoneRunner:
         self.active_rule: str | None = self._state.get("active_rule")
         self.current_values: dict | None = None
         self.reason: str = "sin evaluar todavia"
+        # Serie corta en memoria (se pierde al reiniciar el plugin), solo
+        # para el sparkline del dashboard -- mismo criterio que
+        # `climate/zone_runner.py: temp_history`.
+        self.lux_history: deque[float] = deque(maxlen=24)
         # Color manual (HS) pedido desde la luz "dummy" de la zona (ver
         # `manual_command`/mqtt_lighting.py) -- la curva solar automatica
         # NUNCA produce hs, solo brillo/temperatura de color, asi que esto
@@ -181,9 +186,21 @@ class ZoneRunner:
         el margen de histeresis en un par de minutos (visto de verdad
         contra un Aqara FP300: 36 -> 66 -> 36 en menos de un minuto)
         seguia parpadeando, solo que menos."""
+        lux_state = states.get(cfg.get("lux_sensor") or "")
+        try:
+            raw_lux = float((lux_state or {}).get("state"))
+        except (TypeError, ValueError):
+            raw_lux = None
+        # Solo para el sparkline del dashboard (ver renderSparkline) -- la
+        # lectura CRUDA, sin histeresis ni debounce, para que se vea la
+        # oscilacion real del sensor tal cual es (la histeresis/debounce
+        # de abajo es sobre la DECISION de encender/apagar, no sobre esto).
+        if raw_lux is not None:
+            self.lux_history.append(raw_lux)
+
         was_dark_enough = self._state.get("lux_dark_enough")
         candidate = schedule.lux_dark_enough(
-            states.get(cfg.get("lux_sensor") or ""),
+            lux_state,
             float(cfg.get("target_lux", schedule.DEFAULT_TARGET_LUX)),
             was_dark_enough,
         )

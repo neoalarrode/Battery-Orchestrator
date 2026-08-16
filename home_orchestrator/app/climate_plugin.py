@@ -35,7 +35,7 @@ REACTIVE_MIN_INTERVAL_SECONDS = 5
 class ClimatePlugin(Plugin):
     slug = "climate"
     name = "Climate Orchestrator"
-    version = "0.4.6"
+    version = "0.4.7"
 
     def __init__(self) -> None:
         self._runners: dict[str, ZoneRunner] = {}
@@ -150,6 +150,7 @@ class ClimatePlugin(Plugin):
                         "hvac_mode": runner.hvac_mode,
                         "hvac_action": runner.hvac_action,
                         "current_temperature": runner.current_temperature,
+                        "temp_history": list(runner.temp_history),
                         "target_temperature": runner.target_temperature,
                         "target_temperature_low": runner.target_temperature_low,
                         "target_temperature_high": runner.target_temperature_high,

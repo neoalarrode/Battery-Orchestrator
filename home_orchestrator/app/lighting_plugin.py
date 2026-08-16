@@ -44,7 +44,7 @@ DEFAULT_REAPPLY_MINUTES = 5
 class LightingPlugin(Plugin):
     slug = "lighting"
     name = "Lighting Orchestrator"
-    version = "0.7.8"
+    version = "0.7.9"
 
     def __init__(self) -> None:
         self._runners: dict[str, ZoneRunner] = {}
@@ -162,6 +162,7 @@ class LightingPlugin(Plugin):
                         "active_rule": runner.active_rule,
                         "current_values": runner.current_values,
                         "reason": runner.reason,
+                        "lux_history": list(runner.lux_history),
                         # Estado agregado de la luz "dummy" de la zona
                         # (ver zone_runner.py:group_state) -- para la
                         # tarjeta interactiva del dashboard: no depende de

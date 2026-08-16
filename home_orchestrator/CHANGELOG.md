@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.53.0
+Primer paso del registro tipado de entidades pedido por el usuario (tarea aparcada desde hace varias sesiones): "guardar entidades con tipos (energía, carga, importado, exportado...) y un desplegable en Energy para añadirlas a su tipo correspondiente".
+
+- Nuevo `config_store.ENTITY_TYPES` (carga, importado de red, exportado/vertido, generación solar, carga/descarga de batería, carga diferible, otro) y `tracked_entities` (lista) en la config de Energy.
+- CRUD completo: `add_tracked_entity`/`update_tracked_entity`/`delete_tracked_entity` en `config_store.py`, endpoints `GET /api/entity_types`, `POST/PUT/DELETE /api/tracked_entities` en `main.py`.
+- Nueva tarjeta "Entidades registradas" en la interfaz de Energy: entity_id + etiqueta opcional + desplegable de tipo, listado con editar/eliminar.
+- Deliberadamente NO toca los campos ya dedicados que de verdad alimentan el motor de cálculo (`load_sensor`/`export_sensor`/`net_grid_sensor`, `current_sensor`/`power_sensor` de cada array) — ese circuito sigue siendo el que decide de verdad. Este registro es la parte de "almacenamiento + clasificación" pedida; la explotación de cada tipo en el motor de cálculo (más allá de tenerlas guardadas y consultables) queda como incremento futuro, tipo a tipo, según haga falta.
+
 ## 0.52.1
 Energy re-pineado al tag `v0.52.0` (sensores instantáneos de potencia importada/vertida) — resto sin cambios. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
 

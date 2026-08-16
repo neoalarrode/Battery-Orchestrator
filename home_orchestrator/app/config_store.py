@@ -29,8 +29,37 @@ _lock = threading.RLock()  # reentrante: load_config() llama a save_config() en 
 PLUGIN_KEY = "battery"
 SCHEMA_ROOT_VERSION = 2
 
+# Registro generico de entidades "de apoyo" (ver "tracked_entities" mas
+# abajo): sensores que el usuario quiere que Energy conozca y clasifique
+# por tipo de flujo, SIN que cada uno necesite su propio campo dedicado
+# en la config (a diferencia de load_sensor/export_sensor/net_grid_sensor
+# o current_sensor/power_sensor de cada array, que siguen siendo los que
+# de verdad alimentan el motor de calculo). Es la pieza de "almacenamiento
+# tipado + desplegable en Energy" pedida expresamente por el usuario --
+# de momento es un registro consultable (guardar + clasificar + listar),
+# la explotacion de cada tipo en el motor de calculo es incremental y se
+# hace tipo a tipo segun haga falta, no todo de golpe aqui.
+ENTITY_TYPES = {
+    "load": "Carga / consumo",
+    "grid_import": "Importado de red",
+    "grid_export": "Exportado a red (vertido)",
+    "solar_generation": "Generación solar",
+    "battery_charge": "Carga de batería",
+    "battery_discharge": "Descarga de batería",
+    "deferrable_load": "Carga diferible",
+    "other": "Otro",
+}
+
+DEFAULT_TRACKED_ENTITY = {
+    "id": "",
+    "entity_id": "",
+    "type": "other",
+    "label": "",  # opcional, nombre a mostrar en Energy -- si esta vacio se usa el entity_id
+}
+
 DEFAULT_CONFIG = {
     "batteries": [],
+    "tracked_entities": [],
     "tariff": {
         "mode": "fixed",  # "fixed" | "pvpc_sensor"
         "punta_price": 0.173,
@@ -323,6 +352,35 @@ def delete_pv_array(cfg: dict, array_id: str) -> bool:
     cfg["pv_arrays"] = [a for a in cfg["pv_arrays"] if a["id"] != array_id]
     save_config(cfg)
     return len(cfg["pv_arrays"]) < before
+
+
+def add_tracked_entity(cfg: dict, entity: dict) -> dict:
+    merged = dict(DEFAULT_TRACKED_ENTITY)
+    merged.update(entity)
+    merged["id"] = merged.get("id") or str(uuid.uuid4())[:8]
+    if merged.get("type") not in ENTITY_TYPES:
+        merged["type"] = "other"
+    cfg.setdefault("tracked_entities", []).append(merged)
+    save_config(cfg)
+    return merged
+
+
+def update_tracked_entity(cfg: dict, entity_id: str, updates: dict) -> dict | None:
+    for e in cfg.get("tracked_entities", []):
+        if e["id"] == entity_id:
+            e.update(updates)
+            if e.get("type") not in ENTITY_TYPES:
+                e["type"] = "other"
+            save_config(cfg)
+            return e
+    return None
+
+
+def delete_tracked_entity(cfg: dict, entity_id: str) -> bool:
+    before = len(cfg.get("tracked_entities", []))
+    cfg["tracked_entities"] = [e for e in cfg.get("tracked_entities", []) if e["id"] != entity_id]
+    save_config(cfg)
+    return len(cfg["tracked_entities"]) < before
 
 
 def add_deferrable_load(cfg: dict, load: dict) -> dict:

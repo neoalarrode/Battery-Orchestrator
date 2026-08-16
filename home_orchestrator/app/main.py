@@ -1379,6 +1379,34 @@ def api_delete_pv_array(array_id):
     return jsonify({"deleted": ok})
 
 
+@app.get("/api/entity_types")
+def api_entity_types():
+    return jsonify(config_store.ENTITY_TYPES)
+
+
+@app.post("/api/tracked_entities")
+def api_add_tracked_entity():
+    cfg = config_store.load_config()
+    entity = config_store.add_tracked_entity(cfg, request.get_json(force=True))
+    return jsonify(entity), 201
+
+
+@app.put("/api/tracked_entities/<entity_id>")
+def api_update_tracked_entity(entity_id):
+    cfg = config_store.load_config()
+    updated = config_store.update_tracked_entity(cfg, entity_id, request.get_json(force=True))
+    if updated is None:
+        return jsonify({"error": "no encontrada"}), 404
+    return jsonify(updated)
+
+
+@app.delete("/api/tracked_entities/<entity_id>")
+def api_delete_tracked_entity(entity_id):
+    cfg = config_store.load_config()
+    ok = config_store.delete_tracked_entity(cfg, entity_id)
+    return jsonify({"deleted": ok})
+
+
 @app.post("/api/deferrable_loads")
 def api_add_deferrable_load():
     cfg = config_store.load_config()

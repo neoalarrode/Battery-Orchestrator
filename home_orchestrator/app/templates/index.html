@@ -670,6 +670,30 @@
   <p class="help" data-i18n="help_forecast_note">La previsión se calcula como la media real de esa hora del día en los últimos N días — sin aprendizaje automático opaco, puedes verificarla tú mismo.</p>
 </div>
 
+<div class="card">
+  <h2 data-i18n="card_entities_title">Entidades registradas</h2>
+  <p class="help" data-i18n="help_tracked_entities">Sensores adicionales que quieras que Energy tenga clasificados por tipo de flujo (carga, importado, exportado, generación solar…), aparte de los que ya se usan directamente arriba (sensor de consumo, de vertido, de cada panel...). Útil para llevar un registro ordenado aunque el motor de cálculo no los use todos todavía.</p>
+  <div id="tracked-entities-list"></div>
+  <details id="add-tracked-entity-panel">
+    <summary class="add-toggle" data-i18n="add_tracked_entity_toggle">+ Añadir entidad</summary>
+    <div class="grid2" style="margin-top:10px">
+      <div>
+        <label data-i18n="label_entity_id">Entity ID</label><input id="te-entity-id" placeholder="sensor.mi_sensor">
+        <label data-i18n="label_entity_label_optional">Etiqueta (opcional)</label><input id="te-label" placeholder="Placa este">
+      </div>
+      <div>
+        <label data-i18n="label_entity_type">Tipo</label>
+        <select id="te-type"></select>
+      </div>
+    </div>
+    <p class="help" id="tracked-entity-form-error" style="display:none"></p>
+    <div class="actions">
+      <button onclick="addTrackedEntity()" id="tracked-entity-submit-btn" data-i18n="btn_add_entity">Añadir entidad</button>
+      <button class="ghost" type="button" onclick="cancelTrackedEntityForm()" data-i18n="btn_cancel">Cancelar</button>
+    </div>
+  </details>
+</div>
+
 <div class="card" id="climate-discovery-card">
   <h2 data-i18n="card_climate_discovery_title">Climate Orchestrator</h2>
   <p class="help" data-i18n="help_climate_discovery">Las zonas NO se buscan solas: pulsa el botón cuando quieras (al instalar Climate Orchestrator, o si añades/quitas alguna zona) — así no hay ningún sondeo periódico de fondo.</p>
@@ -1048,6 +1072,17 @@ es: {
   card_deferrable_title: "Cargas diferibles",
   card_deferrable_hint: "en vivo (real) y ventana programada",
   empty_no_deferrable: "Todavía no has añadido ninguna carga diferible.",
+  card_entities_title: "Entidades registradas",
+  help_tracked_entities: "Sensores adicionales que quieras que Energy tenga clasificados por tipo de flujo (carga, importado, exportado, generación solar…), aparte de los que ya se usan directamente arriba (sensor de consumo, de vertido, de cada panel...). Útil para llevar un registro ordenado aunque el motor de cálculo no los use todos todavía.",
+  add_tracked_entity_toggle: "+ Añadir entidad",
+  label_entity_id: "Entity ID",
+  label_entity_label_optional: "Etiqueta (opcional)",
+  label_entity_type: "Tipo",
+  btn_add_entity: "Añadir entidad",
+  empty_no_tracked_entities: "Todavía no has registrado ninguna entidad.",
+  toast_tracked_entity_added: "Entidad añadida.",
+  toast_tracked_entity_updated: "Entidad actualizada.",
+  toast_tracked_entity_deleted: "Entidad eliminada.",
   deferrable_no_schedule: "sin programar todavía",
   deferrable_mode_solar: "excedente solar", deferrable_mode_cheap: "hora barata",
   deferrable_on: "Encendida", deferrable_off: "Apagada", deferrable_unknown: "Sin datos en vivo",
@@ -1363,6 +1398,17 @@ en: {
   card_deferrable_title: "Deferrable loads",
   card_deferrable_hint: "live (real) and scheduled window",
   empty_no_deferrable: "You haven't added any deferrable load yet.",
+  card_entities_title: "Registered entities",
+  help_tracked_entities: "Extra sensors you want Energy to keep classified by flow type (load, grid import, grid export, solar generation…), on top of the ones already used directly above (consumption sensor, export sensor, each panel's...). Useful to keep a tidy record even if the calculation engine doesn't use all of them yet.",
+  add_tracked_entity_toggle: "+ Add entity",
+  label_entity_id: "Entity ID",
+  label_entity_label_optional: "Label (optional)",
+  label_entity_type: "Type",
+  btn_add_entity: "Add entity",
+  empty_no_tracked_entities: "You haven't registered any entity yet.",
+  toast_tracked_entity_added: "Entity added.",
+  toast_tracked_entity_updated: "Entity updated.",
+  toast_tracked_entity_deleted: "Entity deleted.",
   deferrable_no_schedule: "not scheduled yet",
   deferrable_mode_solar: "solar surplus", deferrable_mode_cheap: "cheap hour",
   deferrable_on: "On", deferrable_off: "Off", deferrable_unknown: "No live data",
@@ -1562,6 +1608,8 @@ let pendingEcoflowPvBatteryId = null;
 let pendingEcoflowPvChannels = [];
 let editingPvArrayId = null;
 let editingDeferrableLoadId = null;
+let editingTrackedEntityId = null;
+let entityTypesCache = null;
 let lastStatus = null;
 let lastSavings = null;
 let lastLive = null;
@@ -1743,6 +1791,7 @@ async function loadConfig() {
   renderBatteries();
   renderPvArrays();
   renderDeferrableLoads();
+  renderTrackedEntities();
   updatePvInstallTypeHelp();
 
   document.getElementById('t-mode').value = cfg.tariff.mode || 'fixed';
@@ -2453,6 +2502,114 @@ async function rescheduleDeferrableLoad(id) {
   } catch (err) { return; }
   await loadConfig();
   toast(t('toast_deferrable_rescheduled'));
+}
+
+async function ensureEntityTypesLoaded() {
+  if (entityTypesCache) return entityTypesCache;
+  try {
+    const res = await fetch('api/entity_types');
+    entityTypesCache = await res.json();
+  } catch (err) {
+    entityTypesCache = {};
+  }
+  const sel = document.getElementById('te-type');
+  if (sel) {
+    sel.innerHTML = Object.entries(entityTypesCache).map(([k, label]) => `<option value="${k}">${label}</option>`).join('');
+  }
+  return entityTypesCache;
+}
+
+function trackedEntityTypeLabel(type) {
+  return (entityTypesCache && entityTypesCache[type]) || type;
+}
+
+function renderTrackedEntities() {
+  const el = document.getElementById('tracked-entities-list');
+  const entities = cfg.tracked_entities || [];
+  if (!entities.length) { el.innerHTML = `<p class="empty">${t('empty_no_tracked_entities')}</p>`; return; }
+  el.innerHTML = entities.map(e => `
+    <div class="item-card">
+      <div class="kv"><span>${e.label || e.entity_id}</span><code>${e.entity_id}</code></div>
+      <div class="kv"><span>${t('label_entity_type')}</span><code>${trackedEntityTypeLabel(e.type)}</code></div>
+      <div class="actions">
+        <button class="secondary" onclick="editTrackedEntity('${e.id}')" type="button">${t('btn_edit')}</button>
+        <button class="danger" onclick="deleteTrackedEntity('${e.id}')" type="button">${t('btn_delete_battery')}</button>
+      </div>
+    </div>`).join('');
+}
+
+function showTrackedEntityFormError(msg) {
+  const el = document.getElementById('tracked-entity-form-error');
+  if (!msg) { el.style.display = 'none'; el.textContent = ''; return; }
+  el.style.display = 'block'; el.classList.add('warn'); el.textContent = msg;
+}
+
+function resetTrackedEntityForm() {
+  document.getElementById('te-entity-id').value = '';
+  document.getElementById('te-label').value = '';
+  document.getElementById('te-type').value = 'other';
+  editingTrackedEntityId = null;
+  document.getElementById('tracked-entity-submit-btn').textContent = t('btn_add_entity');
+  showTrackedEntityFormError('');
+}
+
+function cancelTrackedEntityForm() {
+  resetTrackedEntityForm();
+  document.getElementById('add-tracked-entity-panel').open = false;
+}
+
+function editTrackedEntity(id) {
+  const e = (cfg.tracked_entities || []).find(x => x.id === id);
+  if (!e) return;
+  document.getElementById('te-entity-id').value = e.entity_id || '';
+  document.getElementById('te-label').value = e.label || '';
+  document.getElementById('te-type').value = e.type || 'other';
+  editingTrackedEntityId = id;
+  document.getElementById('tracked-entity-submit-btn').textContent = t('btn_save_deferrable_changes');
+  showTrackedEntityFormError('');
+  const panel = document.getElementById('add-tracked-entity-panel');
+  panel.open = true;
+  panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function addTrackedEntity() {
+  showTrackedEntityFormError('');
+  const entity = {
+    entity_id: document.getElementById('te-entity-id').value.trim(),
+    label: document.getElementById('te-label').value.trim(),
+    type: document.getElementById('te-type').value,
+  };
+  if (!entity.entity_id) { showTrackedEntityFormError(t('error_deferrable_required')); return; }
+
+  const isEdit = !!editingTrackedEntityId;
+  const url = isEdit ? 'api/tracked_entities/' + editingTrackedEntityId : 'api/tracked_entities';
+  const method = isEdit ? 'PUT' : 'POST';
+  try {
+    const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(entity) });
+    if (!res.ok) {
+      const body = await res.text();
+      showTrackedEntityFormError(t('error_server', { status: res.status, detail: body || t('error_no_detail') }));
+      return;
+    }
+  } catch (err) {
+    showTrackedEntityFormError(t('error_connect', { msg: err.message }));
+    return;
+  }
+  resetTrackedEntityForm();
+  document.getElementById('add-tracked-entity-panel').open = false;
+  await loadConfig();
+  toast(isEdit ? t('toast_tracked_entity_updated') : t('toast_tracked_entity_added'));
+}
+
+async function deleteTrackedEntity(id) {
+  try {
+    const res = await fetch('api/tracked_entities/' + id, { method: 'DELETE' });
+    if (!res.ok) { toast(t('toast_could_not_delete_deferrable', { status: res.status })); return; }
+  } catch (err) {
+    toast(t('error_connect', { msg: err.message })); return;
+  }
+  await loadConfig();
+  toast(t('toast_tracked_entity_deleted'));
 }
 
 function parsePeriods(str) {
@@ -3539,6 +3696,7 @@ async function renderPluginSwitch() {
   try {
     // loadConfig() decide sola si hay que caer a modo wallpanel, segun si
     // el servidor responde o no a /api/config — ver la funcion.
+    await ensureEntityTypesLoaded();
     await loadConfig();
     renderPluginSwitch();
     // Llegada desde el selector de nivel superior de otro plugin (ver

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.48.1
+Climate re-pineado al tag `v0.48.0` (fix del ventilador) — resto sin cambios. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
+
 ## 0.48.0
 BUG REAL, reportado por el usuario y confirmado contra hardware real (AC Tuya "AirClima 12000" del Salón): "toda la tarde enfriando muy poco y con el ventilador al mínimo" pese a estar 2.4°C por encima de la consigna (24°C, deadband 0.3). Verificado en producción: `mode_dp="wind"` (fan_only, por la pausa correcta de puerta/ventana abierta — ese mecanismo funciona bien, es reactivo al estado en vivo, sin bug de "enganche") y, más revelador, `fan_dp="mid_low"` incluso en los tramos SIN puerta abierta.
 

@@ -296,7 +296,20 @@ class TplinkLightHandle:
     @property
     def color_temp_kelvin(self) -> int | None:
         light = self._light()
-        return int(light.color_temp) if light and light.is_variable_color_temp else None
+        if not light or not light.is_variable_color_temp:
+            return None
+        try:
+            return int(light.color_temp)
+        except KeyError:
+            # python-kasa a veces devuelve un estado sin la clave "color_temp"
+            # aunque is_variable_color_temp sea True (ver colortemperature.py
+            # del SDK) -- no debe tumbar el ciclo reactivo de Lighting por
+            # una luz, se trata como dato no disponible en ESTA consulta.
+            log.debug(
+                "TP-Link %s: color_temp no presente en el estado de este sondeo",
+                self._device_id, exc_info=True,
+            )
+            return None
 
     def turn_on(self, brightness_pct: float | None = None, color_temp_kelvin: float | None = None,
                 hs: tuple[float, float] | None = None) -> None:

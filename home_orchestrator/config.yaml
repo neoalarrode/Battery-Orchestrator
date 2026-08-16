@@ -1,6 +1,6 @@
 name: "Home Orchestrator — Energy"
-version: "0.32.1"
-slug: "battery_orchestrator"
+version: "0.33.0"
+slug: "home_orchestrator"
 description: "Baterias, solar y cargas diferibles, sin cajas negras — plugin Energy de Home Orchestrator"
 url: "https://github.com/neoalarrode/Home-Orchestrator"
 arch:

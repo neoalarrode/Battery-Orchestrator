@@ -85,7 +85,7 @@ PLUGIN_REGISTRY = {
 # instalado no debe crear su app Flask ni abrir ninguna conexion solo por
 # aparecer listado). "tag"/"sha256" identifican exactamente que version
 # de que tag del repo se descarga al instalar (ver plugin_downloader.py);
-# "files" son las rutas (relativas a battery_orchestrator/app/ dentro del
+# "files" son las rutas (relativas a home_orchestrator/app/ dentro del
 # tarball de ese tag) que pertenecen a este plugin en concreto. Mantener
 # todo esto en sincronia a mano con plugins.json (raiz del repo) y con el
 # `version` de cada Plugin -- mismo criterio que el resto de números de

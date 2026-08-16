@@ -6,7 +6,7 @@
       "slug": "battery",
       "name": "Energy Orchestrator",
       "description": "Baterias, solar y cargas diferibles -- carga y descarga adaptativa por precio, sol y consumo real",
-      "path": "battery_orchestrator",
+      "path": "home_orchestrator",
       "repo": "neoalarrode/Home-Orchestrator",
       "version": "0.11.81"
     },
@@ -14,7 +14,7 @@
       "slug": "climate",
       "name": "Climate Orchestrator",
       "description": "Termostatos adaptativos por zona, expuestos como climate.* nativos de HA (HomeKit/Matter) via MQTT Discovery",
-      "path": "battery_orchestrator",
+      "path": "home_orchestrator",
       "repo": "neoalarrode/Home-Orchestrator",
       "version": "0.4.4"
     },
@@ -22,7 +22,7 @@
       "slug": "tuya",
       "name": "Tuya Orchestrator",
       "description": "Puente de ingesta para dispositivos Tuya-por-LAN -- consumo interno por Climate y/o exposicion opcional a HA por MQTT",
-      "path": "battery_orchestrator",
+      "path": "home_orchestrator",
       "repo": "neoalarrode/Home-Orchestrator",
       "version": "0.4.5"
     },
@@ -30,7 +30,7 @@
       "slug": "lighting",
       "name": "Lighting Orchestrator",
       "description": "Iluminacion adaptativa por zona -- color y brillo por hora, encendido/apagado por presencia y reglas condicionales",
-      "path": "battery_orchestrator",
+      "path": "home_orchestrator",
       "repo": "neoalarrode/Home-Orchestrator",
       "version": "0.7.3"
     },
@@ -38,7 +38,7 @@
       "slug": "tplink",
       "name": "TP-Link Orchestrator",
       "description": "Puente de ingesta para dispositivos TP-Link (Kasa/Tapo) via python-kasa -- consumo interno por Lighting y/o exposicion opcional a HA por MQTT",
-      "path": "battery_orchestrator",
+      "path": "home_orchestrator",
       "repo": "neoalarrode/Home-Orchestrator",
       "version": "0.1.10"
     },
@@ -46,7 +46,7 @@
       "slug": "starlink",
       "name": "Starlink Orchestrator",
       "description": "Monitorizacion de tu Starlink (rendimiento, latencia, obstruccion, alineacion, consumo) -- build oficial de Dishylink, servido tal cual, con un proxy local al dish",
-      "path": "battery_orchestrator",
+      "path": "home_orchestrator",
       "repo": "neoalarrode/Home-Orchestrator",
       "version": "0.3.1"
     }

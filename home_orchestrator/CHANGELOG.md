@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.33.0
+**CAMBIO ESTRUCTURAL, con migración manual — carpeta y slug del addon renombrados de `battery_orchestrator` a `home_orchestrator`.** A petición expresa del usuario (tarea "revisar el repositorio... y posiblemente renombrar carpetas"): el nombre venía de cuando esto era solo un planificador de baterías; hoy es una plataforma de 6 plugins (Energy, Climate, Lighting, Tuya, TP-Link, Starlink) y el nombre de carpeta/slug se había quedado desalineado con la identidad real "Home Orchestrator" (ya reflejada en `config.yaml:name` y en toda la interfaz).
+
+Cambios:
+- `battery_orchestrator/` → `home_orchestrator/` (toda la carpeta, `git mv`).
+- `config.yaml`: `slug: "battery_orchestrator"` → `slug: "home_orchestrator"`.
+- `app/plugin_downloader.py`: `SUBPATH` actualizado a `home_orchestrator/app` (de donde extrae el código de cada plugin al descargar un tag) — sin este cambio, la descarga/instalación de CUALQUIER plugin se habría roto.
+- `plugins.json` (raíz): `path` actualizado en las 6 entradas.
+
+**Lo que NO cambia, a propósito**: los entity_id reales de Home Assistant (`sensor.battery_orchestrator_power`, `_soc`, `_solar_energy`...) se quedan exactamente igual — renombrarlos rompería estadísticas a largo plazo, automatizaciones y dashboards del usuario fuera del propio addon, un riesgo mayor y distinto al de esta tarea.
+
+**Por qué es un cambio grave**: el `slug` es la identidad permanente del addon para Supervisor — determina el directorio de `/data` persistente (baterías configuradas, credenciales EcoFlow/Tuya/TP-Link, IP del router de Starlink, histórico). Cambiarlo sin más hace que Supervisor trate esto como un addon COMPLETAMENTE NUEVO, con un `/data` vacío. La migración real (copiar el `/data` del addon viejo al nuevo antes de que el usuario pierda su configuración) se hizo a mano, fuera de este repo, contra la instalación de producción del usuario.
+
+**De paso, el resto de la tarea "revisar el repositorio":**
+- **Licencias**: el `LICENSE` raíz ("todos los derechos reservados") no dejaba claro que el plugin Starlink vendoriza código de terceros bajo licencia MIT ([Dishylink](https://github.com/DaveyHert/dishylink), © daveyhert) — añadida una excepción explícita (ES/EN) aclarando que esa parte concreta sigue bajo su MIT original, no bajo el resto del repositorio. De paso, `DISHYLINK_LICENSE.txt` (antes solo en `starlink_dist/`) también se copia a `starlink_node/`, donde vive la otra mitad del código vendorizado — antes no tenía ningún aviso de licencia propio.
+- **Documentación por plugin**: nueva [wiki](https://github.com/neoalarrode/Home-Orchestrator/wiki) con una página por plugin (Energy, Climate, Lighting, Tuya, TP-Link, Starlink) — antes solo Energy tenía guía, el resto no tenía documentación alguna más allá de la propia interfaz.
+- **README/DOCS desincronizados**: existían DOS copias de `README.md`/`DOCS.md` -- una en la raíz del repo (la que muestra GitHub, desactualizada desde hace mucho: seguía diciendo "Battery Orchestrator" y con una URL de instalación rota) y otra dentro de la carpeta del addon (la que lee Home Assistant, ya con la identidad correcta). Sincronizadas: la raíz ahora coincide con lo que ve el usuario en HA. Los `DOCS.md`/`DOCS.en.md` de la raíz se retiran (movidos a la wiki); el `DOCS.md`/`DOCS.en.md` DENTRO de la carpeta del addon se queda igual -- ese lo lee Supervisor directamente, no puede ser una wiki.
+
+Como cambia `plugin_loader.py`/`config.yaml`/`plugin_downloader.py` (varios ficheros núcleo a la vez), esta versión SÍ lleva Release en GitHub.
+
 ## 0.32.1
 Sha256 de Climate/Tuya/Lighting/TP-Link re-pineados al tag `v0.32.0` (fix de `js/incomplete-sanitization`) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

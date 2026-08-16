@@ -16,6 +16,23 @@ derechos que no se conceden expresamente quedan reservados.
 
 Para solicitar autorización de uso, contacta con el autor a través de
 GitHub (@neoalarrode).
+
+---
+
+**Excepción: código de terceros vendorizado.** Lo anterior aplica al
+código propio del autor. El plugin Starlink incluye, sin modificar su
+lógica, el build web y el historian/servidor de cuenta del proyecto
+[Dishylink](https://github.com/DaveyHert/dishylink) (© daveyhert),
+publicado bajo licencia MIT — ese código concreto sigue rigiéndose por
+su licencia MIT original, no por lo de arriba: quien lo obtenga (de
+Dishylink directamente, o de este repositorio) conserva los permisos que
+la MIT concede, siempre que mantenga el aviso de copyright y la propia
+licencia. El texto completo de esa licencia se incluye junto al código
+vendorizado en `home_orchestrator/app/starlink_dist/
+DISHYLINK_LICENSE.txt` y `home_orchestrator/app/starlink_node/
+DISHYLINK_LICENSE.txt`. Ningún otro fichero de este repositorio está
+afectado por esta excepción.
+
 ---
 
 Copyright (c) 2026 Eric Larrodé. All rights reserved.
@@ -36,3 +53,19 @@ expressly granted are reserved.
 
 To request permission to use this code, contact the author via GitHub
 (@neoalarrode).
+
+---
+
+**Exception: vendored third-party code.** The above applies to the
+author's own code. The Starlink plugin includes, unmodified in its
+logic, the web build and the historian/account server of the
+[Dishylink](https://github.com/DaveyHert/dishylink) project (©
+daveyhert), published under the MIT license — that specific code
+remains governed by its original MIT license, not by the above: anyone
+obtaining it (from Dishylink directly, or from this repository) keeps
+the permissions the MIT grants, provided they retain the copyright
+notice and the license itself. The full license text ships alongside
+the vendored code at `home_orchestrator/app/starlink_dist/
+DISHYLINK_LICENSE.txt` and `home_orchestrator/app/starlink_node/
+DISHYLINK_LICENSE.txt`. No other file in this repository is affected by
+this exception.

@@ -33,7 +33,7 @@ log = logging.getLogger("plugin_downloader")
 
 REPO = "neoalarrode/Home-Orchestrator"
 DATA_DIR = os.environ.get("PLUGIN_DATA_DIR", "/data/plugins")
-SUBPATH = "battery_orchestrator/app"  # donde vive el codigo de los plugins dentro del repo
+SUBPATH = "home_orchestrator/app"  # donde vive el codigo de los plugins dentro del repo
 DOWNLOAD_TIMEOUT_SECONDS = 30
 
 

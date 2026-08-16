@@ -6,12 +6,17 @@ persistencia que savings_store.py: fichero JSON propio, se recupera solo
 al reiniciar el addon (nunca se pierde el acumulado por un reinicio).
 
 A peticion expresa del usuario: "crear y exponer un sensor de importacion
-desde la red, vertido a la red (ambos acumulativos)" -- se exponen por
-MQTT Discovery como sensor.* de HA con device_class "energy" y
-state_class "total_increasing" (ver mqtt_grid_energy.py): el mismo
-contrato que un contador de verdad, solo sube, HA ya sabe calcular
-consumos por periodo el solo a partir de esto (igual que hace con
-cualquier medidor de energia nativo).
+desde la red, vertido a la red (ambos acumulativos)" -- se exponen como
+sensor.battery_orchestrator_grid_imported_energy/..._exported_energy con
+device_class "energy" y state_class "total_increasing" (ver run_cycle()
+en main.py, `_publish_sensor_throttled`): el mismo mecanismo YA PROBADO
+que usa `sensor.battery_orchestrator_solar_energy` (REST directo a HA via
+`ha_client.publish_sensor`, no MQTT Discovery -- mas simple, sin
+conexion nueva que mantener, mismo patron de nombres). El mismo contrato
+que un contador de verdad, solo sube, HA ya sabe calcular consumos por
+periodo el solo a partir de esto -- listo para el Panel de Energia
+oficial de HA (Configuracion -> Ajustes del panel de energia -> Red
+electrica: consumo/vertido).
 """
 
 from __future__ import annotations

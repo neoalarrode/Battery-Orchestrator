@@ -123,7 +123,7 @@ PLUGIN_CATALOG = {
             "deferrable_scheduler.py", "deferrable_store.py", "ecoflow_ble.py",
             "ecoflow_cloud.py", "ecoflow_login.py", "forecast_store.py", "grid_energy_store.py",
             "ha_client.py", "ha_statistics.py", "history_store.py", "lifetime_store.py",
-            "mqtt_grid_energy.py", "pv_source.py",
+            "pv_source.py",
             "savings_store.py", "scheduler.py", "solar_energy_store.py", "tariff_source.py",
             "templates",
         ],

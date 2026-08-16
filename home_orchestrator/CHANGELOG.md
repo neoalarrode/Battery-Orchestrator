@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.51.0
+Unificación: los sensores de energía importada/vertida (v0.49.0/v0.50.0, publicados por MQTT Discovery con un cliente MQTT nuevo dedicado a esto) pasan al MISMO mecanismo ya probado que `sensor.battery_orchestrator_solar_energy` (existente desde antes de esta sesión) — REST directo a HA (`ha_client.publish_sensor`/`_publish_sensor_throttled`), no MQTT. Descubierto al revisar cómo integrar mejor con el Panel de Energía oficial de HA: había DOS mecanismos de publicación de sensores en el mismo plugin haciendo el mismo trabajo.
+
+- Renombrados a `sensor.battery_orchestrator_grid_imported_energy`/`..._grid_exported_energy`, mismo patrón de nombres que el resto de sensores del plugin (`battery_orchestrator_*`).
+- `mqtt_grid_energy.py` eliminado (ya no hace falta); el cliente MQTT dedicado que se había añadido a Energy se retira — el plugin vuelve a no mantener ninguna conexión MQTT propia (nunca la necesitó para esto).
+- `grid_energy_store.py` (la acumulación en sí) no cambia — solo cómo se expone el resultado.
+- Los tres sensores del Panel de Energía de HA ya están listos: producción solar (ya existía), importación y vertido de red (nuevos, ya en el mecanismo correcto).
+
 ## 0.50.1
 Energy re-pineado al tag `v0.50.0` (cuota de reparto en autoconsumo compartido) — resto sin cambios. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
 

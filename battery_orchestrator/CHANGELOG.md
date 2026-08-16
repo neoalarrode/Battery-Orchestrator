@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.29.1
+Sha256 de Energy re-pineado al tag `v0.29.0` (quita el sistema de tokens duplicado) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
 ## 0.29.0
 **Tarea "verificar que todas las pestañas siguen la misma estética" — dedup real encontrado y corregido.** Las 5 páginas (Energy, Climate, Lighting, Tuya, TP-Link) ya enlazaban el mismo `shared/design-system.css`, pero Energy (la página más grande y antigua del proyecto) además mantenía su PROPIA copia completa de los 4 bloques de tokens de color/tema (`:root` base, `@media` claro, `[data-theme=light]`, `[data-theme=dark]`) dentro de su propio `<style>` — verificado byte a byte idéntica a la del fichero compartido, así que sin efecto visual hoy, pero exactamente el riesgo que esta tarea pide comprobar: un cambio futuro al sistema de diseño compartido no se habría notado en Energy. Quitados los 4 bloques duplicados (quedan solo dos reglas legítimas, no duplicadas, que usan `:root[data-theme=...]` para la opacidad del fondo ambiente); el resto del `<style>` propio de Energy (layout, gráfica, tarjetas) se queda igual. El resto de páginas ya dependían solo del fichero compartido, sin cambios.
 

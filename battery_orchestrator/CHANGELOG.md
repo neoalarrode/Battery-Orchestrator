@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.28.1
+Sha256 de Energy re-pineado al tag `v0.28.0` (Configuración movida al menú principal) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
+
 ## 0.28.0
 **"Configuración" sale del submenú de Energy y pasa al menú principal.** A petición expresa del usuario: *"si te fijas está en el submenú dentro de Energy y debería de estar arriba donde tenemos Climate, Energy, Starlink... el porqué es simple, configuración aplica a todos [los plugins]"*. La pestaña en sí (rejilla con la config de cada plugin instalado) sigue viviendo en la página de Energy — solo cambia desde dónde se llega a ella:
 

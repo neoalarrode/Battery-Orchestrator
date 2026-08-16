@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.27.0
+**Corrección real, GRAVE, de la escritura de config del router (v0.26.0 aún no probada en vivo por nadie -- corregida antes de que se usara).** El nombre/contraseña de red se codificaban en el sitio equivocado del esquema (`networkName`/`networkPassword` directamente en `wifiConfig`), deducido con un método poco fiable (`strings` sobre el protoset, que no preserva la jerarquía real de mensajes). Verificado con el decodificador real: esos campos pertenecen a `WifiSetupRequest` (el asistente de primer arranque), no a `WifiConfig` -- una escritura real habría sido rechazada por el propio dispositivo con un error de "campo desconocido", nunca habría llegado a tocar la WiFi. Corregido introspeccionando el registro protobuf real en vez de adivinar: el SSID/contraseña editables de verdad viven dentro de `networks[0].basicServiceSets[]`, el mismo sitio del que ya se leen. Verificado localmente (decodificación de la petición contra el esquema real, sin tocar el router) antes de este despliegue. Detalle completo en `app/starlink_node/PATCH.md`.
+
 ## 0.26.1
 Sha256 de Starlink re-pineado al tag `v0.26.0` (mapa de satélites corregido, escritura real de config del router) — verificado con una descarga real antes de fijarlo. Es un fichero núcleo (`plugin_loader.py`) el que cambia, así que esta versión SÍ lleva Release en GitHub.
 

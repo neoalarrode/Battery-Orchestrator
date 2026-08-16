@@ -50,10 +50,26 @@ Construye la petición `wifiSetConfig` (nombre/contraseña de red, bypass
 mode, DNS personalizado/seguro, rango DHCP, país, apagado de banda,
 band steering, modo exterior) con los flags `apply_*` reales -- mismo
 patrón que `core/dishConfigUpdate.ts` (`CONFIG_APPLY_FLAG`), pero para
-el `targetId` del router ("Router-...") en vez del dish ("ut..."). Los
-nombres de campo/flag están confirmados contra el `dish.protoset` real
-(`strings dish.protoset | grep '^apply'`) y contra una lectura real de
-`getWifiConfig()` del router en producción -- no son una suposición.
+el `targetId` del router ("Router-...") en vez del dish ("ut...").
+
+**Corrección real (v0.3.1)**: la primera versión de este fichero ponía
+`networkName`/`networkName5ghz`/`networkPassword` directamente en
+`wifiConfig`, deducido de `strings dish.protoset | grep -B/-A` --
+método que resultó NO fiable (`strings` no preserva la estructura de
+mensajes anidados, solo el orden de bytes). Verificado en producción: el
+propio decodificador real (`fromJson` contra el `Request` real) lo
+rechazó con `"key \"networkName\" is unknown"` -- esos tres campos
+existen de verdad en el protoset, pero en `WifiSetupRequest` (el asistente
+de primer arranque), no en `WifiConfig`. Corregido introspeccionando el
+registro real (`registry.getMessage(...).fields`, no `strings`): el
+SSID/contraseña editables de verdad viven dentro de
+`networks[0].basicServiceSets[].ssid` / `.authWpa2.password` -- el mismo
+sitio de donde ya los LEE `RouterSettingsTab.tsx`. Cada escritura ahora
+lee primero la red actual (`getWifiConfig()`) y solo sustituye SSID/
+contraseña dentro de esa estructura, preservando bssid/banda/interfaz de
+cada entrada -- verificado localmente decodificando la petición
+construida contra el esquema real antes de desplegar (sin tocar el
+dispositivo).
 
 ## Como se ejecutan
 

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "note": "Registro de plugins oficiales de Home Orchestrator. Solo plugins de este mismo repositorio/organizacion (neoalarrode) -- no se admiten repos personalizados de terceros, para no abrir ejecucion de codigo sin verificar dentro de un addon con credenciales reales (EcoFlow, HA...). La descarga/verificacion dinamica de plugins desde este registro es una fase posterior; por ahora el cargador (app/plugin_loader.py, PLUGIN_CATALOG) es la fuente de verdad operativa -- este fichero es el registro DESCRIPTIVO que la refleja, mantenido a mano en sincronia (mismos 6 plugins, mismas versiones). Starlink es distinto de los demas: sirve tal cual el build oficial de Dishylink (https://github.com/DaveyHert/dishylink, MIT) en vez de una reimplementacion propia -- ver su docstring en app/starlink_plugin.py.",
+  "note": "Registro de plugins oficiales de Home Orchestrator. Solo plugins de este mismo repositorio/organizacion (neoalarrode) -- no se admiten repos personalizados de terceros, para no abrir ejecucion de codigo sin verificar dentro de un addon con credenciales reales (EcoFlow, HA...). La descarga/verificacion dinamica de plugins desde este registro es una fase posterior; por ahora el cargador (app/plugin_loader.py, PLUGIN_CATALOG) es la fuente de verdad operativa -- este fichero es el registro DESCRIPTIVO que la refleja, mantenido a mano en sincronia (mismos 8 plugins, mismas versiones). Starlink es distinto de los demas: sirve tal cual el build oficial de Dishylink (https://github.com/DaveyHert/dishylink, MIT) en vez de una reimplementacion propia -- ver su docstring en app/starlink_plugin.py.",
   "plugins": [
     {
       "slug": "battery",
@@ -8,7 +8,7 @@
       "description": "Baterias, solar y cargas diferibles -- carga y descarga adaptativa por precio, sol y consumo real",
       "path": "home_orchestrator",
       "repo": "neoalarrode/Home-Orchestrator",
-      "version": "0.11.81"
+      "version": "0.11.93"
     },
     {
       "slug": "climate",
@@ -16,7 +16,7 @@
       "description": "Termostatos adaptativos por zona, expuestos como climate.* nativos de HA (HomeKit/Matter) via MQTT Discovery",
       "path": "home_orchestrator",
       "repo": "neoalarrode/Home-Orchestrator",
-      "version": "0.4.4"
+      "version": "0.4.11"
     },
     {
       "slug": "tuya",
@@ -24,7 +24,7 @@
       "description": "Puente de ingesta para dispositivos Tuya-por-LAN -- consumo interno por Climate y/o exposicion opcional a HA por MQTT",
       "path": "home_orchestrator",
       "repo": "neoalarrode/Home-Orchestrator",
-      "version": "0.4.5"
+      "version": "0.4.7"
     },
     {
       "slug": "lighting",
@@ -32,7 +32,7 @@
       "description": "Iluminacion adaptativa por zona -- color y brillo por hora, encendido/apagado por presencia y reglas condicionales",
       "path": "home_orchestrator",
       "repo": "neoalarrode/Home-Orchestrator",
-      "version": "0.7.3"
+      "version": "0.7.12"
     },
     {
       "slug": "tplink",
@@ -40,7 +40,7 @@
       "description": "Puente de ingesta para dispositivos TP-Link (Kasa/Tapo) via python-kasa -- consumo interno por Lighting y/o exposicion opcional a HA por MQTT",
       "path": "home_orchestrator",
       "repo": "neoalarrode/Home-Orchestrator",
-      "version": "0.1.10"
+      "version": "0.1.13"
     },
     {
       "slug": "starlink",
@@ -49,6 +49,22 @@
       "path": "home_orchestrator",
       "repo": "neoalarrode/Home-Orchestrator",
       "version": "0.3.1"
+    },
+    {
+      "slug": "govee",
+      "name": "Govee Orchestrator",
+      "description": "Puente de ingesta para bombillas Govee -- LAN API local del propio dispositivo (sin cuenta ni nube) -- consumo interno por Lighting y/o exposicion opcional a HA por MQTT",
+      "path": "home_orchestrator",
+      "repo": "neoalarrode/Home-Orchestrator",
+      "version": "0.1.0"
+    },
+    {
+      "slug": "shelly",
+      "name": "Shelly Orchestrator",
+      "description": "Puente de ingesta para dispositivos Shelly -- API local del propio fabricante (Gen1 HTTP / Gen2+ RPC), sin cuenta ni nube -- consumo interno por Lighting y/o exposicion opcional a HA por MQTT",
+      "path": "home_orchestrator",
+      "repo": "neoalarrode/Home-Orchestrator",
+      "version": "0.1.2"
     }
   ]
 }

@@ -17,6 +17,7 @@ Starlink se configuran desde su propia página tras instalarlos — ver <a href=
   <a href="#tipo-de-instalación-por-panelstring">Tipo de instalación</a> ·
   <a href="#cargas-diferibles">Cargas diferibles</a> ·
   <a href="#panel-de-solo-lectura-wallpanel">Panel de solo lectura</a> ·
+  <a href="#panel-de-acceso-completo-puerto-8097">Acceso completo</a> ·
   <a href="#las-pestañas">Las pestañas</a> ·
   <a href="#salud-de-batería-cómo-se-calcula">Salud de batería</a> ·
   <a href="#ahorro-y-alertas-de-consumo">Ahorro y alertas</a> ·
@@ -114,6 +115,14 @@ Por ese puerto el panel es **de solo lectura**: se ven "Estado actual", "Previsi
 
 Si no lo vas a usar, puedes desactivarlo dejando el puerto vacío en la configuración de red del add-on.
 
+## Panel de acceso completo (puerto 8097)
+
+Junto al puerto de solo lectura, el add-on expone un segundo puerto propio (por defecto el **8097**, configurable en el mismo sitio: **Ajustes → Add-ons → Home Orchestrator — Energy → Red**) que sirve la MISMA interfaz pero **sin ninguna restricción**: acceso completo de lectura y escritura, igual que por Ingress. Ahí sí aparecen la pestaña "Configuración" y el botón "Ejecutar ciclo ahora", y la API completa responde con normalidad (`/api/config`, `/api/batteries`, `/api/run_now`...).
+
+Pensado para lo que el puerto de solo lectura no permite: llamar a la API desde automatizaciones o scripts externos, herramientas de administración propias, o simplemente usar la interfaz completa desde un dispositivo de la red local sin pasar por el inicio de sesión de Home Assistant.
+
+> **Aviso de seguridad.** Este puerto **no lleva ningún inicio de sesión delante**, igual que el de solo lectura — pero a diferencia de aquel, por aquí sí se puede cambiar la configuración entera, dar de alta o borrar baterías y forzar ciclos. Cualquiera que alcance el puerto tiene control total del add-on. Úsalo solo en una red en la que confíes, nunca redirigido a Internet ni accesible desde fuera de tu LAN (sin VPN). Si no lo necesitas, déjalo vacío en la configuración de red del add-on para desactivarlo.
+
 ## Las pestañas
 
 <p align="center">
@@ -184,3 +193,4 @@ Además, con "Ahorro" o "Longevidad" seleccionado (no aplica con "Autoconsumo so
 - Restaurar una configuración desde archivo solo comprueba que tenga las claves básicas esperadas (baterías, tarifa, solar, general); revisa los datos después de importar por si vienen de una versión antigua del add-on.
 - Una carga diferible marcada como NO interrumpible se queda encendida toda su ventana programada pase lo que pase, aunque el excedente solar previsto desaparezca — es la opción segura por defecto para electrodomésticos con programa (lavadora, lavavajillas). Márcala como interrumpible solo si de verdad no pasa nada por cortarla a medias.
 - El puerto de solo lectura (ver [Panel de solo lectura](#panel-de-solo-lectura-wallpanel)) no lleva ningún inicio de sesión delante — cualquiera con acceso a tu red local puede verlo (nunca escribir, eso está bloqueado en el servidor). No lo expongas fuera de tu LAN (sin VPN) ni lo redirijas a Internet.
+- El puerto de acceso completo (ver [Panel de acceso completo](#panel-de-acceso-completo-puerto-8097)) tampoco lleva inicio de sesión delante y, a diferencia del anterior, **sí permite escribir**: cambiar la configuración entera, dar de alta o borrar baterías y forzar ciclos. Cualquiera que alcance ese puerto tiene control total del add-on. Déjalo vacío para desactivarlo si no lo necesitas, y no lo expongas nunca fuera de tu LAN.

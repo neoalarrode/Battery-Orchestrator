@@ -105,6 +105,21 @@ def pvpc_sensor_prices(entity_id: str, now: datetime, horizon_hours: int) -> lis
         fallback = sum(hourly.values()) / len(hourly)
         prices = [hourly.get(h, fallback) for h in hours]
 
+    # BUG REAL: con una serie de precios PLANA (todos iguales) los tres cortes
+    # coinciden, y como "valle" se comprueba primero (`p <= valle_cut`) TODAS
+    # las horas salian "valle". Ese es exactamente el caso del fallback de
+    # arriba (`prices = [current] * horizon_hours`, cuando el sensor PVPC no
+    # expone atributos por hora): un horizonte entero de valle hace que
+    # `scheduler._reserve_target` colapse a `min_soc_wh` -- el motor deja de
+    # cargar desde red y descarga la bateria hasta el suelo. Sin informacion
+    # real de tramos, lo correcto es "llano" para todo, que es justo lo que ya
+    # devuelve el camino hermano de "sin sensor configurado" (ver
+    # get_prices_tiers mas abajo) -- los dos discrepaban.
+    if not prices:
+        return []
+    if max(prices) - min(prices) < 1e-9:
+        return [(p, "llano") for p in prices]
+
     # tramos por posicion relativa dentro de las horas conocidas del horizonte:
     # tercio mas barato = valle, tercio mas caro = punta, resto = llano
     sorted_prices = sorted(prices)

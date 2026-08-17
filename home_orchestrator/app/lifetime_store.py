@@ -34,8 +34,13 @@ def _load() -> dict:
 def _save(data: dict) -> None:
     os.makedirs(os.path.dirname(LIFETIME_PATH), exist_ok=True)
     with _lock:
-        with open(LIFETIME_PATH, "w") as f:
+        # Escritura ATOMICA (.tmp + os.replace) -- ver config_store._write_raw:
+        # un corte a mitad de un `open(..., "w")` directo dejaba el fichero
+        # truncado o con dos objetos JSON concatenados.
+        tmp = LIFETIME_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, LIFETIME_PATH)
 
 
 def accumulate(battery_id: str, battery_name: str, charged_wh: float, discharged_wh: float,

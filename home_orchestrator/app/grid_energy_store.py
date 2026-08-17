@@ -59,8 +59,13 @@ def _load() -> dict:
 def _save(data: dict) -> None:
     os.makedirs(os.path.dirname(STORE_PATH), exist_ok=True)
     with _lock:
-        with open(STORE_PATH, "w") as f:
+        # Escritura ATOMICA (.tmp + os.replace) -- ver config_store._write_raw:
+        # un corte a mitad de un `open(..., "w")` directo dejaba el fichero
+        # truncado o con dos objetos JSON concatenados.
+        tmp = STORE_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, STORE_PATH)
 
 
 def accumulate(now: datetime, imported_w: float | None, exported_w: float | None) -> dict:

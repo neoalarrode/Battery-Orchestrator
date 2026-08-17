@@ -162,14 +162,36 @@ def _is_namespaced(data) -> bool:
 def _read_raw() -> dict | None:
     if not os.path.exists(CONFIG_PATH):
         return None
-    with open(CONFIG_PATH) as f:
-        return json.load(f)
+    with open(CONFIG_PATH, encoding="utf-8") as f:
+        content = f.read()
+    if not content.strip():
+        return None
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError as exc:
+        if exc.msg == "Extra data":
+            # El fichero tiene dos objetos JSON concatenados (escritura
+            # interrumpida o doble volcado). Se recupera el primero,
+            # que es el valido, y se sana el fichero en disco.
+            try:
+                obj, _ = json.JSONDecoder().raw_decode(content.lstrip())
+                log.warning(
+                    "config.json tenia datos extra (JSON corrupto) — recuperado el primer "
+                    "objeto valido. El fichero se sanea ahora mismo."
+                )
+                _write_raw(obj)
+                return obj
+            except json.JSONDecodeError:
+                pass
+        raise
 
 
 def _write_raw(root: dict) -> None:
     os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
-    with open(CONFIG_PATH, "w") as f:
+    tmp = CONFIG_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(root, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, CONFIG_PATH)  # atomico en POSIX: nunca deja el fichero a medias
 
 
 def load_config() -> dict:

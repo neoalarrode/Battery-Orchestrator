@@ -1,5 +1,5 @@
 name: "Home Orchestrator — Energy"
-version: "0.55.1"
+version: "0.56.0"
 slug: "home_orchestrator"
 description: "Baterias, solar y cargas diferibles, sin cajas negras — plugin Energy de Home Orchestrator"
 url: "https://github.com/neoalarrode/Home-Orchestrator"
@@ -30,7 +30,9 @@ services:
 host_network: true
 ports:
   8098/tcp: 8098
+  8097/tcp: 8097
 ports_description:
   8098/tcp: "Panel de solo lectura (wallpanel), sin pasar por Ingress. Desactivalo (deja el puerto vacio) si no lo vas a usar."
+  8097/tcp: "Panel de acceso COMPLETO (lectura y escritura), sin pasar por Ingress ni por la autenticacion de Home Assistant. Cualquiera que alcance este puerto puede cambiar la configuracion — usalo solo en una red de confianza y desactivalo (deja el puerto vacio) si no lo necesitas."
 options: {}
 schema: {}

@@ -501,11 +501,42 @@ def pv_forecast_from_entity(entity_id: str, horizon_hours: int) -> list[float]:
             if isinstance(series, dict):
                 values = list(series.values())[:horizon_hours]
             else:
+                # BUG REAL: antes era `item.get("p_pv_forecast") or
+                # item.get("value") or item.get("power")` -- un 0 (toda hora
+                # de NOCHE, y cualquier hora totalmente nublada) es falsy, asi
+                # que la cadena `or` caia a las claves siguientes (ausentes) y
+                # daba None. El filtro de la linea de abajo BORRABA entonces
+                # esas horas, con lo que las horas de sol restantes se
+                # compactaban hacia el indice 0 y el relleno de ceros se iba
+                # al final: el planificador recibia "sol a medianoche y noche
+                # a mediodia". Ahora se coge la primera clave que NO sea None
+                # (un 0 es un dato valido, no una ausencia) y se conserva la
+                # POSICION de cada hora.
                 values = [
-                    item.get("p_pv_forecast") or item.get("value") or item.get("power")
+                    next(
+                        (item[k] for k in ("p_pv_forecast", "value", "power")
+                         if item.get(k) is not None),
+                        None,
+                    )
                     for item in series[:horizon_hours]
                 ]
-            values = [float(v) for v in values if v is not None]
+            # Una hora sin dato utilizable cuenta como 0 W, nunca se elimina:
+            # borrarla desplazaria todas las horas siguientes. `any_real`
+            # distingue "serie con ceros de verdad" (valida, se usa) de "serie
+            # con un formato que no reconocemos" (ningun valor utilizable: se
+            # sigue probando con la clave siguiente y, si ninguna sirve, con
+            # la estimacion plana de mas abajo, igual que antes).
+            coerced, any_real = [], False
+            for v in values:
+                if v is None:
+                    coerced.append(0.0)
+                    continue
+                try:
+                    coerced.append(float(v))
+                    any_real = True
+                except (TypeError, ValueError):
+                    coerced.append(0.0)
+            values = coerced if any_real else []
             if values:
                 values += [0.0] * (horizon_hours - len(values))
                 return values[:horizon_hours]

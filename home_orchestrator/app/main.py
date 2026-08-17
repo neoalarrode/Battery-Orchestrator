@@ -51,6 +51,15 @@ app = Flask(__name__, static_folder="static", template_folder="templates")
 WALLPANEL_PORT = int(os.environ.get("WALLPANEL_PORT", 8098))
 WALLPANEL_ALLOWED_GET = {"/", "/api/status", "/api/live", "/api/savings", "/api/battery_health", "/api/anomaly"}
 
+# Puerto adicional de acceso COMPLETO (lectura y escritura), pensado para
+# acceder desde dentro de la red local sin pasar por Ingress — p.ej. desde
+# automaciones externas, scripts o herramientas de administracion que
+# necesiten llamar a endpoints de configuracion. Al igual que Ingress,
+# no lleva ninguna restriccion de ruta ni metodo; a diferencia del
+# wallpanel (8098), si expone /api/config, /api/run_now, etc.
+# ADVERTENCIA: no expongas este puerto a Internet sin autenticacion.
+FULL_ACCESS_PORT = int(os.environ.get("FULL_ACCESS_PORT", 8097))
+
 
 @app.before_request
 def _restrict_wallpanel_port():
@@ -2236,6 +2245,15 @@ def _run_wallpanel_server():
         log.warning(f"No se pudo abrir el puerto wallpanel ({WALLPANEL_PORT}): {e}")
 
 
+def _run_full_access_server():
+    try:
+        server = make_server("0.0.0.0", FULL_ACCESS_PORT, app, threaded=True)
+        log.info(f"Puerto de acceso completo escuchando en el puerto {FULL_ACCESS_PORT}")
+        server.serve_forever()
+    except OSError as e:
+        log.warning(f"No se pudo abrir el puerto de acceso completo ({FULL_ACCESS_PORT}): {e}")
+
+
 def start_background_threads() -> None:
     """
     Arranca todos los hilos de fondo de Battery. Extraido a funcion propia
@@ -2249,6 +2267,7 @@ def start_background_threads() -> None:
     threading.Thread(target=background_loop, daemon=True).start()
     threading.Thread(target=_live_sensor_loop, daemon=True).start()
     threading.Thread(target=_run_wallpanel_server, daemon=True).start()
+    threading.Thread(target=_run_full_access_server, daemon=True).start()
     threading.Thread(target=_ha_ws_client.run_forever, daemon=True).start()
     threading.Thread(target=_reactive_trigger.worker_loop, daemon=True).start()
 

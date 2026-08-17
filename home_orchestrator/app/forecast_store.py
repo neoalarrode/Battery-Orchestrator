@@ -43,8 +43,13 @@ def _load() -> dict:
 def _save(data: dict) -> None:
     os.makedirs(os.path.dirname(FORECAST_PATH), exist_ok=True)
     with _lock:
-        with open(FORECAST_PATH, "w") as f:
+        # Escritura ATOMICA (.tmp + os.replace) -- ver config_store._write_raw:
+        # un corte a mitad de un `open(..., "w")` directo dejaba el fichero
+        # truncado o con dos objetos JSON concatenados.
+        tmp = FORECAST_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, FORECAST_PATH)
 
 
 def record_and_compare(now: datetime, predicted_end_of_hour_soc_pct: float, actual_soc_pct_now: float) -> dict | None:

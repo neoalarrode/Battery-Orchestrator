@@ -64,7 +64,12 @@ def _hourly_from_watts(watts: dict, horizon_hours: int) -> list[float]:
     for k, v in watts.items():
         try:
             parsed.append((datetime.fromisoformat(k.replace(" ", "T")), float(v)))
-        except ValueError:
+        except (TypeError, ValueError, AttributeError):
+            # `float(None)` lanza TypeError (no ValueError) y Forecast.Solar SI
+            # emite entradas nulas -- esta funcion se llama FUERA del try/except
+            # de la descarga, asi que un TypeError aqui abortaba el ciclo de
+            # planificacion entero y dejaba las baterias sin orden. AttributeError
+            # cubre una clave que no sea texto.
             continue
     now = datetime.now().replace(minute=0, second=0, microsecond=0)
     out = []

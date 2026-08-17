@@ -50,8 +50,14 @@ def _load() -> dict:
 def _save(data: dict) -> None:
     os.makedirs(os.path.dirname(ANOMALY_PATH), exist_ok=True)
     with _lock:
-        with open(ANOMALY_PATH, "w") as f:
+        # Escritura ATOMICA: un `open(..., "w")` directo trunca el fichero al
+        # instante y vuelca encima, asi que un corte a mitad (reinicio, OOM)
+        # lo dejaba truncado o con dos objetos JSON concatenados -- el mismo
+        # fallo que dejo el add-on en crash-loop. Ver config_store._write_raw.
+        tmp = ANOMALY_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, ANOMALY_PATH)
 
 
 def update(now: datetime, live_load_w: float, expected_load_w: float) -> dict:

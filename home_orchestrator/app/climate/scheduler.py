@@ -143,6 +143,7 @@ def decide_action(
     idle_loss_coeff: float,
     grid_tier: str | None = None,
     solar_surplus_now_w: float | None = None,
+    battery_discharge_headroom_now_w: float | None = None,
     zone_estimated_power_w: float | None = None,
     grid_forecast: list[dict] | None = None,
     occupancy_now_likely: bool | None = None,
@@ -167,12 +168,15 @@ def decide_action(
     outdoor.py. Sin previsión disponible, el motor sigue funcionando
     (reactivo puro, sin anticipacion ni ensanche de margen), nunca falla.
 
-    `grid_tier`/`solar_surplus_now_w`/`zone_estimated_power_w`/
-    `grid_forecast`: señal de Battery Orchestrator, si esta instalado (ver
-    modulo grid_signal.py) — None/[] si no hay addon, o si no ha
-    reportado nunca. Solo se usan en prioridad "ahorro"; sin ellos,
-    "ahorro" se comporta exactamente igual que antes de que existiera
-    esta integracion (solo meteo exterior).
+    `grid_tier`/`solar_surplus_now_w`/`battery_discharge_headroom_now_w`/
+    `zone_estimated_power_w`/`grid_forecast`: señal de Battery Orchestrator,
+    si esta instalado (ver modulo grid_signal.py) — None/[] si no hay
+    addon, o si no ha reportado nunca. Solo se usan en prioridad "ahorro";
+    sin ellos, "ahorro" se comporta exactamente igual que antes de que
+    existiera esta integracion (solo meteo exterior). El hueco de descarga
+    de bateria se trata como el excedente solar: potencia ya disponible
+    AHORA MISMO sin coste extra de red, se suman antes de comparar contra
+    lo que la zona necesitaria (ver `_economic_factor`).
 
     `occupancy_now_likely`/`occupancy_forecast_likely`: patron HISTORICO
     de ocupacion de la zona (ver climate/occupancy.py) — estadistica
@@ -219,12 +223,14 @@ def decide_action(
     if priority == "ahorro":
         if heating:
             extra, why = _ahorro_extra_margin(True, outdoor_now, outdoor_forecast, heating_rate_deg_h,
-                                               grid_tier, solar_surplus_now_w, zone_estimated_power_w)
+                                               grid_tier, solar_surplus_now_w, zone_estimated_power_w,
+                                               battery_discharge_headroom_now_w)
             heat_deadband = deadband + extra
             heat_note += f" ({why})"
         if cooling:
             extra, why = _ahorro_extra_margin(False, outdoor_now, outdoor_forecast, cooling_rate_deg_h,
-                                               grid_tier, solar_surplus_now_w, zone_estimated_power_w)
+                                               grid_tier, solar_surplus_now_w, zone_estimated_power_w,
+                                               battery_discharge_headroom_now_w)
             cool_deadband = deadband + extra
             cool_note += f" ({why})"
 
@@ -286,29 +292,46 @@ def decide_action(
 
 
 def _economic_factor(grid_tier: str | None, solar_surplus_now_w: float | None,
-                      zone_power_w: float | None) -> tuple[float, str]:
-    """Multiplicador (0..1) sobre el margen de "ahorro" segun el precio/sol
-    de la red AHORA MISMO — ver grid_signal.py. 1.0 = no recorta nada
-    (sin señal de Battery Orchestrator, o excedente solar de sobra para
-    cubrir la zona: tan barato como pueda ser, margen completo). Recorta
-    mas cuanto mas cara sea la hora sin sol que la cubra — igual filosofia
-    que el resto de factores de `_ahorro_extra_margin`: solo puede
-    RECORTAR el margen maximo, nunca ampliarlo por su cuenta."""
+                      zone_power_w: float | None,
+                      battery_discharge_headroom_now_w: float | None = None) -> tuple[float, str]:
+    """Multiplicador (0..1) sobre el margen de "ahorro" segun el precio/sol/
+    bateria de la red AHORA MISMO — ver grid_signal.py. 1.0 = no recorta
+    nada (sin señal de Battery Orchestrator, o excedente solar + hueco de
+    descarga de bateria de sobra para cubrir la zona: tan barato como
+    pueda ser, margen completo). Recorta mas cuanto mas cara sea la hora
+    sin sol NI bateria que la cubra — igual filosofia que el resto de
+    factores de `_ahorro_extra_margin`: solo puede RECORTAR el margen
+    maximo, nunca ampliarlo por su cuenta.
+
+    Solar Y bateria se SUMAN antes de comparar contra `zone_power_w`: son
+    dos fuentes independientes que, cualquiera de las dos o combinadas,
+    evitan que la zona tenga que tirar de red — una bateria con hueco de
+    descarga de sobra es tan "gratis ahora mismo" como el excedente solar
+    para efectos de esta decision (ya esta pagada, usarla no añade coste
+    nuevo a la factura de esta hora, a diferencia de tirar de red en
+    punta)."""
     if grid_tier is None:
         return 1.0, ""
-    if solar_surplus_now_w and zone_power_w and solar_surplus_now_w >= zone_power_w:
-        return 1.0, "excedente solar cubre la zona: margen completo"
+    covered_w = (solar_surplus_now_w or 0.0) + (battery_discharge_headroom_now_w or 0.0)
+    if covered_w and zone_power_w and covered_w >= zone_power_w:
+        source = (
+            "excedente solar + hueco de batería cubren la zona" if solar_surplus_now_w and battery_discharge_headroom_now_w
+            else "excedente solar cubre la zona" if solar_surplus_now_w
+            else "hueco de descarga de batería cubre la zona"
+        )
+        return 1.0, f"{source}: margen completo"
     if grid_tier == "valle":
         return 0.8, "hora valle: margen amplio"
     if grid_tier == "llano":
         return 0.4, "hora llano: margen moderado"
-    return 0.0, "hora punta sin sol suficiente: margen mínimo"
+    return 0.0, "hora punta sin sol ni batería suficiente: margen mínimo"
 
 
 def _ahorro_extra_margin(heating: bool, outdoor_now: float | None, outdoor_forecast: list[float],
                           rate_deg_h: float, grid_tier: str | None = None,
                           solar_surplus_now_w: float | None = None,
-                          zone_power_w: float | None = None) -> tuple[float, str]:
+                          zone_power_w: float | None = None,
+                          battery_discharge_headroom_now_w: float | None = None) -> tuple[float, str]:
     """Cuantos °C de mas se le puede dar de margen a la histéresis en
     prioridad "ahorro", y por que. Combina TRES factores independientes,
     cada uno limitando el margen por su cuenta (nunca lo amplian, solo lo
@@ -322,8 +345,8 @@ def _ahorro_extra_margin(heating: bool, outdoor_now: float | None, outdoor_forec
       - Velocidad real de la zona (inercia termica aprendida): una zona
         lenta no se puede permitir tanto margen como una rapida, porque
         tarda mas en recuperar terreno si hace falta.
-      - Precio/sol AHORA MISMO (ver `_economic_factor`) — señal opcional
-        de Battery Orchestrator, si esta instalado.
+      - Precio/sol/bateria AHORA MISMO (ver `_economic_factor`) — señal
+        opcional de Battery Orchestrator, si esta instalado.
     """
     if outdoor_now is None or not outdoor_forecast:
         base_max = AHORRO_MAX_MARGIN_DEG * 0.5
@@ -336,7 +359,9 @@ def _ahorro_extra_margin(heating: bool, outdoor_now: float | None, outdoor_forec
         trend_note = "previsión exterior estable" if worsening < 0.5 else "la previsión exterior empeora, margen recortado"
 
     responsiveness = max(0.0, min(1.0, (rate_deg_h or 0.0) / REFERENCE_RATE_DEG_H))
-    economic_mult, economic_note = _economic_factor(grid_tier, solar_surplus_now_w, zone_power_w)
+    economic_mult, economic_note = _economic_factor(
+        grid_tier, solar_surplus_now_w, zone_power_w, battery_discharge_headroom_now_w,
+    )
     extra = base_max * responsiveness * economic_mult
 
     note = trend_note

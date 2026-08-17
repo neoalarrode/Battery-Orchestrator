@@ -496,6 +496,15 @@ def run_cycle():
         return
 
     batteries = [_battery_from_cfg(b, cfg) for b in batteries_cfg]
+    # Suma de potencia MAXIMA declarada de descarga de todas las baterias --
+    # un RATING de configuracion, no depende de leer nada a HA, asi que se
+    # puede calcular aqui, pronto. Se usa mas abajo para el hueco de
+    # descarga disponible AHORA MISMO en la señal de red publicada para
+    # Climate Orchestrator ("battery_discharge_headroom_now_w"), SIN tener
+    # que esperar a la comprobacion de baterias con SOC disponible que viene
+    # despues -- esa señal debe seguir publicandose aunque las baterias no
+    # respondan (ver el comentario extenso junto a la publicacion).
+    max_discharge_w_all = sum(b.max_discharge_w for b in batteries)
     horizon = int(cfg["general"]["horizon_hours"])
 
     now = datetime.now()
@@ -586,8 +595,22 @@ def run_cycle():
     try:
         contracted_power_w = float(cfg["general"].get("contracted_power_w") or 0)
         price_now, tier_now = prices_tiers[0]
-        solar_surplus_now = max(0.0, pv_forecast[0] - load_forecast[0])
-        headroom_w = max(0.0, contracted_power_w - load_forecast[0]) if contracted_power_w else None
+        # AHORA MISMO ("solar_surplus_now_w", lo que Climate Orchestrator usa
+        # para su banco de confort oportunista) tiene que ser lo mas fresco
+        # posible -- ANTES esto usaba pv_forecast[0]/load_forecast[0] (la
+        # MEDIA prevista de toda la hora), el mismo criterio "forecast en vez
+        # de en vivo" que ya se corrigio para energia de cargas diferibles
+        # (ver CHANGELOG v0.54.0). Un nublado pasajero (sol real momentaneo
+        # muy por debajo de la media horaria) haria que Climate creyera que
+        # hay excedente "ahora mismo" cuando no lo hay; al reves, un pico
+        # real de sol por encima de la media se perderia. Mismo patron ya
+        # usado en el resto de este fichero (`live_pv_for_deferrable`,
+        # `flow_pv_w`): en vivo si hay dato, la media prevista de la hora
+        # como fallback si no.
+        pv_now_for_signal = pv_now_actual if pv_now_actual is not None else pv_forecast[0]
+        load_now_for_signal = live_base_load_w if live_base_load_w is not None else load_forecast[0]
+        solar_surplus_now = max(0.0, pv_now_for_signal - load_now_for_signal)
+        headroom_w = max(0.0, contracted_power_w - load_now_for_signal) if contracted_power_w else None
         forecast = [
             {
                 "dt": (now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=i)).isoformat(),
@@ -596,6 +619,22 @@ def run_cycle():
             }
             for i in range(horizon)
         ]
+        # Hueco de descarga de bateria DISPONIBLE AHORA MISMO (rating maximo
+        # declarado menos lo que ya estan descargando de verdad, medido en
+        # vivo, nunca la previsión del planificador) -- para que Climate
+        # Orchestrator pueda tratar "las baterias tienen margen para cubrir
+        # mas consumo sin tirar de red" igual que trata el excedente solar
+        # (ver `_economic_factor` en climate/scheduler.py). Es un TECHO por
+        # rating, no ajustado por SOC restante: una bateria casi vacia deja
+        # de poder sostener ese hueco y `live_discharge_w` lo refleja solo
+        # en el siguiente ciclo (bajando), nunca se inventa cuanto le queda
+        # de verdad. None si no hay dato en vivo de ninguna bateria (mismo
+        # criterio de "nunca un cero inventado" que el resto de este
+        # fichero) -- Climate Orchestrator ya sabe caer a comportamiento
+        # solo-solar sin esto.
+        battery_discharge_headroom_now_w = (
+            max(0.0, max_discharge_w_all - live_discharge_w) if live_battery_data_ok else None
+        )
         _publish_sensor_throttled(
             "sensor.battery_orchestrator_grid_signal",
             price_now,
@@ -603,6 +642,9 @@ def run_cycle():
                 "unit_of_measurement": "EUR/kWh",
                 "tier": tier_now,
                 "solar_surplus_now_w": round(solar_surplus_now),
+                "battery_discharge_headroom_now_w": (
+                    round(battery_discharge_headroom_now_w) if battery_discharge_headroom_now_w is not None else None
+                ),
                 "contracted_headroom_w": round(headroom_w) if headroom_w is not None else None,
                 "forecast": forecast,
                 # Sensor general de consumo de la casa YA declarado aqui

@@ -23,13 +23,27 @@ from __future__ import annotations
 GRID_SIGNAL_ENTITY_ID = "sensor.battery_orchestrator_grid_signal"
 
 
+def _safe_float(v):
+    try:
+        return float(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
 def read(ws) -> dict:
-    """Devuelve {"tier", "solar_surplus_now_w", "home_power_sensor",
-    "forecast"} — todo None (forecast: []) si Battery no esta instalado o
-    no ha publicado nunca. "home_power_sensor" es el sensor general de
-    consumo de la casa que Battery YA tiene declarado — aqui sirve para
-    aprender solo el consumo real de cada actuador sin que el usuario
-    tenga que declarar el mismo sensor otra vez en este plugin.
+    """Devuelve {"tier", "solar_surplus_now_w", "battery_discharge_headroom_now_w",
+    "home_power_sensor", "forecast"} — todo None (forecast: []) si Battery
+    no esta instalado o no ha publicado nunca. "home_power_sensor" es el
+    sensor general de consumo de la casa que Battery YA tiene declarado —
+    aqui sirve para aprender solo el consumo real de cada actuador sin que
+    el usuario tenga que declarar el mismo sensor otra vez en este plugin.
+
+    "battery_discharge_headroom_now_w": cuanta potencia de descarga de
+    bateria hay disponible AHORA MISMO (rating maximo declarado menos lo
+    que ya estan descargando de verdad, medido en vivo por Battery) SIN
+    tirar de red — mismo tratamiento que el excedente solar: una zona que
+    usa este margen no le cuesta nada extra a la factura. None si Battery
+    no publica dato en vivo de baterias (nunca un cero inventado).
 
     "forecast" es la previsión horaria de precio/tramo/excedente solar que
     Battery YA calcula para si mismo (empezando por la hora actual, indice
@@ -45,19 +59,18 @@ def read(ws) -> dict:
     except Exception:
         state = None
     if state is None or state.get("state") in ("unknown", "unavailable"):
-        return {"tier": None, "solar_surplus_now_w": None, "home_power_sensor": None, "forecast": []}
+        return {
+            "tier": None, "solar_surplus_now_w": None, "battery_discharge_headroom_now_w": None,
+            "home_power_sensor": None, "forecast": [],
+        }
     attrs = state.get("attributes") or {}
-    surplus = attrs.get("solar_surplus_now_w")
-    try:
-        surplus = float(surplus) if surplus is not None else None
-    except (TypeError, ValueError):
-        surplus = None
     forecast = attrs.get("forecast")
     if not isinstance(forecast, list):
         forecast = []
     return {
         "tier": attrs.get("tier"),
-        "solar_surplus_now_w": surplus,
+        "solar_surplus_now_w": _safe_float(attrs.get("solar_surplus_now_w")),
+        "battery_discharge_headroom_now_w": _safe_float(attrs.get("battery_discharge_headroom_now_w")),
         "home_power_sensor": attrs.get("home_power_sensor") or None,
         "forecast": forecast,
     }

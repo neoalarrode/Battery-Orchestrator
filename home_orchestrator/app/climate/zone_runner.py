@@ -944,6 +944,7 @@ class ZoneRunner:
                 cooling_rate_deg_h=self._thermal_model.get("cooling_rate_deg_h", 0.0),
                 idle_loss_coeff=self._thermal_model.get("idle_loss_coeff", 0.0),
                 grid_tier=grid["tier"], solar_surplus_now_w=grid["solar_surplus_now_w"],
+                battery_discharge_headroom_now_w=grid["battery_discharge_headroom_now_w"],
                 zone_estimated_power_w=self._zone_estimated_power_w(),
                 grid_forecast=grid["forecast"],
                 occupancy_now_likely=occupancy_now_likely, occupancy_forecast_likely=occupancy_forecast_likely,

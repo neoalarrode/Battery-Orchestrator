@@ -51,18 +51,45 @@ def _default_entry(name: str) -> dict:
         "segment_action": None,
         "segment_start_soc": None,
         "segment_energy_wh": 0.0,
-        "observations": [],
+        # Observaciones separadas por direccion (carga vs descarga) — ANTES
+        # se mezclaban en una unica lista "observations", pero las perdidas
+        # de conversion sesgan cada direccion al reves: un segmento de
+        # carga tiende a SOBREestimar la capacidad real (entra mas energia
+        # de la que de verdad sube el SOC), uno de descarga tiende a
+        # SUBestimarla (sale menos energia util de la que baja el SOC).
+        # Mezclarlas hacia que health_pct subiera/bajara solo segun la
+        # proporcion reciente de ciclos de carga vs descarga, no segun
+        # degradacion real de la bateria. Ver get_health: se calcula la
+        # mediana de cada direccion por separado y se combinan las dos.
+        "observations_charge": [],
+        "observations_discharge": [],
     }
 
 
+def _migrate_legacy_observations(entry: dict) -> None:
+    """Entradas guardadas por versiones anteriores a este fix tenian una
+    unica lista "observations" (mezclada) — se reparte a partes iguales
+    como fallback hasta que se acumulen suficientes observaciones nuevas
+    ya separadas por direccion (la ventana de MAX_OBSERVATIONS las
+    reemplaza sola con el tiempo, no hace falta borrar nada a mano)."""
+    legacy = entry.pop("observations", None)
+    if legacy and not entry.get("observations_charge") and not entry.get("observations_discharge"):
+        entry["observations_charge"] = list(legacy)
+        entry["observations_discharge"] = list(legacy)
+    entry.setdefault("observations_charge", [])
+    entry.setdefault("observations_discharge", [])
+
+
 def _close_segment(entry: dict, current_soc_pct: float) -> None:
-    if entry["segment_action"] not in ("charge", "discharge") or entry["segment_start_soc"] is None:
+    action = entry["segment_action"]
+    if action not in ("charge", "discharge") or entry["segment_start_soc"] is None:
         return
     delta = abs(current_soc_pct - entry["segment_start_soc"])
     if delta >= MIN_DELTA_PCT and entry["segment_energy_wh"] > 0:
         capacity_wh = entry["segment_energy_wh"] / (delta / 100)
-        entry["observations"].append(round(capacity_wh, 1))
-        entry["observations"] = entry["observations"][-MAX_OBSERVATIONS:]
+        key = "observations_charge" if action == "charge" else "observations_discharge"
+        entry[key].append(round(capacity_wh, 1))
+        entry[key] = entry[key][-MAX_OBSERVATIONS:]
 
 
 def update(battery_id: str, battery_name: str, soc_pct: float | None,
@@ -88,6 +115,7 @@ def update(battery_id: str, battery_name: str, soc_pct: float | None,
         entry = data.pop(legacy_id)
     if entry is None:
         entry = _default_entry(battery_name)
+    _migrate_legacy_observations(entry)
     entry["name"] = battery_name
 
     if action != entry["segment_action"]:
@@ -106,9 +134,29 @@ def update(battery_id: str, battery_name: str, soc_pct: float | None,
 def get_health(battery_id: str, declared_capacity_wh: float, display_id: str | None = None) -> dict | None:
     data = _load()
     entry = data.get(battery_id)
-    if not entry or not entry["observations"] or declared_capacity_wh <= 0:
+    if not entry or declared_capacity_wh <= 0:
         return None
-    real_capacity_wh = statistics.median(entry["observations"])
+    _migrate_legacy_observations(entry)
+    charge_obs = entry["observations_charge"]
+    discharge_obs = entry["observations_discharge"]
+    if not charge_obs and not discharge_obs:
+        return None
+
+    # Mediana de carga y de descarga POR SEPARADO y luego combinadas — no
+    # una mediana unica sobre la mezcla (ver comentario en _default_entry:
+    # las perdidas de conversion sesgan cada direccion al reves, mezclarlas
+    # hacia que la salud oscilara con la proporcion reciente de carga vs
+    # descarga en vez de con la degradacion real). Con las dos direcciones
+    # disponibles, la media de ambas medianas compensa ese sesgo simetrico;
+    # con solo una direccion disponible (bateria que casi siempre hace lo
+    # mismo, p.ej. solo carga de solar) se usa la que haya, mejor una
+    # estimacion con sesgo conocido que ninguna.
+    medians = []
+    if charge_obs:
+        medians.append(statistics.median(charge_obs))
+    if discharge_obs:
+        medians.append(statistics.median(discharge_obs))
+    real_capacity_wh = sum(medians) / len(medians)
     health_pct = min(100.0, real_capacity_wh / declared_capacity_wh * 100)
     return {
         "id": display_id if display_id is not None else battery_id,
@@ -116,7 +164,7 @@ def get_health(battery_id: str, declared_capacity_wh: float, display_id: str | N
         "declared_capacity_wh": declared_capacity_wh,
         "estimated_capacity_wh": round(real_capacity_wh),
         "health_pct": round(health_pct, 1),
-        "observations": len(entry["observations"]),
+        "observations": len(charge_obs) + len(discharge_obs),
     }
 
 

@@ -38,11 +38,17 @@ def _in_any_window(now: datetime, occurrences: list[dict]) -> dict | None:
 
 
 def execute(loads: list[dict], schedules: dict[str, dict], now: datetime,
-            cycle_hours: float, live_surplus_w: float, dry_run: bool = True):
+            live_surplus_w: float, dry_run: bool = True):
     """
     `live_surplus_w`: excedente solar real medido ahora mismo (el mismo
     numero que usa el resto del ciclo), solo se usa para decidir si cortar
     antes de tiempo una carga interrumpible.
+
+    Ya NO recibe "cycle_hours" (el intervalo nominal configurado) — la
+    energia de cada sesion se integra con el tiempo REAL transcurrido
+    entre llamadas (ver deferrable_store.accumulate_session_energy), no
+    con un nominal que asume que este metodo se llama siempre cada
+    cycle_seconds exactos.
 
     Devuelve (log_lines, live_power_by_id, expected_power_now_w,
     just_completed_once_ids).
@@ -76,7 +82,7 @@ def execute(loads: list[dict], schedules: dict[str, dict], now: datetime,
             live_power_by_id[load_id] = ha_client.get_numeric_state(power_sensor, default=0.0) if power_sensor else 0.0
             deferrable_store.record_session_start(load_id, now)
             if power_sensor:
-                deferrable_store.accumulate_session_energy(load_id, live_power_by_id[load_id] * cycle_hours)
+                deferrable_store.accumulate_session_energy(load_id, live_power_by_id[load_id], now)
             mode_txt = "excedente solar" if active_occ["mode"] == "solar" else "hora barata"
             window_txt = f"{active_occ['start'][11:16]}-{active_occ['end'][11:16]}"
             line = f"{prefix}[{name}] ENCENDIDA ({mode_txt}, ventana {window_txt})"

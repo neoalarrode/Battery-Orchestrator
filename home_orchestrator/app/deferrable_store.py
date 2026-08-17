@@ -25,12 +25,27 @@ from datetime import datetime
 DEFERRABLE_PATH = os.environ.get("DEFERRABLE_PATH", "/data/deferrable.json")
 MAX_SESSIONS = 12  # activaciones pasadas guardadas, para la mediana de energia
 
+# Mismo motivo y mismo valor que ENERGY_ACCUMULATE_MAX_GAP_SECONDS en main.py
+# (energia de baterias): tope duro al integrar potencia * tiempo real
+# transcurrido, para no inventar energia sobre un hueco largo sin ciclos
+# (p.ej. tras un reinicio del addon con una sesion que se habia quedado
+# "activa" en disco).
+MAX_ACCUMULATE_GAP_SECONDS = 300
+
 _lock = threading.RLock()
 
 
 def _default_session() -> dict:
     return {
         "active_since": None, "active_energy_wh": 0.0, "no_surplus_streak": 0,
+        # Marca de tiempo REAL del ultimo accumulate_session_energy() de
+        # esta sesion — ver esa funcion. Necesaria para integrar potencia
+        # * tiempo REALMENTE transcurrido entre ciclos, no un "cycle_hours"
+        # nominal que asume que run_cycle() se ejecuta siempre cada
+        # cycle_seconds exactos (no es cierto con el ciclo reactivo, ver
+        # el comentario homologo en main.py sobre la energia de baterias
+        # — este mismo fallo, ya corregido ahi, seguia sin corregir aqui).
+        "last_accumulate_ts": None,
         # "history_wh"/"history_minutes" van EMPAREJADAS indice a indice: la
         # energia y la duracion de la misma activacion pasada — la duracion
         # sirve para que una carga NO interrumpible (p.ej. una lavadora) vea
@@ -121,14 +136,31 @@ def record_session_start(load_id: str, now: datetime) -> None:
     if sess.get("active_since") is None:
         sess["active_since"] = now.isoformat()
         sess["active_energy_wh"] = 0.0
+        sess["last_accumulate_ts"] = now.isoformat()
     _save(data)
 
 
-def accumulate_session_energy(load_id: str, wh: float) -> None:
+def accumulate_session_energy(load_id: str, power_w: float, now: datetime) -> None:
+    """
+    Integra potencia (W) * tiempo REAL transcurrido desde la ultima llamada
+    (no un "cycle_hours" nominal fijo — con el ciclo reactivo, run_cycle()
+    puede ejecutarse mucho mas a menudo que cycle_seconds, y multiplicar
+    por el nominal en cada ejecucion reactiva contaba energia de mas cada
+    vez; mismo fallo que ya se corrigio para la energia de baterias, ver
+    el comentario homologo en main.py). El primer tick de una sesion nueva
+    (last_accumulate_ts == active_since, puesto por record_session_start)
+    integra 0 Wh -- correcto, todavia no ha pasado tiempo real.
+    """
     data = _load()
     sess = data["sessions"].setdefault(load_id, _default_session())
-    if sess.get("active_since") is not None:
-        sess["active_energy_wh"] = sess.get("active_energy_wh", 0.0) + wh
+    if sess.get("active_since") is None:
+        return
+    last_ts = sess.get("last_accumulate_ts")
+    if last_ts is not None:
+        elapsed_h = min((now - datetime.fromisoformat(last_ts)).total_seconds(), MAX_ACCUMULATE_GAP_SECONDS) / 3600
+        if elapsed_h > 0:
+            sess["active_energy_wh"] = sess.get("active_energy_wh", 0.0) + power_w * elapsed_h
+    sess["last_accumulate_ts"] = now.isoformat()
     _save(data)
 
 
@@ -145,6 +177,7 @@ def end_session(load_id: str, now: datetime) -> float | None:
     sess["active_since"] = None
     sess["active_energy_wh"] = 0.0
     sess["no_surplus_streak"] = 0
+    sess["last_accumulate_ts"] = None
     if energy > 1:  # ignora sesiones vacias/ruido de sensor
         history_wh = sess.setdefault("history_wh", [])
         history_min = sess.setdefault("history_minutes", [])

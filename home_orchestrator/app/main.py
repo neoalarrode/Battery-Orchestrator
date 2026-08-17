@@ -733,7 +733,7 @@ def run_cycle():
         )
 
         deferrable_log_lines, deferrable_live_power, deferrable_expected_now_w, just_done_once = deferrable_exec.execute(
-            deferrable_loads_cfg, deferrable_schedules, now, cycle_hours,
+            deferrable_loads_cfg, deferrable_schedules, now,
             live_surplus_w=live_surplus_w, dry_run=dry_run,
         )
         for line in deferrable_log_lines:

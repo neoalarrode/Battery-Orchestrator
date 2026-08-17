@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.54.0
+Dos bugs reales encontrados al revisar (a petición del usuario) los algoritmos de salud de baterías y estimación de consumo de cargas diferibles.
+
+- **Cargas diferibles (bug real):** `deferrable_exec.py` integraba la energía de cada sesión activa como `potencia * cycle_hours` — el intervalo NOMINAL configurado (`cfg["general"]["cycle_seconds"]`), no el tiempo real transcurrido. Mismo fallo que ya se corrigió para la energía de baterías (ver comentario en `main.py` sobre el ciclo reactivo) pero que nunca se portó aquí: cada ejecución reactiva de más contaba otra ración completa de energía por el mismo tiempo real, sobreestimando el consumo aprendido de las cargas diferibles. Corregido con el mismo patrón (tiempo real entre llamadas, tope de 300s ante huecos largos) en `deferrable_store.accumulate_session_energy`, ahora recibe potencia + `now` en vez de Wh ya multiplicados. `deferrable_exec.execute()` ya no recibe `cycle_hours` (no le hacía falta para nada más).
+- **Salud de baterías (problema de diseño real):** `capacity_store.py` mezclaba observaciones de capacidad de segmentos de carga y de descarga en una única lista para la mediana. Las pérdidas de conversión sesgan cada dirección al revés (carga sobreestima, descarga subestima) — mezclarlas hacía que `health_pct` oscilara según la proporción reciente de carga/descarga, no según degradación real. Ahora se guardan `observations_charge`/`observations_discharge` por separado, con migración automática de las entradas antiguas (`observations`), y la capacidad real combina la mediana de cada dirección (media de ambas si hay las dos, la que haya si solo hay una).
+- Ambos arreglos verificados con pruebas manuales antes de desplegar (ver sesión): integración de energía por tiempo real con llamadas duplicadas del ciclo reactivo, tope ante huecos largos, migración de `observations` legacy, y separación efectiva de medianas carga/descarga.
+
 ## 0.53.1
 Energy re-pineado al tag `v0.53.0` (registro tipado de entidades) — resto sin cambios. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
 

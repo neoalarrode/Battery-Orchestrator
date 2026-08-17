@@ -9,14 +9,12 @@ docstring de shelly/device_manager.py).
 
 from __future__ import annotations
 
-import threading
 import uuid
 
 import config_store
 
 PLUGIN_KEY = "shelly"
 
-_lock = threading.RLock()
 
 DEFAULT_DEVICE_CONFIG = {
     "name": "",
@@ -26,25 +24,18 @@ DEFAULT_DEVICE_CONFIG = {
 
 
 def _read_section() -> dict:
-    raw = config_store._read_raw() or {}
-    if not isinstance(raw.get("plugins"), dict):
-        return {"devices": []}
-    section = raw["plugins"].get(PLUGIN_KEY)
-    return section if isinstance(section, dict) else {"devices": []}
+    return config_store.read_plugin_section(PLUGIN_KEY, {"devices": []})
 
 
 def _write_section(section: dict) -> None:
-    with _lock:
-        raw = config_store._read_raw()
-        if not isinstance(raw, dict) or not isinstance(raw.get("plugins"), dict):
-            raw = {"schema_version": config_store.SCHEMA_ROOT_VERSION, "core": {}, "plugins": {}}
-        raw.setdefault("plugins", {})[PLUGIN_KEY] = section
-        raw["schema_version"] = config_store.SCHEMA_ROOT_VERSION
-        config_store._write_raw(raw)
+    # Ver comentario homologo en govee_store: el read-modify-write completo se
+    # hace ahora dentro de config_store, bajo el mismo lock que el resto de
+    # escritores, y el formato plano antiguo se migra en vez de descartarse.
+    config_store.update_plugin_section(PLUGIN_KEY, section)
 
 
 def load_devices() -> list[dict]:
-    with _lock:
+    with config_store.transaction():
         section = _read_section()
         devices = section.get("devices") or []
         for d in devices:
@@ -55,14 +46,14 @@ def load_devices() -> list[dict]:
 
 
 def save_devices(devices: list[dict]) -> None:
-    with _lock:
+    with config_store.transaction():
         section = _read_section()
         section["devices"] = devices
         _write_section(section)
 
 
 def add_device(config: dict) -> dict:
-    with _lock:
+    with config_store.transaction():
         devices = load_devices()
         merged = dict(DEFAULT_DEVICE_CONFIG)
         merged.update(config)
@@ -73,7 +64,7 @@ def add_device(config: dict) -> dict:
 
 
 def update_device(device_id: str, config: dict) -> dict | None:
-    with _lock:
+    with config_store.transaction():
         devices = load_devices()
         for d in devices:
             if d["id"] == device_id:
@@ -84,7 +75,7 @@ def update_device(device_id: str, config: dict) -> dict | None:
 
 
 def delete_device(device_id: str) -> bool:
-    with _lock:
+    with config_store.transaction():
         devices = load_devices()
         before = len(devices)
         devices = [d for d in devices if d["id"] != device_id]

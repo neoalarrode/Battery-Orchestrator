@@ -6,6 +6,7 @@ Se guarda en un JSON dentro del directorio persistente del addon.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -160,6 +161,19 @@ def _is_namespaced(data) -> bool:
 
 
 def _read_raw() -> dict | None:
+    # El lock se toma AQUI (y en _write_raw) y no solo en las funciones de mas
+    # arriba: este fichero lo comparten TODOS los plugins (ver
+    # update_plugin_section), y antes cada store hacia su read-modify-write con
+    # un lock PROPIO distinto -- dos escrituras solapadas de plugins distintos
+    # leian la misma base y la segunda descartaba en silencio la seccion que
+    # habia escrito la primera (un dispositivo Tuya guardado, o el estado
+    # aprendido de una zona de Climate, desaparecian sin mas). _lock es
+    # reentrante, asi que anidarlo desde load_config/transaction() es seguro.
+    with _lock:
+        return _read_raw_locked()
+
+
+def _read_raw_locked() -> dict | None:
     if not os.path.exists(CONFIG_PATH):
         return None
     with open(CONFIG_PATH, encoding="utf-8") as f:
@@ -187,11 +201,74 @@ def _read_raw() -> dict | None:
 
 
 def _write_raw(root: dict) -> None:
-    os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
-    tmp = CONFIG_PATH + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(root, f, indent=2, ensure_ascii=False)
-    os.replace(tmp, CONFIG_PATH)  # atomico en POSIX: nunca deja el fichero a medias
+    with _lock:  # ver comentario en _read_raw
+        os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+        tmp = CONFIG_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(root, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, CONFIG_PATH)  # atomico en POSIX: nunca deja el fichero a medias
+
+
+@contextlib.contextmanager
+def transaction():
+    """Agrupa varias lecturas/escrituras de la config en una sola operacion
+    atomica respecto a CUALQUIER otro escritor del mismo fichero, incluidos
+    los de otros plugins.
+
+    Hace falta porque leer y escribir por separado (cada uno atomico por su
+    cuenta) NO basta para un read-modify-write: entre el `_read_raw` y el
+    `_write_raw` de un store, otro plugin puede escribir su propia seccion, y
+    esa escritura se pierde al volcar la base ya leida. Envolver el ciclo
+    completo aqui cierra esa ventana.
+    """
+    with _lock:
+        yield
+
+
+def _as_namespaced(raw) -> dict:
+    """Devuelve el documento en formato con namespace por plugin, MIGRANDO el
+    formato plano antiguo en vez de descartarlo.
+
+    BUG REAL de perdida de datos: los stores de dispositivos hacian
+    `if not isinstance(raw.get("plugins"), dict): raw = {...vacio...}`, asi que
+    con un config.json en el formato PLANO de antes del nucleo de plugins (que
+    solo `load_config` sabia migrar) guardar un dispositivo tiraba la config
+    ENTERA: baterias, tarifa, pv_arrays y credenciales EcoFlow incluidas. Aqui
+    el contenido antiguo se traslada bajo `plugins.battery`, igual que hace
+    `load_config`, y nunca se pierde nada.
+    """
+    if not isinstance(raw, dict):
+        return {"schema_version": SCHEMA_ROOT_VERSION, "core": {}, "plugins": {}}
+    if _is_namespaced(raw):
+        return raw
+    log.info(
+        "Config en formato antiguo (plano) encontrada al escribir una seccion de plugin "
+        "-- migrando a plugins.%s en vez de descartarla", PLUGIN_KEY,
+    )
+    return {"schema_version": SCHEMA_ROOT_VERSION, "core": {}, "plugins": {PLUGIN_KEY: raw}}
+
+
+def read_plugin_section(plugin_key: str, default: dict | None = None) -> dict:
+    """Seccion `plugins.<plugin_key>` del fichero compartido. Nunca falla por
+    formato: un fichero plano antiguo se interpreta migrado (ver _as_namespaced)."""
+    with _lock:
+        raw = _as_namespaced(_read_raw())
+        section = (raw.get("plugins") or {}).get(plugin_key)
+        if isinstance(section, dict):
+            return section
+        return json.loads(json.dumps(default)) if default is not None else {}
+
+
+def update_plugin_section(plugin_key: str, section: dict) -> None:
+    """Escribe SOLO la seccion de un plugin, preservando "core" y las secciones
+    del resto de plugins. Todo el read-modify-write ocurre bajo el mismo lock
+    que usan los demas escritores, asi que dos plugins guardando a la vez ya no
+    se pisan (ver transaction())."""
+    with _lock:
+        raw = _as_namespaced(_read_raw())
+        raw.setdefault("plugins", {})[plugin_key] = section
+        raw["schema_version"] = SCHEMA_ROOT_VERSION
+        _write_raw(raw)
 
 
 def load_config() -> dict:
@@ -255,13 +332,11 @@ def save_config(cfg: dict) -> None:
     que antes, sin enterarse del namespacing. Por debajo se guarda dentro
     de "plugins.battery", preservando lo que ya hubiera en "core" (o en
     otros plugins, el dia que compartan fichero) en vez de machacarlo."""
-    with _lock:
-        raw = _read_raw()
-        if not _is_namespaced(raw):
-            raw = {"schema_version": SCHEMA_ROOT_VERSION, "core": {}, "plugins": {}}
-        raw.setdefault("plugins", {})[PLUGIN_KEY] = cfg
-        raw["schema_version"] = SCHEMA_ROOT_VERSION
-        _write_raw(raw)
+    # Antes esto reemplazaba `raw` por un documento VACIO si el fichero no
+    # estaba namespaced -- seguro solo porque load_config() ya habia migrado
+    # antes. update_plugin_section migra de verdad (ver _as_namespaced), asi
+    # que ya no depende de ese orden de llamadas.
+    update_plugin_section(PLUGIN_KEY, cfg)
 
 
 # ---------------------------------------------------------- nucleo/plugins -
@@ -285,9 +360,10 @@ def get_installed_plugins() -> list[str]:
 
 def set_plugin_installed(slug: str, installed: bool) -> list[str]:
     with _lock:
-        raw = _read_raw()
-        if not _is_namespaced(raw):
-            raw = {"schema_version": SCHEMA_ROOT_VERSION, "core": {}, "plugins": {}}
+        # _as_namespaced en vez de reemplazar por un documento vacio: si el
+        # fichero esta en formato plano antiguo, instalar/desinstalar un plugin
+        # tiraba toda la config de Battery que vivia en la raiz.
+        raw = _as_namespaced(_read_raw())
         raw.setdefault("core", {})
         current = raw["core"].get("installed_plugins")
         current = list(current) if current is not None else list(DEFAULT_INSTALLED_PLUGINS)

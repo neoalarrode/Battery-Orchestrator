@@ -237,10 +237,7 @@ class LightingPlugin(Plugin):
                     color_temp_kelvin=payload.get("color_temp_kelvin"),
                     hs=tuple(hs) if hs else None,
                 )
-                zone_store.update_zone_state(zone_id, runner.to_persisted_state())
-                mqtt_zone = self._mqtt_zones.get(zone_id)
-                if mqtt_zone:
-                    mqtt_zone.publish_state(runner)
+                self._persist_and_publish(runner)
             except Exception:
                 log.exception("Fallo aplicando comando manual en zona %s", zone_id)
                 return flask.jsonify({"error": "fallo aplicando el comando en la zona"}), 500
@@ -269,6 +266,16 @@ class LightingPlugin(Plugin):
 
         log.info("Plugin Lighting arrancado con %d zona(s)", len(zones))
 
+    def _persist_and_publish(self, runner) -> None:
+        """Guarda el estado de la zona y lo publica por MQTT. Punto UNICO para
+        el "despues de aplicar un comando", usado tanto por el endpoint HTTP
+        como por los comandos que llegan por MQTT -- antes solo lo hacia el
+        HTTP, y esa asimetria era el bug de latencia del camino MQTT."""
+        zone_store.update_zone_state(runner.zone_id, runner.to_persisted_state())
+        mqtt_zone = self._mqtt_zones.get(runner.zone_id)
+        if mqtt_zone:
+            mqtt_zone.publish_state(runner)
+
     def _start_zone(self, zone: dict) -> None:
         zone_id = zone["id"]
         cfg = zone["config"]
@@ -276,7 +283,13 @@ class LightingPlugin(Plugin):
 
         mqtt_zone = MqttLightingZone(self._mqtt, zone_id, cfg)
         runner = ZoneRunner(zone_id, cfg, self._ws, mqtt_zone=mqtt_zone, state=state, bridges=self)
-        mqtt_zone.bind(runner)
+        # Tras un comando llegado por MQTT se hace lo MISMO que en el endpoint
+        # HTTP de comando manual: persistir el estado de la zona y publicarlo
+        # de vuelta. Sin esto, la entidad de HA se quedaba con el valor viejo
+        # hasta el siguiente disparo (ver MqttLightingZone._dispatch) -- la
+        # causa de que por MQTT todo pareciera lentisimo y por la interfaz del
+        # plugin fuera inmediato.
+        mqtt_zone.bind(runner, after_command=self._persist_and_publish)
         mqtt_zone.publish_discovery(
             min_color_temp_kelvin=float(cfg.get("min_color_temp_kelvin", 2200)),
             max_color_temp_kelvin=float(cfg.get("max_color_temp_kelvin", 5000)),
@@ -288,15 +301,34 @@ class LightingPlugin(Plugin):
         # Una decision inicial ya al arrancar la zona -- si no, el panel
         # se queda mostrando "sin evaluar todavia" hasta el primer evento
         # reactivo o hasta el primer ciclo periodico (que puede tardar
-        # `reapply_minutes`). Solo falla en silencio si el WebSocket aun
-        # no esta conectado (arranque en frio) -- el primer evento
-        # reactivo o el primer ciclo periodico lo resuelven igualmente.
-        try:
-            runner.decide_and_act()
-            zone_store.update_zone_state(zone_id, runner.to_persisted_state())
-            mqtt_zone.publish_state(runner)
-        except Exception:
-            log.debug("Zona lighting %s: decision inicial pospuesta (WS aun no listo)", zone_id)
+        # `reapply_minutes`).
+        #
+        # El comentario anterior daba por hecho que esto "falla en silencio
+        # si el WebSocket aun no esta conectado", pero `get_states()` ya NO
+        # lanza en ese caso: devuelve [] (una lectura de cache sin sembrar).
+        # Asi que no fallaba -- decidia con un estado vacio, concluia "sin
+        # presencia" y apagaba las luces de la zona. `decide_and_act` ya se
+        # protege sola de un snapshot sin entidades de presencia, pero
+        # ademas no tiene sentido gastar la decision inicial antes de que
+        # haya datos: si el WS no esta listo, se deja para el primer evento
+        # reactivo o el primer ciclo periodico, que llegan igual.
+        if not self._ws.connected:
+            log.info(
+                "Zona lighting %s: decision inicial pospuesta -- WebSocket de HA aun sin "
+                "conectar, se resolvera en el primer evento reactivo o ciclo periodico", zone_id,
+            )
+        else:
+            try:
+                runner.decide_and_act()
+                zone_store.update_zone_state(zone_id, runner.to_persisted_state())
+                mqtt_zone.publish_state(runner)
+            except Exception:
+                # A nivel warning y con traza: antes iba a debug (invisible en
+                # la practica), asi que un fallo real aqui no dejaba rastro.
+                log.warning(
+                    "Zona lighting %s: fallo en la decision inicial -- se reintenta en el "
+                    "proximo ciclo", zone_id, exc_info=True,
+                )
 
         reapply_minutes = int(cfg.get("reapply_minutes", DEFAULT_REAPPLY_MINUTES) or DEFAULT_REAPPLY_MINUTES)
         threading.Thread(

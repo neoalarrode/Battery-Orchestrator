@@ -10,46 +10,34 @@ docstring de starlink_plugin.py.
 
 from __future__ import annotations
 
-import threading
-
 import config_store
 
 PLUGIN_KEY = "starlink"
 
-_lock = threading.RLock()
 
 DEFAULT_CONFIG = {"router_ip": ""}
 
 
 def _read_section() -> dict:
-    raw = config_store._read_raw() or {}
-    if not isinstance(raw.get("plugins"), dict):
-        return dict(DEFAULT_CONFIG)
-    section = raw["plugins"].get(PLUGIN_KEY)
-    if not isinstance(section, dict):
-        return dict(DEFAULT_CONFIG)
     merged = dict(DEFAULT_CONFIG)
-    merged.update(section)
+    merged.update(config_store.read_plugin_section(PLUGIN_KEY, DEFAULT_CONFIG))
     return merged
 
 
 def _write_section(section: dict) -> None:
-    with _lock:
-        raw = config_store._read_raw()
-        if not isinstance(raw, dict) or not isinstance(raw.get("plugins"), dict):
-            raw = {"schema_version": config_store.SCHEMA_ROOT_VERSION, "core": {}, "plugins": {}}
-        raw.setdefault("plugins", {})[PLUGIN_KEY] = section
-        raw["schema_version"] = config_store.SCHEMA_ROOT_VERSION
-        config_store._write_raw(raw)
+    # Ver comentario homologo en govee_store: el read-modify-write completo se
+    # hace ahora dentro de config_store, bajo el mismo lock que el resto de
+    # escritores, y el formato plano antiguo se migra en vez de descartarse.
+    config_store.update_plugin_section(PLUGIN_KEY, section)
 
 
 def load_config() -> dict:
-    with _lock:
+    with config_store.transaction():
         return _read_section()
 
 
 def save_router_ip(router_ip: str) -> dict:
-    with _lock:
+    with config_store.transaction():
         section = _read_section()
         section["router_ip"] = (router_ip or "").strip()
         _write_section(section)

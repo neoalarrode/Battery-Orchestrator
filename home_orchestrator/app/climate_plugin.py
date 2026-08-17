@@ -295,6 +295,13 @@ class ClimatePlugin(Plugin):
 
         log.info("Plugin Climate arrancado con %d zona(s)", len(zones))
 
+    def _persist_zone_state(self, runner) -> None:
+        """Guarda el estado de la zona tras aplicar un comando. El estado hacia
+        HA ya lo publica `ZoneRunner._maybe_publish_state` dentro de
+        `decide_and_act`, asi que aqui solo hace falta persistir -- mismo patron
+        que `_zone_command` (HTTP)."""
+        zone_store.update_zone_state(runner.zone_id, runner.to_persisted_state())
+
     def _start_zone(self, zone: dict) -> None:
         zone_id = zone["id"]
         cfg = zone["config"]
@@ -303,7 +310,10 @@ class ClimatePlugin(Plugin):
 
         mqtt_zone = MqttClimateZone(self._mqtt, zone_id, cfg)
         runner = ZoneRunner(zone_id, cfg, self._ws, mqtt_zone, all_zone_configs, state=state, bridges=self)
-        mqtt_zone.bind(runner)
+        # Un comando llegado por MQTT persiste el estado igual que el endpoint
+        # HTTP equivalente (`_zone_command`) -- antes solo lo hacia el HTTP, asi
+        # que una consigna puesta desde HA se perdia al reiniciar el add-on.
+        mqtt_zone.bind(runner, after_command=self._persist_zone_state)
         mqtt_zone.publish_discovery(
             min_temp=float(cfg.get("min_temp", 15.0)),
             max_temp=float(cfg.get("max_temp", 30.0)),

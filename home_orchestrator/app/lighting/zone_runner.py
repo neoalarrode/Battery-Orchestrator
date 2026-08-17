@@ -384,6 +384,32 @@ class ZoneRunner:
         now = time.time()
         states = states if states is not None else self._snapshot_states()
 
+        # BUG REAL: un snapshot de estados VACIO o sin ninguna de las
+        # entidades de presencia era indistinguible de "no hay nadie en
+        # casa" -- `_is_occupied` devolvia False y, con `auto_off` activo
+        # (el valor por defecto), se apagaban TODAS las luces de la zona.
+        # Y eso ocurre de verdad en dos casos normales, no raros:
+        #   - Arranque en frio: `ha_websocket.get_states()` es una lectura
+        #     de cache que devuelve [] hasta que el WebSocket se siembra,
+        #     y `LightingPlugin` lanza la primera decision justo despues de
+        #     arrancar el hilo del WS.
+        #   - Cualquier hipo del WebSocket: `_snapshot_states` atrapa la
+        #     excepcion y devuelve {} a proposito.
+        # Para refs de puente (`tuya:`...) el dano es real y visible,
+        # porque `_current_light_values` lee el HANDLE y no `states`: la
+        # luz SI se apaga. "No se ha podido leer el estado" no es
+        # "no hay nadie" -- sin dato, no se toca nada y se reintenta en el
+        # siguiente ciclo.
+        presence_entities = [e for e in (cfg.get("presence_entities") or []) if e]
+        if presence_entities and not any(e in states for e in presence_entities):
+            self.reason = "estado de HA no disponible -> sin cambios"
+            log.warning(
+                "Zona lighting %s: ninguna entidad de presencia presente en el estado de HA "
+                "(%d entidades leidas) -- se omite el ciclo en vez de tratarlo como 'sin presencia'",
+                self.zone_id, len(states),
+            )
+            return
+
         raw_occupied = self._is_occupied(states)
         occupied = self._occupied_with_delay(raw_occupied, now)
         was_occupied = bool(self._state.get("occupied", False))

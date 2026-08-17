@@ -25,6 +25,8 @@ from __future__ import annotations
 
 import logging
 
+import ha_mqtt
+
 DISCOVERY_PREFIX = "homeassistant"
 NODE_ID = "home_orchestrator_lighting"
 
@@ -38,9 +40,50 @@ class MqttLightingZone:
         self.zone_name = zone.get("name") or zone_id
         self._base = f"{DISCOVERY_PREFIX}/light/{NODE_ID}/{zone_id}"
         self._runner = None  # asignado por LightingPlugin tras crear el ZoneRunner (dependencia circular si no)
+        # Ver `_dispatch` y ha_mqtt.MqttCommandWorker.
+        self._after_command = None
+        self._commands: ha_mqtt.MqttCommandWorker | None = None
 
-    def bind(self, runner) -> None:
+    def bind(self, runner, after_command=None) -> None:
+        """`after_command(runner)`: que hacer cuando un comando MQTT ya se ha
+        aplicado -- persistir el estado de la zona y publicarlo de vuelta. Lo
+        inyecta LightingPlugin para que sea EXACTAMENTE lo mismo que hace su
+        endpoint HTTP de comando manual (ver el bug de latencia en
+        `_dispatch`)."""
         self._runner = runner
+        self._after_command = after_command
+        if self._commands is None:
+            self._commands = ha_mqtt.MqttCommandWorker(
+                name=f"lighting-mqtt-cmd-{self.zone_id}", on_done=self._publish_after_command,
+            )
+
+    # ----------------------------------------------------------- despacho --
+
+    def _publish_after_command(self) -> None:
+        if self._after_command is not None:
+            self._after_command(self._runner)
+        else:
+            self.publish_state(self._runner)
+
+    def _dispatch(self, apply_command) -> None:
+        """BUG REAL de latencia (sintoma: desde la interfaz del plugin los
+        cambios son inmediatos, desde la entidad MQTT de HA van muy lentos).
+
+        La causa concreta de ESTE modulo: los manejadores de comando no
+        publicaban el estado de vuelta. El endpoint HTTP equivalente
+        (`/api/zones/<id>/manual_command`) hace `manual_command` +
+        `update_zone_state` + `publish_state`, asi que HA recibe el eco al
+        instante. Por MQTT solo se llamaba a `manual_command`: la entidad de HA
+        se quedaba con el valor viejo hasta que OTRO disparo publicara estado --
+        el ciclo reactivo (que depende de que la bombilla real cambie, y lleva
+        su propio debounce) o el reajuste periodico, hasta `reapply_minutes`
+        (5 min por defecto) despues.
+
+        La segunda causa (no ejecutar en el hilo de red de paho) es comun a
+        todos los puentes MQTT del add-on y vive en ha_mqtt.MqttCommandWorker."""
+        if self._runner is None or self._commands is None:
+            return
+        self._commands.submit(apply_command)
 
     # ---------------------------------------------------------- discovery -
 
@@ -116,33 +159,56 @@ class MqttLightingZone:
 
     # ----------------------------------------------------------- comandos -
 
+    # El payload se valida AQUI (en el hilo de paho: es solo parsear, cuesta
+    # nada) y solo se despacha si es correcto -- asi un payload basura no llega
+    # nunca al worker, y sobre todo no revienta dentro del hilo de red de paho,
+    # que antes es justo lo que pasaba con cada `float(msg.payload.decode())`
+    # sin proteger.
+
     def _on_power(self, client, userdata, msg) -> None:
-        if self._runner:
-            payload = msg.payload.decode()
-            if payload == "ON":
-                self._runner.manual_command(on=True)
-            elif payload == "OFF":
-                self._runner.manual_command(on=False)
+        payload = msg.payload.decode(errors="replace").strip()
+        if payload == "ON":
+            self._dispatch(lambda: self._runner.manual_command(on=True))
+        elif payload == "OFF":
+            self._dispatch(lambda: self._runner.manual_command(on=False))
+        else:
+            log.warning("Zona lighting %s: payload de encendido invalido: %r", self.zone_id, msg.payload)
 
     def _on_brightness(self, client, userdata, msg) -> None:
-        if self._runner:
-            # Un cambio de brillo por si solo NO debe tirar abajo un color
-            # manual que ya estuviera activo (ver ZoneRunner._manual_hs) --
-            # se reenvia junto con el, no en vez de el.
+        value = self._as_float(msg, "brillo")
+        if value is None:
+            return
+
+        # Un cambio de brillo por si solo NO debe tirar abajo un color
+        # manual que ya estuviera activo (ver ZoneRunner._manual_hs) --
+        # se reenvia junto con el, no en vez de el. `_manual_hs` se lee
+        # DENTRO del worker (no al encolar) para usar el valor vigente en el
+        # momento de aplicar el comando.
+        def apply() -> None:
             self._runner.manual_command(
-                on=True,
-                brightness_pct=float(msg.payload.decode()),
-                hs=self._runner._manual_hs,
+                on=True, brightness_pct=value, hs=self._runner._manual_hs,
             )
 
+        self._dispatch(apply)
+
     def _on_color_temp(self, client, userdata, msg) -> None:
-        if self._runner:
-            self._runner.manual_command(on=True, color_temp_kelvin=float(msg.payload.decode()))
+        value = self._as_float(msg, "temperatura de color")
+        if value is None:
+            return
+        self._dispatch(lambda: self._runner.manual_command(on=True, color_temp_kelvin=value))
 
     def _on_hs(self, client, userdata, msg) -> None:
-        if self._runner:
-            try:
-                h_str, s_str = msg.payload.decode().split(",")
-                self._runner.manual_command(on=True, hs=(float(h_str), float(s_str)))
-            except ValueError:
-                log.warning("Zona lighting %s: payload de color HS invalido: %r", self.zone_id, msg.payload)
+        try:
+            h_str, s_str = msg.payload.decode(errors="replace").split(",")
+            hs = (float(h_str), float(s_str))
+        except ValueError:
+            log.warning("Zona lighting %s: payload de color HS invalido: %r", self.zone_id, msg.payload)
+            return
+        self._dispatch(lambda: self._runner.manual_command(on=True, hs=hs))
+
+    def _as_float(self, msg, what: str) -> float | None:
+        try:
+            return float(msg.payload.decode(errors="replace"))
+        except ValueError:
+            log.warning("Zona lighting %s: payload de %s invalido: %r", self.zone_id, what, msg.payload)
+            return None

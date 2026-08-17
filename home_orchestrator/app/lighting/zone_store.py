@@ -15,7 +15,6 @@ Cada zona tiene dos partes:
 
 from __future__ import annotations
 
-import threading
 import uuid
 
 import config_store
@@ -23,7 +22,6 @@ from lighting import schedule
 
 PLUGIN_KEY = "lighting"
 
-_lock = threading.RLock()
 
 DEFAULT_ZONE_CONFIG = {
     "name": "",
@@ -57,28 +55,24 @@ DEFAULT_ZONE_CONFIG = {
 
 
 def _read_lighting_section() -> dict:
-    raw = config_store._read_raw() or {}
-    if not isinstance(raw.get("plugins"), dict):
-        return {"zones": []}
-    section = raw["plugins"].get(PLUGIN_KEY)
-    if not isinstance(section, dict):
-        return {"zones": []}
-    return section
+    return config_store.read_plugin_section(PLUGIN_KEY, {"zones": []})
 
 
 def _write_lighting_section(section: dict) -> None:
-    with _lock:
-        raw = config_store._read_raw()
-        if not isinstance(raw, dict) or not isinstance(raw.get("plugins"), dict):
-            raw = {"schema_version": config_store.SCHEMA_ROOT_VERSION, "core": {}, "plugins": {}}
-        raw.setdefault("plugins", {})[PLUGIN_KEY] = section
-        raw["schema_version"] = config_store.SCHEMA_ROOT_VERSION
-        config_store._write_raw(raw)
+    # El read-modify-write completo se hace dentro de config_store, bajo el
+    # MISMO lock que el resto de escritores del fichero compartido -- antes este
+    # modulo usaba un lock propio, distinto del de Battery/Tuya/Climate, con lo
+    # que una escritura de otro plugin colada entre la lectura y la escritura de
+    # aqui se descartaba en silencio. Ademas, el camino de "formato no
+    # reconocido" reemplazaba el documento por uno vacio, tirando la config
+    # entera si el fichero estaba en el formato plano antiguo (ver
+    # config_store._as_namespaced).
+    config_store.update_plugin_section(PLUGIN_KEY, section)
 
 
 def load_zones() -> list[dict]:
     """Lista de zonas, cada una `{"id", "config", "state"}`."""
-    with _lock:
+    with config_store.transaction():
         section = _read_lighting_section()
         zones = section.get("zones") or []
         for z in zones:
@@ -90,12 +84,12 @@ def load_zones() -> list[dict]:
 
 
 def save_zones(zones: list[dict]) -> None:
-    with _lock:
+    with config_store.transaction():
         _write_lighting_section({"zones": zones})
 
 
 def add_zone(config: dict) -> dict:
-    with _lock:
+    with config_store.transaction():
         zones = load_zones()
         merged = dict(DEFAULT_ZONE_CONFIG)
         merged.update(config)
@@ -106,7 +100,7 @@ def add_zone(config: dict) -> dict:
 
 
 def update_zone_config(zone_id: str, config: dict) -> dict | None:
-    with _lock:
+    with config_store.transaction():
         zones = load_zones()
         for z in zones:
             if z["id"] == zone_id:
@@ -117,7 +111,7 @@ def update_zone_config(zone_id: str, config: dict) -> dict | None:
 
 
 def update_zone_state(zone_id: str, state: dict) -> None:
-    with _lock:
+    with config_store.transaction():
         zones = load_zones()
         for z in zones:
             if z["id"] == zone_id:
@@ -140,7 +134,7 @@ def update_zone_states(states: dict[str, dict]) -> None:
     UNA sola vez para las 7."""
     if not states:
         return
-    with _lock:
+    with config_store.transaction():
         zones = load_zones()
         changed = False
         for z in zones:
@@ -153,7 +147,7 @@ def update_zone_states(states: dict[str, dict]) -> None:
 
 
 def delete_zone(zone_id: str) -> bool:
-    with _lock:
+    with config_store.transaction():
         zones = load_zones()
         before = len(zones)
         zones = [z for z in zones if z["id"] != zone_id]

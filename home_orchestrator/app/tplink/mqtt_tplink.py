@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 from functools import partial
 
+import ha_mqtt
 from kasa import Module
 
 log = logging.getLogger("tplink.mqtt")
@@ -60,6 +61,11 @@ class MqttTplinkDevice:
             "manufacturer": "TP-Link",
             "model": self.device_name,
         }
+        # Comandos fuera del hilo de red de paho + publicacion del estado en
+        # cuanto se aplican (ver ha_mqtt.MqttCommandWorker).
+        self._commands = ha_mqtt.MqttCommandWorker(
+            name=f"tplink-mqtt-cmd-{device_id}", on_done=self.publish_state,
+        )
 
     def _base(self, suffix: str) -> str:
         return f"{DISCOVERY_PREFIX}/{{domain}}/{NODE_ID}/{self.device_id}_{suffix}"
@@ -225,30 +231,46 @@ class MqttTplinkDevice:
 
     # ------------------------------------------------------------- comandos
 
+    # El payload se valida en el hilo de paho (solo parsear) y la orden al
+    # dispositivo se ejecuta en el worker -- ver ha_mqtt.MqttCommandWorker.
+    # Aqui era especialmente grave: `manager.turn_on` espera con
+    # `future.result(timeout=10)`, asi que un Tapo que no respondiera bloqueaba
+    # hasta 10s el hilo de red de paho, que es UNO para todo el add-on -- todas
+    # las entidades MQTT del add-on se quedaban lentas por un solo dispositivo.
+
     def _on_power(self, client, userdata, msg) -> None:
-        try:
-            if msg.payload.decode() == "ON":
-                self._manager.turn_on(self.device_id)
-            else:
-                self._manager.turn_off(self.device_id)
-        except Exception:
-            log.exception("TP-Link %s: fallo aplicando encendido/apagado", self.device_id)
+        on = msg.payload.decode(errors="replace").strip() == "ON"
+        self._commands.submit(
+            lambda: self._manager.turn_on(self.device_id) if on
+            else self._manager.turn_off(self.device_id)
+        )
 
     def _on_brightness(self, client, userdata, msg) -> None:
-        try:
-            self._manager.turn_on(self.device_id, brightness_pct=max(1, min(100, round(float(msg.payload.decode())))))
-        except Exception:
-            log.exception("TP-Link %s: fallo aplicando brillo", self.device_id)
+        value = self._as_float(msg, "brillo")
+        if value is None:
+            return
+        pct = max(1, min(100, round(value)))
+        self._commands.submit(lambda: self._manager.turn_on(self.device_id, brightness_pct=pct))
 
     def _on_color_temp(self, client, userdata, msg) -> None:
-        try:
-            self._manager.turn_on(self.device_id, color_temp_kelvin=round(float(msg.payload.decode())))
-        except Exception:
-            log.exception("TP-Link %s: fallo aplicando temperatura de color", self.device_id)
+        value = self._as_float(msg, "temperatura de color")
+        if value is None:
+            return
+        kelvin = round(value)
+        self._commands.submit(lambda: self._manager.turn_on(self.device_id, color_temp_kelvin=kelvin))
 
     def _on_hs(self, client, userdata, msg) -> None:
         try:
-            h_str, s_str = msg.payload.decode().split(",")
-            self._manager.turn_on(self.device_id, hs=(float(h_str), float(s_str)))
-        except Exception:
-            log.exception("TP-Link %s: fallo aplicando color", self.device_id)
+            h_str, s_str = msg.payload.decode(errors="replace").split(",")
+            hs = (float(h_str), float(s_str))
+        except ValueError:
+            log.warning("TP-Link %s: payload de color invalido: %r", self.device_id, msg.payload)
+            return
+        self._commands.submit(lambda: self._manager.turn_on(self.device_id, hs=hs))
+
+    def _as_float(self, msg, what: str) -> float | None:
+        try:
+            return float(msg.payload.decode(errors="replace"))
+        except ValueError:
+            log.warning("TP-Link %s: payload de %s invalido: %r", self.device_id, what, msg.payload)
+            return None

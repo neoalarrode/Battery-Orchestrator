@@ -17,6 +17,8 @@ from __future__ import annotations
 import json
 import logging
 
+import ha_mqtt
+
 DISCOVERY_PREFIX = "homeassistant"
 NODE_ID = "home_orchestrator_climate"
 
@@ -30,9 +32,42 @@ class MqttClimateZone:
         self.zone_name = zone.get("name") or zone_id
         self._base = f"{DISCOVERY_PREFIX}/climate/{NODE_ID}/{zone_id}"
         self._runner = None  # asignado por ClimatePlugin tras crear el ZoneRunner (dependencia circular si no)
+        # Ver `_dispatch` y ha_mqtt.MqttCommandWorker.
+        self._after_command = None
+        self._commands: ha_mqtt.MqttCommandWorker | None = None
 
-    def bind(self, runner) -> None:
+    def bind(self, runner, after_command=None) -> None:
+        """`after_command(runner)`: que hacer cuando un comando MQTT ya se ha
+        aplicado -- persistir el estado de la zona (el estado hacia HA lo
+        publica ya `ZoneRunner._maybe_publish_state` desde `decide_and_act`)."""
         self._runner = runner
+        self._after_command = after_command
+        if self._commands is None:
+            self._commands = ha_mqtt.MqttCommandWorker(
+                name=f"climate-mqtt-cmd-{self.zone_id}", on_done=self._after_applied,
+            )
+
+    # ----------------------------------------------------------- despacho --
+
+    def _after_applied(self) -> None:
+        if self._after_command is not None:
+            self._after_command(self._runner)
+
+    def _dispatch(self, apply_command) -> None:
+        """Los comandos NO se ejecutan en el hilo de RED de paho (ver
+        ha_mqtt.MqttCommandWorker): cada `set_*` termina en `decide_and_act()`,
+        que lee estados de HA y puede lanzar consultas de historico y llamadas
+        de servicio en serie -- mientras eso corriera en el hilo de paho, el
+        cliente no atendia el socket y todo el camino MQTT parecia lentisimo
+        comparado con la interfaz del plugin (que corre en un hilo de Flask
+        aparte).
+
+        Ademas, el comando MQTT no persistia el estado de la zona: solo lo hacia
+        el endpoint HTTP equivalente, asi que una consigna puesta desde HA se
+        perdia al reiniciar el add-on."""
+        if self._runner is None or self._commands is None:
+            return
+        self._commands.submit(apply_command)
 
     # ---------------------------------------------------------- discovery -
 
@@ -164,30 +199,55 @@ class MqttClimateZone:
 
     # ----------------------------------------------------------- comandos -
 
+    # El payload se valida AQUI (en el hilo de paho: solo parsear, cuesta nada) y
+    # solo se despacha si es correcto -- antes cada `float(msg.payload.decode())`
+    # sin proteger podia lanzar ValueError DENTRO del hilo de red de paho.
+
+    def _as_float(self, msg, what: str) -> float | None:
+        try:
+            return float(msg.payload.decode(errors="replace"))
+        except ValueError:
+            log.warning("Zona climate %s: payload de %s invalido: %r", self.zone_id, what, msg.payload)
+            return None
+
     def _on_mode(self, client, userdata, msg) -> None:
-        if self._runner:
-            self._runner.set_hvac_mode(msg.payload.decode())
+        mode = msg.payload.decode(errors="replace").strip()
+        # Un payload suelto no debe poder meter la zona en un modo que no
+        # soporta (p.ej. "heat_cool" en una zona solo-calor), que luego llevaria
+        # a `_execute` por la rama equivocada.
+        valid = getattr(self._runner, "hvac_modes", None) if self._runner else None
+        if valid and mode not in valid:
+            log.warning(
+                "Zona climate %s: modo '%s' no soportado (validos: %s) -- ignorado",
+                self.zone_id, mode, ", ".join(valid),
+            )
+            return
+        self._dispatch(lambda: self._runner.set_hvac_mode(mode))
 
     def _on_temp(self, client, userdata, msg) -> None:
-        if self._runner:
-            self._runner.set_temperature(single=float(msg.payload.decode()))
+        value = self._as_float(msg, "consigna")
+        if value is not None:
+            self._dispatch(lambda: self._runner.set_temperature(single=value))
 
     def _on_temp_low(self, client, userdata, msg) -> None:
-        if self._runner:
-            self._runner.set_temperature(low=float(msg.payload.decode()))
+        value = self._as_float(msg, "consigna baja")
+        if value is not None:
+            self._dispatch(lambda: self._runner.set_temperature(low=value))
 
     def _on_temp_high(self, client, userdata, msg) -> None:
-        if self._runner:
-            self._runner.set_temperature(high=float(msg.payload.decode()))
+        value = self._as_float(msg, "consigna alta")
+        if value is not None:
+            self._dispatch(lambda: self._runner.set_temperature(high=value))
 
     def _on_fan_mode(self, client, userdata, msg) -> None:
-        if self._runner:
-            self._runner.set_fan_mode(msg.payload.decode())
+        mode = msg.payload.decode(errors="replace").strip()
+        self._dispatch(lambda: self._runner.set_fan_mode(mode))
 
     def _on_preset_mode(self, client, userdata, msg) -> None:
-        if self._runner:
-            self._runner.set_preset_mode(msg.payload.decode())
+        preset = msg.payload.decode(errors="replace").strip()
+        self._dispatch(lambda: self._runner.set_preset_mode(preset))
 
     def _on_target_humidity(self, client, userdata, msg) -> None:
-        if self._runner:
-            self._runner.set_humidity(float(msg.payload.decode()))
+        value = self._as_float(msg, "humedad objetivo")
+        if value is not None:
+            self._dispatch(lambda: self._runner.set_humidity(value))

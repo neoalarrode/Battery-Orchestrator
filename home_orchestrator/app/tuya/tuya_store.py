@@ -6,14 +6,12 @@ config compartido del nucleo, nunca pisa la seccion de otro plugin.
 
 from __future__ import annotations
 
-import threading
 import uuid
 
 import config_store
 
 PLUGIN_KEY = "tuya"
 
-_lock = threading.RLock()
 
 DEFAULT_DEVICE_CONFIG = {
     "name": "",
@@ -32,25 +30,23 @@ DEFAULT_DEVICE_CONFIG = {
 
 
 def _read_section() -> dict:
-    raw = config_store._read_raw() or {}
-    if not isinstance(raw.get("plugins"), dict):
-        return {"devices": []}
-    section = raw["plugins"].get(PLUGIN_KEY)
-    return section if isinstance(section, dict) else {"devices": []}
+    return config_store.read_plugin_section(PLUGIN_KEY, {"devices": []})
 
 
 def _write_section(section: dict) -> None:
-    with _lock:
-        raw = config_store._read_raw()
-        if not isinstance(raw, dict) or not isinstance(raw.get("plugins"), dict):
-            raw = {"schema_version": config_store.SCHEMA_ROOT_VERSION, "core": {}, "plugins": {}}
-        raw.setdefault("plugins", {})[PLUGIN_KEY] = section
-        raw["schema_version"] = config_store.SCHEMA_ROOT_VERSION
-        config_store._write_raw(raw)
+    # El read-modify-write completo se hace dentro de config_store, bajo el
+    # MISMO lock que el resto de escritores del fichero compartido -- antes cada
+    # store usaba un lock propio distinto, con lo que una escritura de otro
+    # plugin colada entre la lectura y la escritura de aqui se perdia en
+    # silencio (un dispositivo guardado desaparecia sin mas). Ademas, el camino
+    # de "formato no reconocido" reemplazaba el documento por uno vacio,
+    # tirando la config entera si el fichero estaba en el formato plano antiguo
+    # (ver config_store._as_namespaced).
+    config_store.update_plugin_section(PLUGIN_KEY, section)
 
 
 def load_devices() -> list[dict]:
-    with _lock:
+    with config_store.transaction():
         section = _read_section()
         devices = section.get("devices") or []
         for d in devices:
@@ -73,14 +69,14 @@ def save_devices(devices: list[dict]) -> None:
     actual primero (igual que ya hacia save_account) y solo reemplazar
     la clave "devices", preservando cualquier otra cosa que viva en la
     misma seccion."""
-    with _lock:
+    with config_store.transaction():
         section = _read_section()
         section["devices"] = devices
         _write_section(section)
 
 
 def add_device(config: dict) -> dict:
-    with _lock:
+    with config_store.transaction():
         devices = load_devices()
         merged = dict(DEFAULT_DEVICE_CONFIG)
         merged.update(config)
@@ -91,7 +87,7 @@ def add_device(config: dict) -> dict:
 
 
 def update_device(device_id: str, config: dict) -> dict | None:
-    with _lock:
+    with config_store.transaction():
         devices = load_devices()
         for d in devices:
             if d["id"] == device_id:
@@ -102,7 +98,7 @@ def update_device(device_id: str, config: dict) -> dict | None:
 
 
 def delete_device(device_id: str) -> bool:
-    with _lock:
+    with config_store.transaction():
         devices = load_devices()
         before = len(devices)
         devices = [d for d in devices if d["id"] != device_id]
@@ -120,7 +116,7 @@ DEFAULT_ACCOUNT = {"region": "eu", "access_id": "", "access_secret": "", "uid": 
 
 
 def load_account() -> dict:
-    with _lock:
+    with config_store.transaction():
         section = _read_section()
         merged = dict(DEFAULT_ACCOUNT)
         merged.update(section.get("account") or {})
@@ -128,7 +124,7 @@ def load_account() -> dict:
 
 
 def save_account(account: dict) -> None:
-    with _lock:
+    with config_store.transaction():
         section = _read_section()
         merged = dict(DEFAULT_ACCOUNT)
         merged.update(section.get("account") or {})

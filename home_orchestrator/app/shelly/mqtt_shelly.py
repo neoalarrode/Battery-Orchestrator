@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import logging
 
+import ha_mqtt
+
 log = logging.getLogger("shelly.mqtt")
 
 DISCOVERY_PREFIX = "homeassistant"
@@ -30,6 +32,11 @@ class MqttShellyDevice:
             "manufacturer": "Shelly",
             "model": self.device_name,
         }
+        # Comandos fuera del hilo de red de paho + publicacion del estado en
+        # cuanto se aplican (ver ha_mqtt.MqttCommandWorker).
+        self._commands = ha_mqtt.MqttCommandWorker(
+            name=f"shelly-mqtt-cmd-{device_id}", on_done=self.publish_state,
+        )
 
     def _capability(self) -> str:
         info = self._manager.get_device(self.device_id)
@@ -103,24 +110,33 @@ class MqttShellyDevice:
 
     # ------------------------------------------------------------- comandos
 
+    # El payload se valida en el hilo de paho (solo parsear) y la orden HTTP/RPC
+    # al dispositivo se ejecuta en el worker -- ver ha_mqtt.MqttCommandWorker: el
+    # hilo de red de paho es UNO para todo el add-on, asi que un Shelly que no
+    # responda dejaba lentas TODAS las entidades MQTT, no solo la suya. Ademas
+    # ahora se publica el estado en cuanto se aplica el comando, en vez de
+    # esperar al siguiente sondeo.
+
     def _on_power(self, client, userdata, msg) -> None:
-        try:
-            if msg.payload.decode() == "ON":
-                self._manager.turn_on(self.device_id)
-            else:
-                self._manager.turn_off(self.device_id)
-        except Exception:
-            log.exception("Shelly %s: fallo aplicando encendido/apagado", self.device_id)
+        on = msg.payload.decode(errors="replace").strip() == "ON"
+        self._commands.submit(
+            lambda: self._manager.turn_on(self.device_id) if on
+            else self._manager.turn_off(self.device_id)
+        )
 
     def _on_brightness(self, client, userdata, msg) -> None:
         try:
-            self._manager.turn_on(self.device_id, brightness_pct=max(1, min(100, round(float(msg.payload.decode())))))
-        except Exception:
-            log.exception("Shelly %s: fallo aplicando brillo", self.device_id)
+            pct = max(1, min(100, round(float(msg.payload.decode(errors="replace")))))
+        except ValueError:
+            log.warning("Shelly %s: payload de brillo invalido: %r", self.device_id, msg.payload)
+            return
+        self._commands.submit(lambda: self._manager.turn_on(self.device_id, brightness_pct=pct))
 
     def _on_hs(self, client, userdata, msg) -> None:
         try:
-            h_str, s_str = msg.payload.decode().split(",")
-            self._manager.turn_on(self.device_id, hs=(float(h_str), float(s_str)))
-        except Exception:
-            log.exception("Shelly %s: fallo aplicando color", self.device_id)
+            h_str, s_str = msg.payload.decode(errors="replace").split(",")
+            hs = (float(h_str), float(s_str))
+        except ValueError:
+            log.warning("Shelly %s: payload de color invalido: %r", self.device_id, msg.payload)
+            return
+        self._commands.submit(lambda: self._manager.turn_on(self.device_id, hs=hs))

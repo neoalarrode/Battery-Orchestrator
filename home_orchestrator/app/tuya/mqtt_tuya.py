@@ -20,6 +20,7 @@ import json
 import logging
 from functools import partial
 
+import ha_mqtt
 from tuya.profile import (
     LIGHT_MAX_MIREDS,
     LIGHT_MIN_MIREDS,
@@ -57,6 +58,11 @@ class MqttTuyaDevice:
             "manufacturer": "Tuya",
             "model": self.device_name,
         }
+        # Comandos fuera del hilo de red de paho + publicacion del estado en
+        # cuanto se aplican (ver ha_mqtt.MqttCommandWorker).
+        self._commands = ha_mqtt.MqttCommandWorker(
+            name=f"tuya-mqtt-cmd-{device_id}", on_done=self.publish_state,
+        )
 
     def _base(self, suffix: str) -> str:
         return f"{DISCOVERY_PREFIX}/{{domain}}/{NODE_ID}/{self.device_id}_{suffix}"
@@ -292,63 +298,90 @@ class MqttTuyaDevice:
     # exactamente el tipo de fallo silencioso contra el que ya se protege
     # el resto de este proyecto (ver coordinator.py original).
 
+    # Todos los comandos se ejecutan en el worker, NO en el hilo de red de paho
+    # -- ver ha_mqtt.MqttCommandWorker. Aqui era lo mas grave de todo el add-on:
+    # `manager.set_dp` acaba en `_run_coro` + `future.result(timeout=10)`, asi
+    # que un dispositivo Tuya que no respondiera bloqueaba hasta 10 SEGUNDOS el
+    # hilo de red de paho, que es UNO para todo el add-on -- durante ese rato
+    # ninguna entidad MQTT de ningun plugin respondia. Ademas, ahora se publica
+    # el estado en cuanto el comando se aplica, en vez de esperar al siguiente
+    # sondeo del dispositivo.
+    #
+    # El payload se decodifica/valida en el hilo de paho (solo parsear, cuesta
+    # nada) y solo se encola si es correcto; el trabajo pesado va al worker.
+
     def _on_bool_command(self, dp, client, userdata, msg) -> None:
-        try:
-            self._manager.set_dp(self.device_id, dp.dp_id, msg.payload.decode() == "ON")
-        except Exception:
-            log.exception("Tuya %s: fallo aplicando comando booleano DP %s", self.device_id, dp.dp_id)
+        on = msg.payload.decode(errors="replace").strip() == "ON"
+        self._commands.submit(lambda: self._manager.set_dp(self.device_id, dp.dp_id, on))
 
     def _on_number_command(self, dp, client, userdata, msg) -> None:
         try:
-            raw = dp.encode(float(msg.payload.decode()))
-            self._manager.set_dp(self.device_id, dp.dp_id, raw)
-        except Exception:
-            log.exception("Tuya %s: fallo aplicando comando numerico DP %s", self.device_id, dp.dp_id)
+            raw = dp.encode(float(msg.payload.decode(errors="replace")))
+        except (TypeError, ValueError):
+            log.warning("Tuya %s: payload numerico invalido para DP %s: %r", self.device_id, dp.dp_id, msg.payload)
+            return
+        self._commands.submit(lambda: self._manager.set_dp(self.device_id, dp.dp_id, raw))
 
     def _on_select_command(self, dp, client, userdata, msg) -> None:
         try:
-            raw = dp.encode(msg.payload.decode())
-            self._manager.set_dp(self.device_id, dp.dp_id, raw)
-        except Exception:
-            log.exception("Tuya %s: fallo aplicando comando de seleccion DP %s", self.device_id, dp.dp_id)
+            raw = dp.encode(msg.payload.decode(errors="replace"))
+        except (TypeError, ValueError):
+            log.warning("Tuya %s: payload de seleccion invalido para DP %s: %r", self.device_id, dp.dp_id, msg.payload)
+            return
+        self._commands.submit(lambda: self._manager.set_dp(self.device_id, dp.dp_id, raw))
 
     def _on_climate_mode(self, index, client, userdata, msg) -> None:
-        handle = self._manager.climate_handle(self.device_id, index)
-        if not handle:
-            return
-        try:
-            handle.set_hvac_mode(msg.payload.decode())
-        except Exception:
-            log.exception("Tuya %s: fallo aplicando modo climate %s", self.device_id, index)
+        mode = msg.payload.decode(errors="replace").strip()
+
+        def apply() -> None:
+            # El handle se resuelve DENTRO del worker: entre encolar y aplicar
+            # el dispositivo puede haberse reconectado o cambiado de perfil.
+            handle = self._manager.climate_handle(self.device_id, index)
+            if handle:
+                handle.set_hvac_mode(mode)
+
+        self._commands.submit(apply)
 
     def _on_climate_temp(self, index, client, userdata, msg) -> None:
-        handle = self._manager.climate_handle(self.device_id, index)
-        if not handle:
-            return
         try:
-            handle.set_temperature(float(msg.payload.decode()))
-        except Exception:
-            log.exception("Tuya %s: fallo aplicando temperatura climate %s", self.device_id, index)
+            value = float(msg.payload.decode(errors="replace"))
+        except ValueError:
+            log.warning("Tuya %s: temperatura climate invalida: %r", self.device_id, msg.payload)
+            return
+
+        def apply() -> None:
+            handle = self._manager.climate_handle(self.device_id, index)
+            if handle:
+                handle.set_temperature(value)
+
+        self._commands.submit(apply)
 
     def _light(self, index: int):
         profile = self._manager.profile(self.device_id)
         return profile.lights[index] if profile and index < len(profile.lights) else None
 
     def _on_light_power(self, index, client, userdata, msg) -> None:
-        lt = self._light(index)
-        if lt is None:
-            return
-        try:
-            self._manager.set_dp(self.device_id, lt.switch_dp, msg.payload.decode() == "ON")
-        except Exception:
-            log.exception("Tuya %s: fallo aplicando encendido de luz %s", self.device_id, index)
+        on = msg.payload.decode(errors="replace").strip() == "ON"
+
+        def apply() -> None:
+            lt = self._light(index)
+            if lt is not None:
+                self._manager.set_dp(self.device_id, lt.switch_dp, on)
+
+        self._commands.submit(apply)
 
     def _on_light_brightness(self, index, client, userdata, msg) -> None:
-        lt = self._light(index)
-        if lt is None or lt.brightness_dp is None:
-            return
         try:
-            val = max(int(lt.brightness_min), min(int(lt.brightness_max), round(float(msg.payload.decode()))))
+            requested = float(msg.payload.decode(errors="replace"))
+        except ValueError:
+            log.warning("Tuya %s: brillo invalido para luz %s: %r", self.device_id, index, msg.payload)
+            return
+
+        def apply() -> None:
+            lt = self._light(index)
+            if lt is None or lt.brightness_dp is None:
+                return
+            val = max(int(lt.brightness_min), min(int(lt.brightness_max), round(requested)))
             if lt.work_mode_dp is not None:
                 # Poner en modo "blanco" ANTES del brillo -- si el
                 # dispositivo esta en modo color, cambiar el brillo del
@@ -356,35 +389,47 @@ class MqttTuyaDevice:
                 # cambia de modo de todos modos.
                 self._manager.set_dp(self.device_id, lt.work_mode_dp, lt.work_mode_white)
             self._manager.set_dp(self.device_id, lt.brightness_dp, val)
-        except Exception:
-            log.exception("Tuya %s: fallo aplicando brillo de luz %s", self.device_id, index)
+
+        self._commands.submit(apply)
 
     def _on_light_color_temp(self, index, client, userdata, msg) -> None:
-        lt = self._light(index)
-        if lt is None or lt.color_temp_dp is None:
-            return
         try:
+            requested = float(msg.payload.decode(errors="replace"))
+        except ValueError:
+            log.warning("Tuya %s: temperatura de color invalida para luz %s: %r", self.device_id, index, msg.payload)
+            return
+
+        def apply() -> None:
+            lt = self._light(index)
+            if lt is None or lt.color_temp_dp is None:
+                return
             # BUG FIXED HERE: esto clampaba el valor RECIBIDO (mireds de
             # verdad, ver `_publish_light`) directo al rango del DP
             # (0..color_temp_max, escala del fabricante) sin convertir --
             # ver el aviso de arriba y `tuya/profile.py:mireds_to_light_dp`.
-            mireds = max(LIGHT_MIN_MIREDS, min(LIGHT_MAX_MIREDS, round(float(msg.payload.decode()))))
+            mireds = max(LIGHT_MIN_MIREDS, min(LIGHT_MAX_MIREDS, round(requested)))
             val = mireds_to_light_dp(mireds, lt)
             if lt.work_mode_dp is not None:
                 self._manager.set_dp(self.device_id, lt.work_mode_dp, lt.work_mode_white)
             self._manager.set_dp(self.device_id, lt.color_temp_dp, val)
-        except Exception:
-            log.exception("Tuya %s: fallo aplicando temperatura de color de luz %s", self.device_id, index)
+
+        self._commands.submit(apply)
 
     def _on_light_hs(self, index, client, userdata, msg) -> None:
-        lt = self._light(index)
-        if lt is None or lt.color_dp is None:
-            return
         try:
-            h_str, s_str = msg.payload.decode().split(",")
-            raw = encode_color_hs(lt, float(h_str), float(s_str))
+            h_str, s_str = msg.payload.decode(errors="replace").split(",")
+            h, s = float(h_str), float(s_str)
+        except ValueError:
+            log.warning("Tuya %s: color invalido para luz %s: %r", self.device_id, index, msg.payload)
+            return
+
+        def apply() -> None:
+            lt = self._light(index)
+            if lt is None or lt.color_dp is None:
+                return
+            raw = encode_color_hs(lt, h, s)
             if lt.work_mode_dp is not None:
                 self._manager.set_dp(self.device_id, lt.work_mode_dp, lt.work_mode_colour)
             self._manager.set_dp(self.device_id, lt.color_dp, raw)
-        except Exception:
-            log.exception("Tuya %s: fallo aplicando color de luz %s", self.device_id, index)
+
+        self._commands.submit(apply)

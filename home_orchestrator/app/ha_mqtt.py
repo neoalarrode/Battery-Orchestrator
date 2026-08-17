@@ -66,6 +66,63 @@ def _fetch_broker_credentials() -> dict | None:
         return None
 
 
+class MqttCommandWorker:
+    """Ejecuta comandos llegados por MQTT FUERA del hilo de red de paho, en
+    serie, y avisa al terminar para que se publique el estado de vuelta.
+
+    BUG REAL de latencia (sintoma reportado: desde la interfaz de un plugin los
+    cambios son inmediatos, desde la entidad que ese plugin publica por MQTT
+    Discovery van lentisimos). Dos causas, ambas cubiertas aqui:
+
+    1) `message_callback_add` ejecuta los callbacks en el hilo de RED de paho,
+       el mismo que atiende el socket. Los manejadores de comando hacian I/O
+       real ahi dentro: llamadas de servicio a HA una por luz, o una orden al
+       dispositivo con `future.result(timeout=10)` (Tuya/TP-Link). Mientras eso
+       corre, paho no lee ni escribe el socket -- los ACK de QoS 1 y todos los
+       mensajes siguientes se encolan. Y como el cliente MQTT es UNO para todo
+       el add-on, un solo dispositivo que no responde deja lento a TODO lo
+       demas, no solo a si mismo.
+
+    2) Los manejadores no publicaban el estado tras aplicar el comando, asi que
+       HA se quedaba con el valor anterior hasta el siguiente sondeo o ciclo
+       reactivo. Con `on_done` se publica en cuanto el comando termina, que es
+       lo que ya hacian los endpoints HTTP equivalentes (de ahi la diferencia).
+
+    En serie y con cola: dos ordenes seguidas de la misma entidad (arrastrar un
+    deslizador) se aplican en el orden en que llegaron, nunca al reves.
+    """
+
+    def __init__(self, name: str, on_done=None) -> None:
+        import queue
+
+        self._queue = queue.Queue()
+        self._on_done = on_done
+        self._thread = threading.Thread(target=self._loop, name=name, daemon=True)
+        self._thread.start()
+
+    def submit(self, apply_command) -> None:
+        self._queue.put(apply_command)
+
+    def _loop(self) -> None:
+        while True:
+            apply_command = self._queue.get()
+            try:
+                apply_command()
+            except Exception:
+                log.exception("Fallo aplicando un comando MQTT en %s", self._thread.name)
+            else:
+                if self._on_done is not None:
+                    try:
+                        self._on_done()
+                    except Exception:
+                        log.exception(
+                            "Comando MQTT aplicado en %s pero fallo al publicar el estado de "
+                            "vuelta -- HA puede quedarse con el valor anterior", self._thread.name,
+                        )
+            finally:
+                self._queue.task_done()
+
+
 class HAMqttClient:
     """
     Una instancia por addon. `connect()` es bloqueante hasta la primera

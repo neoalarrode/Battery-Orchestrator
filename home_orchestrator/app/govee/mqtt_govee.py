@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import logging
 
+import ha_mqtt
+
 log = logging.getLogger("govee.mqtt")
 
 DISCOVERY_PREFIX = "homeassistant"
@@ -31,6 +33,11 @@ class MqttGoveeDevice:
             "manufacturer": "Govee",
             "model": self.device_name,
         }
+        # Comandos fuera del hilo de red de paho + publicacion del estado en
+        # cuanto se aplican (ver ha_mqtt.MqttCommandWorker).
+        self._commands = ha_mqtt.MqttCommandWorker(
+            name=f"govee-mqtt-cmd-{device_id}", on_done=self.publish_state,
+        )
 
     def _base(self) -> str:
         return f"{DISCOVERY_PREFIX}/light/{NODE_ID}/{self.device_id}"
@@ -101,30 +108,47 @@ class MqttGoveeDevice:
 
     # ------------------------------------------------------------- comandos
 
+    # El payload se valida en el hilo de paho (solo parsear, cuesta nada) y la
+    # orden al dispositivo se ejecuta en el worker -- ver
+    # ha_mqtt.MqttCommandWorker: antes la E/S al dispositivo corria en el hilo de
+    # RED de paho, que es UNO para todo el add-on, asi que una bombilla que no
+    # respondia dejaba lento a todo lo demas. Y no se publicaba el estado tras
+    # el comando, asi que HA se quedaba con el valor viejo hasta el siguiente
+    # sondeo (de ahi que por MQTT pareciera lentisimo y por la interfaz no).
+
     def _on_power(self, client, userdata, msg) -> None:
-        try:
-            if msg.payload.decode() == "ON":
-                self._manager.turn_on(self.device_id)
-            else:
-                self._manager.turn_off(self.device_id)
-        except Exception:
-            log.exception("Govee %s: fallo aplicando encendido/apagado", self.device_id)
+        on = msg.payload.decode(errors="replace").strip() == "ON"
+        self._commands.submit(
+            lambda: self._manager.turn_on(self.device_id) if on
+            else self._manager.turn_off(self.device_id)
+        )
 
     def _on_brightness(self, client, userdata, msg) -> None:
-        try:
-            self._manager.turn_on(self.device_id, brightness_pct=max(1, min(100, round(float(msg.payload.decode())))))
-        except Exception:
-            log.exception("Govee %s: fallo aplicando brillo", self.device_id)
+        value = self._as_float(msg, "brillo")
+        if value is None:
+            return
+        pct = max(1, min(100, round(value)))
+        self._commands.submit(lambda: self._manager.turn_on(self.device_id, brightness_pct=pct))
 
     def _on_color_temp(self, client, userdata, msg) -> None:
-        try:
-            self._manager.turn_on(self.device_id, color_temp_kelvin=round(float(msg.payload.decode())))
-        except Exception:
-            log.exception("Govee %s: fallo aplicando temperatura de color", self.device_id)
+        value = self._as_float(msg, "temperatura de color")
+        if value is None:
+            return
+        kelvin = round(value)
+        self._commands.submit(lambda: self._manager.turn_on(self.device_id, color_temp_kelvin=kelvin))
 
     def _on_hs(self, client, userdata, msg) -> None:
         try:
-            h_str, s_str = msg.payload.decode().split(",")
-            self._manager.turn_on(self.device_id, hs=(float(h_str), float(s_str)))
-        except Exception:
-            log.exception("Govee %s: fallo aplicando color", self.device_id)
+            h_str, s_str = msg.payload.decode(errors="replace").split(",")
+            hs = (float(h_str), float(s_str))
+        except ValueError:
+            log.warning("Govee %s: payload de color invalido: %r", self.device_id, msg.payload)
+            return
+        self._commands.submit(lambda: self._manager.turn_on(self.device_id, hs=hs))
+
+    def _as_float(self, msg, what: str) -> float | None:
+        try:
+            return float(msg.payload.decode(errors="replace"))
+        except ValueError:
+            log.warning("Govee %s: payload de %s invalido: %r", self.device_id, what, msg.payload)
+            return None

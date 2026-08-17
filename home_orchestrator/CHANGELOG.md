@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.54.1
+Energy re-pineado al tag `v0.54.0` (fix energía cargas diferibles + salud batería carga/descarga separadas) — resto sin cambios. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
+
 ## 0.54.0
 Dos bugs reales encontrados al revisar (a petición del usuario) los algoritmos de salud de baterías y estimación de consumo de cargas diferibles.
 

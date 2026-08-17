@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.58.1
+Energy, Climate, Tuya, TP-Link, Govee y Shelly re-pineados al tag `v0.58.0` — es lo que hace que los arreglos de esa versión lleguen de verdad a las instalaciones que descargan los plugins. sha256 `2cff5377…e1f6`, calculado sobre el tarball real y verificado antes de fijarlo; comprobado además que los ficheros de sus listas `files` viajan dentro del tarball y que los arreglos están presentes en el código empaquetado.
+
+**Lighting y Starlink NO se re-pinean:** su código propio no cambió en 0.58.0 (sus arreglos entraron en 0.57.0), así que siguen apuntando a `v0.57.0` a propósito. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
+
 ## 0.58.0
 
 Ronda de fallos silenciosos: cosas que dejaban funcionalidad muerta o daban datos falsos sin que nada lo avisara.

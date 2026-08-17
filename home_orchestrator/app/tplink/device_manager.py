@@ -30,6 +30,10 @@ log = logging.getLogger("tplink.device_manager")
 
 DEFAULT_CALL_TIMEOUT_SECONDS = 10
 POLL_INTERVAL_SECONDS = 5  # igual que TPLinkDataUpdateCoordinator de HA
+# Sin un sondeo con exito en este tiempo, el dispositivo se considera no
+# disponible (ver `connected`). Varios intervalos de sondeo de margen para no
+# marcarlo caido por un fallo suelto de red.
+UNAVAILABLE_AFTER_SECONDS = POLL_INTERVAL_SECONDS * 6
 
 
 class TplinkDeviceManager:
@@ -42,6 +46,9 @@ class TplinkDeviceManager:
     def __init__(self, on_any_change: Callable[[str], None] | None = None) -> None:
         self._on_any_change = on_any_change
         self._devices: dict[str, Device] = {}
+        # device_id -> time.time() del ultimo sondeo CON EXITO. Es la señal de
+        # disponibilidad real (ver `connected`).
+        self._last_poll_ok: dict[str, float] = {}
         self._lock = threading.Lock()
         self._loop: asyncio.AbstractEventLoop | None = None
         self._loop_ready = threading.Event()
@@ -83,6 +90,24 @@ class TplinkDeviceManager:
                 except KasaException:
                     log.debug("TP-Link %s: fallo sondeando (dispositivo apagado/sin red?)", device_id, exc_info=True)
                     continue
+                except Exception:
+                    # BUG REAL: `python-kasa` lanza `KeyError` PELADO desde su
+                    # parseo de estado -- este mismo repo lo documenta mas
+                    # abajo y en mqtt_tplink.py. Un KeyError no es
+                    # `KasaException` ni `AuthenticationError`, asi que escapaba
+                    # de los dos handlers y terminaba la corrutina del bucle: a
+                    # partir de ahi NINGUN TP-Link se volvia a sondear en toda
+                    # la vida del proceso. Y como la tarea se queda
+                    # referenciada, ni siquiera saltaba el aviso de "Task
+                    # exception was never retrieved" -- fallo del todo
+                    # silencioso, con `connected()` devolviendo True igual.
+                    log.exception(
+                        "TP-Link %s: fallo inesperado al sondear -- se omite este ciclo, "
+                        "el resto de dispositivos sigue sondeandose", device_id,
+                    )
+                    continue
+                # Sondeo con exito: esta es la señal de disponibilidad real.
+                self._last_poll_ok[device_id] = time.time()
                 if self._on_any_change:
                     try:
                         self._on_any_change(device_id)
@@ -157,21 +182,31 @@ class TplinkDeviceManager:
         device = self._run_coro(self._discover_and_connect(host, credentials), timeout=15)
         with self._lock:
             self._devices[device_id] = device
+            # Acaba de conectar y leer su estado: cuenta como sondeo bueno, para
+            # que no salga "no disponible" durante el primer intervalo.
+            self._last_poll_ok[device_id] = time.time()
 
     def remove_device(self, device_id: str) -> None:
         with self._lock:
             self._devices.pop(device_id, None)
+            self._last_poll_ok.pop(device_id, None)
 
     def get_device(self, device_id: str) -> Device | None:
         return self._devices.get(device_id)
 
     def connected(self, device_id: str) -> bool:
-        # python-kasa no expone un "connected" persistente como el LAN
-        # push de Tuya -- el ultimo sondeo con exito ES la señal de
-        # disponibilidad (si el sondeo lleva fallando, `_poll_loop` ya lo
-        # habria quitado... salvo que no lo quita, se queda intentando --
-        # ver nota mas abajo). De momento: "esta dado de alta" basta.
-        return device_id in self._devices
+        # python-kasa no expone un "connected" persistente como el LAN push de
+        # Tuya -- el ultimo sondeo CON EXITO es la señal de disponibilidad.
+        #
+        # BUG REAL: esto devolvia `device_id in self._devices`, es decir SIEMPRE
+        # True en cuanto el dispositivo estaba dado de alta, pasara lo que
+        # pasara con el (`_poll_loop` no lo quita, sigue reintentando). Efecto:
+        # un Tapo desenchufado se seguia reportando disponible a Lighting y a
+        # HA indefinidamente. Ahora se mira cuando fue el ultimo sondeo bueno.
+        last_ok = self._last_poll_ok.get(device_id)
+        if last_ok is None:
+            return False
+        return (time.time() - last_ok) <= UNAVAILABLE_AFTER_SECONDS
 
     # ------------------------------------------------------------ escritura
     #

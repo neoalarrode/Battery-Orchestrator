@@ -78,7 +78,23 @@ class ShellyDeviceManager:
             with self._lock:
                 ids = list(self._devices.keys())
             for device_id in ids:
-                self._refresh(device_id)
+                # BUG REAL: `_refresh` solo atrapa `requests.RequestException`,
+                # pero por debajo hace `r.json()` e indexa lo que venga
+                # (`_read_gen1_state`/`_read_gen2_state`). Un dispositivo que
+                # responda con algo que no sea JSON, o con `lights: {}` en vez
+                # de una lista, lanza ValueError/TypeError/AttributeError, que
+                # escapaban de aqui y MATABAN el hilo de sondeo: a partir de
+                # ese momento NINGUN Shelly se volvia a sondear en toda la vida
+                # del proceso, en silencio y con `connected()` siguiendo en
+                # True. Un fallo leyendo UN dispositivo no puede dejar sin
+                # sondeo a los demas.
+                try:
+                    self._refresh(device_id)
+                except Exception:
+                    log.exception(
+                        "Shelly %s: fallo inesperado al sondear -- se omite este ciclo, "
+                        "el resto de dispositivos sigue sondeandose", device_id,
+                    )
 
     # ------------------------------------------------------------ deteccion
 

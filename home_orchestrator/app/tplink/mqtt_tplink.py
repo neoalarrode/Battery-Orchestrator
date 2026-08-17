@@ -188,9 +188,18 @@ class MqttTplinkDevice:
         device = self._device()
         if device is None:
             return
+        # Ver comentario homologo en govee/mqtt_govee.py: la disponibilidad se
+        # publicaba "online" retenida una sola vez y no se revocaba nunca, asi
+        # que un Tapo desenchufado seguia saliendo disponible en HA con su
+        # ultimo estado retenido. (`manager.connected` ahora refleja el ultimo
+        # sondeo con exito de verdad, antes devolvia siempre True.)
+        available = self._manager.connected(self.device_id)
         light = device.modules.get(Module.Light)
         if light is not None:
             base = self._base("light").format(domain="light")
+            self._mqtt.publish(
+                f"{base}/availability", "online" if available else "offline", retain=True,
+            )
             self._mqtt.publish(f"{base}/state", "ON" if device.is_on else "OFF", retain=True)
             if light.is_dimmable:
                 self._mqtt.publish(f"{base}/brightness/state", round(light.brightness), retain=True)
@@ -222,11 +231,17 @@ class MqttTplinkDevice:
                 self._mqtt.publish(f"{base}/color_mode/state", "color_temp" if ct_active else "hs", retain=True)
         else:
             base = self._base("switch").format(domain="switch")
+            self._mqtt.publish(
+                f"{base}/availability", "online" if available else "offline", retain=True,
+            )
             self._mqtt.publish(f"{base}/state", "ON" if device.is_on else "OFF", retain=True)
 
         energy = device.modules.get(Module.Energy)
         if energy is not None and energy.current_consumption is not None:
             base = self._base("power").format(domain="sensor")
+            self._mqtt.publish(
+                f"{base}/availability", "online" if available else "offline", retain=True,
+            )
             self._mqtt.publish(f"{base}/state", round(energy.current_consumption, 1), retain=True)
 
     # ------------------------------------------------------------- comandos

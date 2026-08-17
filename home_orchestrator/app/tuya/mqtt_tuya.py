@@ -233,14 +233,25 @@ class MqttTuyaDevice:
                 continue
             value = self._manager.get_decoded(self.device_id, dp.dp_id)
             base = self._base(f"dp{dp.dp_id}").format(domain=domain)
+            self._publish_availability(base)
             self._mqtt.publish(f"{base}/state", self._encode_state(domain, value), retain=True)
         for i, cm in enumerate(profile.climates):
             self._publish_climate_state(i, cm)
         for i, lt in enumerate(profile.lights):
             self._publish_light_state(i, lt)
 
+    def _publish_availability(self, base: str) -> None:
+        """BUG REAL: la disponibilidad se publicaba "online" retenida UNA vez, al
+        anunciar la entidad, y no se revocaba nunca. Con el dispositivo apagado o
+        fuera de la LAN, HA seguia mostrandolo disponible con su ultimo estado
+        retenido, aunque `manager.connected` ya fuera False. Climate ya lo hacia
+        bien; los cuatro puentes no."""
+        online = self._manager.connected(self.device_id)
+        self._mqtt.publish(f"{base}/availability", "online" if online else "offline", retain=True)
+
     def _publish_light_state(self, index: int, lt) -> None:
         base = self._base(f"light{index}").format(domain="light")
+        self._publish_availability(base)
         switch_val = self._manager.get_decoded(self.device_id, lt.switch_dp)
         self._mqtt.publish(f"{base}/state", "ON" if switch_val else "OFF", retain=True)
         if lt.brightness_dp is not None:
@@ -275,6 +286,7 @@ class MqttTuyaDevice:
 
     def _publish_climate_state(self, index: int, cm) -> None:
         base = self._base(f"climate{index}").format(domain="climate")
+        self._publish_availability(base)
         handle = self._manager.climate_handle(self.device_id, index)
         if handle is None:
             return

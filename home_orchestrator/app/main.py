@@ -496,7 +496,9 @@ def run_cycle():
     _reconcile_ecoflow_sn_from_ble(cfg)
     batteries_cfg = cfg["batteries"]
     dry_run = bool(cfg["general"]["dry_run"])
-    cycle_hours = cfg["general"]["cycle_seconds"] / 3600
+    # (ya no se calcula `cycle_hours`: era el intervalo NOMINAL y su ultimo uso
+    # -- el coste para savings_store -- se sustituyo por integracion con el
+    # tiempo REAL transcurrido dentro del propio store)
 
     if not batteries_cfg:
         with _state_lock:
@@ -1056,10 +1058,14 @@ def run_cycle():
         grid_bought_w = max(0.0, now_hp.load_w - now_hp.pv_w - now_hp.discharge_w)
         if now_hp.charge_source == "grid":
             grid_bought_w += now_hp.charge_w
-        real_cost_eur = now_hp.price * (grid_bought_w / 1000) * cycle_hours
         baseline_deficit_w = max(0.0, now_hp.load_w - now_hp.pv_w)
-        baseline_cost_eur = now_hp.price * (baseline_deficit_w / 1000) * cycle_hours
-        savings_store.record(now, real_cost_eur, baseline_cost_eur)
+        # Se pasan POTENCIAS (W) y precio, no costes ya multiplicados por
+        # `cycle_hours`: ese `cycle_seconds` es el intervalo NOMINAL, pero
+        # `run_cycle` tambien lo dispara el ciclo reactivo, asi que multiplicar
+        # aqui inflaba el ahorro acumulado hasta ~12x. La integracion la hace
+        # ahora `savings_store.record` con el tiempo REAL transcurrido -- mismo
+        # patron ya usado para baterias, diferibles, red y solar.
+        savings_store.record(now, grid_bought_w, baseline_deficit_w, now_hp.price)
     except Exception as e:
         log.warning(f"No se pudo actualizar el ahorro acumulado: {e}")
 

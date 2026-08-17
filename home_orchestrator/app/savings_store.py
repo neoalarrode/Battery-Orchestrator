@@ -26,8 +26,18 @@ MAX_DAYS = 400  # poco mas de un año de historico diario, para no crecer sin li
 _lock = threading.RLock()
 
 
+# Tope de cuanto tiempo "de golpe" se deja integrar en una sola vuelta -- si el
+# addon estuvo parado un rato (reinicio, fallo...) no se quiere contar ese hueco
+# entero como si hubiera habido el mismo consumo todo el tiempo. Mismo criterio
+# y mismo valor que grid_energy_store.MAX_INTEGRATION_GAP_HOURS.
+MAX_INTEGRATION_GAP_HOURS = 300 / 3600
+
+
 def _default() -> dict:
-    return {"since": None, "total_real_eur": 0.0, "total_baseline_eur": 0.0, "days": {}}
+    return {
+        "since": None, "total_real_eur": 0.0, "total_baseline_eur": 0.0, "days": {},
+        "last_update": None,
+    }
 
 
 def _load() -> dict:
@@ -35,10 +45,21 @@ def _load() -> dict:
         if not os.path.exists(SAVINGS_PATH):
             return _default()
         try:
-            with open(SAVINGS_PATH) as f:
-                return json.load(f)
+            with open(SAVINGS_PATH, encoding="utf-8") as f:
+                data = json.load(f)
         except (json.JSONDecodeError, OSError):
             return _default()
+        if not isinstance(data, dict):
+            return _default()
+        # Completar claves que falten en vez de indexar a ciegas: un fichero
+        # escrito por una version anterior no tiene "last_update", y el resto
+        # del modulo hacia `data["since"]`/`data["days"]` directo, que sobre un
+        # esquema viejo o incompleto revienta con KeyError.
+        merged = _default()
+        merged.update(data)
+        if not isinstance(merged.get("days"), dict):
+            merged["days"] = {}
+        return merged
 
 
 def _save(data: dict) -> None:
@@ -53,25 +74,65 @@ def _save(data: dict) -> None:
         os.replace(tmp, SAVINGS_PATH)
 
 
-def record(now: datetime, real_cost_eur: float, baseline_cost_eur: float) -> None:
-    data = _load()
-    if data["since"] is None:
-        data["since"] = now.isoformat()
+def record(now: datetime, real_power_w: float, baseline_power_w: float,
+           price_eur_kwh: float) -> None:
+    """Integra el coste por rectangulo simple usando el tiempo REAL transcurrido
+    desde la ultima llamada.
 
-    data["total_real_eur"] += real_cost_eur
-    data["total_baseline_eur"] += baseline_cost_eur
+    BUG REAL (el ahorro acumulado se inflaba hasta ~12x): antes esta funcion
+    recibia el coste YA multiplicado por el `cycle_seconds` NOMINAL de la
+    config, pero `run_cycle` no se ejecuta solo cada `cycle_seconds` -- tambien
+    lo dispara el ciclo reactivo (ver ha_websocket.ReactiveTrigger, con un suelo
+    de 5s). Con el `cycle_seconds: 60` por defecto, un Home Assistant movido
+    puede ejecutar el ciclo ~12 veces por minuto, y cada una sumaba una racion
+    COMPLETA de una hora-fraccion de coste. Como solo se usaba `now` para la
+    clave del dia, no habia forma de corregirse solo.
 
-    day_key = now.strftime("%Y-%m-%d")
-    day = data["days"].get(day_key) or {"real_eur": 0.0, "baseline_eur": 0.0}
-    day["real_eur"] += real_cost_eur
-    day["baseline_eur"] += baseline_cost_eur
-    data["days"][day_key] = day
+    Es exactamente el mismo fallo que este repo ya habia corregido para la
+    energia de baterias (ver main.py), las cargas diferibles
+    (deferrable_store), la red (grid_energy_store) y la solar -- el ahorro se
+    quedo sin arreglar. Se recibe POTENCIA (W) y precio, no un coste ya
+    multiplicado, para que la integracion la haga quien sabe cuanto tiempo ha
+    pasado de verdad.
 
-    if len(data["days"]) > MAX_DAYS:
-        for k in sorted(data["days"].keys())[: len(data["days"]) - MAX_DAYS]:
-            del data["days"][k]
+    La PRIMERA llamada tras un reinicio no integra nada (no hay "antes" con el
+    que calcular un intervalo real), solo fija el punto de partida -- mismo
+    criterio que grid_energy_store.accumulate."""
+    with _lock:
+        data = _load()
+        if data.get("since") is None:
+            data["since"] = now.isoformat()
 
-    _save(data)
+        last_iso = data.get("last_update")
+        dt_hours = 0.0
+        if last_iso is not None:
+            try:
+                elapsed = (now - datetime.fromisoformat(last_iso)).total_seconds()
+                dt_hours = max(0.0, elapsed) / 3600.0
+                if dt_hours > MAX_INTEGRATION_GAP_HOURS:
+                    dt_hours = 0.0  # hueco largo (addon parado): no se inventa consumo
+            except ValueError:
+                dt_hours = 0.0
+
+        if dt_hours > 0.0:
+            real_cost_eur = price_eur_kwh * (max(0.0, real_power_w) / 1000.0) * dt_hours
+            baseline_cost_eur = price_eur_kwh * (max(0.0, baseline_power_w) / 1000.0) * dt_hours
+
+            data["total_real_eur"] += real_cost_eur
+            data["total_baseline_eur"] += baseline_cost_eur
+
+            day_key = now.strftime("%Y-%m-%d")
+            day = data["days"].get(day_key) or {"real_eur": 0.0, "baseline_eur": 0.0}
+            day["real_eur"] += real_cost_eur
+            day["baseline_eur"] += baseline_cost_eur
+            data["days"][day_key] = day
+
+            if len(data["days"]) > MAX_DAYS:
+                for k in sorted(data["days"].keys())[: len(data["days"]) - MAX_DAYS]:
+                    del data["days"][k]
+
+        data["last_update"] = now.isoformat()
+        _save(data)
 
 
 def get_summary(now: datetime) -> dict:

@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.58.0
+
+Ronda de fallos silenciosos: cosas que dejaban funcionalidad muerta o daban datos falsos sin que nada lo avisara.
+
+### Bucles de sondeo que morían y dejaban una marca entera sin sondear
+
+- **TP-Link:** `python-kasa` lanza `KeyError` pelado desde su parseo de estado — este repo ya lo documentaba en dos sitios. Un `KeyError` no es `KasaException` ni `AuthenticationError`, así que escapaba de los dos handlers y **terminaba la corrutina del bucle**: a partir de ahí ningún TP-Link se volvía a sondear en toda la vida del proceso. Y como la tarea se queda referenciada, ni siquiera saltaba el aviso de "Task exception was never retrieved".
+- **Shelly:** `_refresh` solo atrapaba `requests.RequestException`, pero por debajo hace `r.json()` e indexa lo que venga; un dispositivo que respondiera con algo que no fuera JSON, o con `lights: {}` en vez de una lista, mataba el hilo de sondeo para todos los Shelly.
+- **Govee:** cualquier datagrama JSON que no fuera un dict mataba el hilo receptor con `AttributeError` (`json.loads("[1,2]")` devuelve una lista, y `.get` sobre una lista revienta) — y con `host_network: true` basta con que cualquier proceso del host o de la LAN mande un JSON al UDP 4002. Se iba por `threading.excepthook` a stderr, sin pasar por el log, y todas las bombillas quedaban desconectadas para siempre sin una línea de aviso.
+
+En los tres casos un fallo leyendo **un** dispositivo ya no puede dejar sin sondeo a los demás.
+
+### Otros
+
+- **Govee, puerto UDP:** `SO_REUSEADDR` no evita `EADDRINUSE` en UDP en Linux (eso es `SO_REUSEPORT`, que ahora se pide); y el socket se filtraba al fallar el `bind`, quedando el descriptor abierto para siempre.
+- **Govee, escaneos concurrentes:** había un único hueco compartido con una espera de varios segundos en medio, así que dos `POST /api/discover` a la vez se pisaban y el segundo reventaba con `'NoneType' object has no attribute 'values'` (un 502). Ahora cada escaneo tiene su propio dict y comparten las respuestas.
+- **Una zona de clima que apagabas se encendía sola tras reiniciar.** Con actuador de puente, `_capability_pending` es True al construir la zona (el caso normal: Climate arranca antes que Tuya), y ahí el `hvac_mode` guardado se **descartaba y nunca se volvía a leer** — `_reconcile_hvac_mode` lo sobreescribía con el modo por defecto, p.ej. `heat_cool`. La pérdida era permanente porque cada ciclo persiste el valor nuevo. Ahora el estado se guarda y se reaplica en cuanto se conoce la capacidad real.
+- **El ahorro acumulado se inflaba hasta ~12×.** `savings_store.record` recibía el coste ya multiplicado por el `cycle_seconds` **nominal**, pero `run_cycle` también lo dispara el ciclo reactivo (suelo de 5 s): con el valor por defecto de 60 s, un HA movido ejecuta el ciclo ~12 veces por minuto y cada una sumaba una ración completa. Es el mismo fallo ya corregido para baterías, cargas diferibles, red y solar; el ahorro se había quedado sin arreglar. Ahora recibe potencia y precio, e integra con el tiempo real transcurrido con tope ante huecos largos.
+- **Falsos positivos de "ventana abierta".** El único filtro era sobre el salto de temperatura (≤ 2 °C), no sobre el intervalo, y `update()` se llama desde el ciclo reactivo — a veces con segundos de diferencia. Un cambio de 0,1 °C a 20 s de distancia da una pendiente cruda de 18 °C/h y, con peso 0,8, la suavizada cruzaba el umbral de alerta (4 °C/h) al instante: la zona entera se pausaba sin que nadie hubiera abierto nada. Ahora se exige un intervalo mínimo de 120 s y, por debajo de él, **no se consume la lectura anterior** (si no, con el reactivo el intervalo nunca llegaría a acumularse).
+- **Los presets declarados no se anunciaban a HA.** `preset_modes` estaba fijo en `["Automático", "Manual"]`, así que los presets del usuario (`presets_text`, p.ej. "Confort"/"Ausente") no se podían seleccionar desde la entidad, y HA descarta un valor de estado que no esté en la lista anunciada. Es el mismo bug que ya se corrigió para `modes` y `fan_modes`.
+- **La disponibilidad MQTT no se revocaba nunca** en los cuatro puentes: se publicaba `online` retenida al anunciar la entidad y ya. Un dispositivo desenchufado seguía saliendo disponible en HA con su último estado retenido (una bombilla Govee leyendo "encendida" para siempre). Climate ya lo hacía bien. De paso, `TplinkDeviceManager.connected()` devolvía literalmente `device_id in self._devices` — siempre True una vez dado de alta; ahora refleja el último sondeo con éxito.
+- **Tuya, DP de tipo bitmap corrompidos.** Llegan muy a menudo como int, y `bytes(5)` no codifica el 5: reserva cinco bytes a cero, así que un bitfield con valor 5 se leía como "todos los bits a False" (y `bytes(100000)` reservaba 100 kB por trama). En escritura, un `current_raw` entero caía en la rama del bytearray vacío, así que cambiar un bit **borraba todos los demás booleanos empaquetados en el mismo DP** — justo lo que el docstring promete que no puede pasar.
+- **Tuya, DP numéricos de solo escritura incontrolables.** Faltaba `"wr"` en la selección de plataforma, así que un DP numérico de solo escritura (consigna, temporizador, cuenta atrás) se tipaba como sensor de solo lectura, sin aviso y de forma incoherente con bool y enum, que sí lo aceptaban.
+
 ## 0.57.1
 Climate, Tuya, Lighting, TP-Link, Starlink, Govee y Shelly re-pineados al tag `v0.57.0` — es lo que hace que los arreglos de esa versión (worker de comandos MQTT, stores bajo el lock único de `config_store`, apagado indebido de luces) lleguen de verdad a las instalaciones que descargan los plugins. sha256 `f5fb59cd…d05a`, calculado sobre el tarball real y verificado por duplicado (misma URL que usa `plugin_downloader` y su host de redirección dan los mismos bytes) antes de fijarlo; comprobado además que los 25 elementos de las listas `files` de esos siete plugins viajan dentro y que los arreglos están presentes en el código empaquetado.
 

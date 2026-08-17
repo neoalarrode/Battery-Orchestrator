@@ -104,6 +104,13 @@ class MqttShellyDevice:
         capability = self._capability()
         domain = "switch" if capability == "switch" else "light"
         base = self._base(domain)
+        # Ver comentario homologo en govee/mqtt_govee.py: la disponibilidad se
+        # publicaba "online" retenida una sola vez y no se revocaba nunca, asi
+        # que un dispositivo caido seguia saliendo disponible en HA con su
+        # ultimo estado retenido.
+        self._mqtt.publish(
+            f"{base}/availability", "online" if handle.available else "offline", retain=True,
+        )
         self._mqtt.publish(f"{base}/state", "ON" if handle.is_on else "OFF", retain=True)
         if domain == "light" and handle.brightness_pct is not None:
             self._mqtt.publish(f"{base}/brightness/state", round(handle.brightness_pct), retain=True)

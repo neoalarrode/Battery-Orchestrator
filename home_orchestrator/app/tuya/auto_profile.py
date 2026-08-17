@@ -340,7 +340,13 @@ def _auto_dp_mapping(entry: dict[str, Any]) -> DPMapping | None:
     if dtype == "value":
         scale = 10 ** values["scale"] if values.get("scale") else None
         unit = values.get("unit") or None
-        platform = "number" if access == "rw" else "sensor"
+        # BUG REAL: faltaba "wr". `tuya_cloud.py` asigna access="wr" a todo
+        # codigo que aparece en `functions` sin `status` equivalente, asi que un
+        # DP numerico de SOLO ESCRITURA (consigna, temporizador, cuenta atras)
+        # se tipaba como sensor de solo lectura y quedaba incontrolable, sin
+        # ningun aviso -- y de forma incoherente con bool y enum, que si
+        # aceptan "wr" en la misma situacion (ver las dos ramas de al lado).
+        platform = "number" if access in ("rw", "wr") else "sensor"
         kwargs = dict(dp_id=dp_id, platform=platform, name=name, unit=unit, scale=scale)
         if platform == "number":
             if values.get("min") is not None:

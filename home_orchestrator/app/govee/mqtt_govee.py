@@ -91,6 +91,14 @@ class MqttGoveeDevice:
         if handle is None:
             return
         base = self._base()
+        # BUG REAL: la disponibilidad se publicaba "online" retenida UNA vez, al
+        # anunciar la entidad, y no se revocaba nunca. Con la bombilla
+        # desenchufada HA seguia mostrandola disponible con su ultimo estado
+        # retenido (leyendo "encendida" para siempre), aunque `handle.available`
+        # ya fuera False. Climate ya lo hacia bien; los cuatro puentes no.
+        self._mqtt.publish(
+            f"{base}/availability", "online" if handle.available else "offline", retain=True,
+        )
         self._mqtt.publish(f"{base}/state", "ON" if handle.is_on else "OFF", retain=True)
         if handle.brightness_pct is not None:
             self._mqtt.publish(f"{base}/brightness/state", round(handle.brightness_pct), retain=True)

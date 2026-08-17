@@ -80,14 +80,37 @@ class GoveeDeviceManager:
         self._ip_to_id: dict[str, str] = {}
         self._sock: socket.socket | None = None
         self._scan_lock = threading.Lock()
-        self._scan_results: dict[str, dict] | None = None  # None = ningun escaneo en curso ahora mismo
+        # Un dict por escaneo EN CURSO (ver `discover`) -- antes era un unico
+        # hueco compartido, y dos escaneos concurrentes se pisaban.
+        self._active_scans: list[dict[str, dict]] = []
 
     # ------------------------------------------------------------ arranque
 
     def start(self) -> None:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind(("0.0.0.0", LISTEN_PORT))
+        # SO_REUSEADDR NO evita EADDRINUSE en UDP en Linux (eso es
+        # SO_REUSEPORT) -- este puerto lo compite con cualquier proceso del
+        # HOST, porque el addon corre con `host_network: true` (ver
+        # config.yaml). Sin esto, otro proceso que ya tuviera el 4002 tomado
+        # dejaba a Govee sin arrancar del todo. No existe en todas las
+        # plataformas, asi que es opcional.
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        except (AttributeError, OSError):
+            pass
+        try:
+            sock.bind(("0.0.0.0", LISTEN_PORT))
+        except OSError:
+            # El socket se cerraba y se filtraba al propagar el fallo (el
+            # llamante atrapa la excepcion, pero el descriptor quedaba abierto
+            # para siempre). Se cierra aqui antes de re-lanzar.
+            sock.close()
+            log.error(
+                "Govee: no se pudo abrir el puerto UDP %s -- otro proceso del host lo tiene "
+                "tomado. El plugin se queda sin funcionar hasta resolverlo.", LISTEN_PORT,
+            )
+            raise
         self._sock = sock
         threading.Thread(target=self._recv_loop, name="govee-recv", daemon=True).start()
         threading.Thread(target=self._poll_loop, name="govee-poll", daemon=True).start()
@@ -99,24 +122,43 @@ class GoveeDeviceManager:
             except OSError:
                 log.exception("Govee: fallo leyendo del socket UDP -- se detiene el receptor")
                 return
+            # BUG REAL: todo lo de abajo estaba fuera de cualquier proteccion
+            # amplia. `json.loads(b"[1,2]")` devuelve una LISTA, y `.get` sobre
+            # una lista lanza AttributeError -- que no es ValueError ni
+            # UnicodeDecodeError, asi que escapaba y MATABA el hilo receptor
+            # (via threading.excepthook, a stderr, sin pasar por el log). A
+            # partir de ese momento TODAS las bombillas Govee quedaban como
+            # desconectadas para siempre, sin una sola linea de log. Y con
+            # `host_network: true` basta con que cualquier proceso del host o de
+            # la LAN mande un JSON cualquiera al UDP 4002 para provocarlo.
             try:
-                msg = json.loads(raw.decode("utf-8")).get("msg") or {}
+                payload = json.loads(raw.decode("utf-8"))
+                msg = payload.get("msg") if isinstance(payload, dict) else None
+                if not isinstance(msg, dict):
+                    continue
+                cmd = msg.get("cmd")
+                data = msg.get("data")
+                data = data if isinstance(data, dict) else {}
+                if cmd == "scan":
+                    self._on_scan_response(addr[0], data)
+                elif cmd == "devStatus":
+                    self._on_status_response(addr[0], data)
             except (ValueError, UnicodeDecodeError):
-                continue
-            cmd = msg.get("cmd")
-            data = msg.get("data") or {}
-            if cmd == "scan":
-                self._on_scan_response(addr[0], data)
-            elif cmd == "devStatus":
-                self._on_status_response(addr[0], data)
+                continue  # datagrama que no es JSON valido: normal en una LAN, se ignora
+            except Exception:
+                # Cualquier otro fallo procesando UN datagrama no puede tumbar
+                # el receptor entero.
+                log.exception("Govee: fallo procesando un datagrama de %s -- se ignora", addr[0])
 
     def _on_scan_response(self, ip: str, data: dict) -> None:
         device = data.get("device")
         if not device:
             return
         with self._scan_lock:
-            if self._scan_results is not None:
-                self._scan_results[device] = {"ip": ip, "sku": data.get("sku"), "device": device}
+            # Se alimenta a TODOS los escaneos en curso (antes habia un unico
+            # hueco compartido, ver `discover`).
+            for results in self._active_scans:
+                results[device] = {"ip": ip, "sku": data.get("sku"), "device": device}
 
     def _on_status_response(self, ip: str, data: dict) -> None:
         with self._lock:
@@ -134,22 +176,37 @@ class GoveeDeviceManager:
     def _poll_loop(self) -> None:
         while True:
             time.sleep(POLL_INTERVAL_SECONDS)
-            with self._lock:
-                ips = [d["ip"] for d in self._devices.values()]
-            for ip in ips:
-                self._send(ip, "devStatus", {})
+            try:
+                with self._lock:
+                    ips = [d["ip"] for d in self._devices.values()]
+                for ip in ips:
+                    self._send(ip, "devStatus", {})
+            except Exception:
+                # Mismo criterio que el receptor: un fallo puntual no puede
+                # dejar sin sondeo a todos los dispositivos para siempre.
+                log.exception("Govee: fallo en el ciclo de sondeo -- se reintenta en el proximo")
 
     # --------------------------------------------------------- descubrimiento
 
     def discover(self, timeout: float = SCAN_WINDOW_SECONDS) -> list[dict]:
+        """BUG REAL: antes habia UN solo hueco compartido (`_scan_results`) con
+        una espera de varios segundos en medio. Dos escaneos concurrentes (dos
+        `POST /api/discover`, y Flask es multihilo) se pisaban: el primero que
+        terminaba lo ponia a None y el segundo reventaba con
+        `'NoneType' object has no attribute 'values'`, que la ruta convertia en
+        un 502. Ahora cada escaneo tiene su PROPIO dict, registrado en una lista
+        de escaneos activos que el receptor alimenta a todos por igual -- dos
+        escaneos a la vez funcionan y ademas comparten las respuestas."""
+        results: dict[str, dict] = {}
         with self._scan_lock:
-            self._scan_results = {}
-        self._send(MULTICAST_IP, "scan", {"account_topic": "reserve"})
-        time.sleep(timeout)
-        with self._scan_lock:
-            results = list(self._scan_results.values())
-            self._scan_results = None
-        return results
+            self._active_scans.append(results)
+        try:
+            self._send(MULTICAST_IP, "scan", {"account_topic": "reserve"})
+            time.sleep(timeout)
+        finally:
+            with self._scan_lock:
+                self._active_scans.remove(results)
+        return list(results.values())
 
     # --------------------------------------------------------- dispositivos
 

@@ -24,6 +24,27 @@ END_ALERT_SLOPE_DEG_H = 1.0    # por debajo de esto (en valor absoluto) se da po
 MAX_PLAUSIBLE_JUMP_DEG = 2.0   # salto entre dos lecturas mayor que esto se descarta (glitch del sensor, no ventana)
 MIN_SAMPLES = 3                # lecturas minimas antes de fiarse de la pendiente
 
+# Intervalo MINIMO entre dos lecturas para calcular una pendiente.
+#
+# BUG REAL (falsos positivos de "ventana abierta"): `update()` se llama desde
+# `decide_and_act`, que tambien dispara el ciclo REACTIVO -- es decir, en
+# cualquier cambio de una entidad vigilada (presencia, puerta, señal de red,
+# atributos del delegado...), a menudo con segundos de diferencia. El unico
+# filtro que habia era sobre el SALTO de temperatura (<= 2 °C), no sobre el
+# intervalo: un cambio de 0,1 °C a 20 s de distancia da una pendiente cruda de
+# 18 °C/h y, con peso 0.8, la pendiente suavizada se pone por encima de
+# ALERT_SLOPE_DEG_H (4.0) al instante. Con MIN_SAMPLES=3 alcanzable en la misma
+# rafaga, la zona entera se pausaba (`force_off`) sin que nadie hubiera abierto
+# nada.
+#
+# 120 s es el suelo: con la resolucion tipica de 0,1 °C de estos sensores, la
+# pendiente espuria maxima queda en 0,1/(120/3600) = 3 °C/h, por debajo del
+# umbral de alerta. Por debajo de este intervalo NO se calcula pendiente y NO se
+# consume la lectura anterior, para que el intervalo pueda acumularse de verdad
+# (versatile_thermostat, de donde viene este algoritmo, muestrea a intervalo
+# fijo por el mismo motivo).
+MIN_SAMPLE_INTERVAL_SECONDS = 120
+
 
 class WindowSlopeDetector:
     """Un detector por zona. `update()` se llama en cada ciclo de
@@ -38,13 +59,25 @@ class WindowSlopeDetector:
         self._alert = False
 
     def update(self, temp: float, now, wants_heat: bool, wants_cool: bool) -> bool:
-        if self._last_temp is not None and self._last_ts is not None:
-            dt_h = (now - self._last_ts).total_seconds() / 3600
-            jump = abs(temp - self._last_temp)
-            if dt_h > 0 and jump <= MAX_PLAUSIBLE_JUMP_DEG:
-                raw_slope = (temp - self._last_temp) / dt_h
-                self._slope = 0.2 * self._slope + 0.8 * raw_slope
-                self._samples += 1
+        if self._last_temp is None or self._last_ts is None:
+            self._last_temp, self._last_ts = temp, now
+            return self._alert
+
+        elapsed = (now - self._last_ts).total_seconds()
+        if elapsed < MIN_SAMPLE_INTERVAL_SECONDS:
+            # Demasiado pronto para una pendiente fiable (ver
+            # MIN_SAMPLE_INTERVAL_SECONDS). Se deja la lectura anterior INTACTA
+            # a proposito: si se sustituyera aqui, con el ciclo reactivo
+            # disparando cada pocos segundos el intervalo nunca llegaria a
+            # acumularse y el detector no mediria nada de verdad.
+            return self._alert
+
+        dt_h = elapsed / 3600
+        jump = abs(temp - self._last_temp)
+        if jump <= MAX_PLAUSIBLE_JUMP_DEG:
+            raw_slope = (temp - self._last_temp) / dt_h
+            self._slope = 0.2 * self._slope + 0.8 * raw_slope
+            self._samples += 1
         self._last_temp, self._last_ts = temp, now
 
         if self._samples < MIN_SAMPLES:

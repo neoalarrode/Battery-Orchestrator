@@ -241,6 +241,10 @@ class ZoneRunner:
         self._equipment_run: tuple[str, datetime, float] | None = None
         self._equipment_failure_suspected = False
         self._power_model: dict = {}
+        # Estado persistido que no se pudo aplicar todavia porque la capacidad
+        # real de la zona aun no se conoce -- se reaplica en
+        # `_reconcile_hvac_mode`. Ver el comentario extenso en `_restore`.
+        self._pending_restore_state: dict | None = None
 
         if state:
             self._restore(state)
@@ -258,6 +262,18 @@ class ZoneRunner:
                 self.hvac_mode = saved_mode
             if self.hvac_mode != "off":
                 self._last_active_hvac_mode = self.hvac_mode
+        else:
+            # BUG REAL: con `_capability_pending` (el caso NORMAL en cuanto la
+            # zona tiene un actuador de puente, porque Climate arranca antes
+            # que Tuya -- ver `_capability_still_pending`) el modo guardado se
+            # descartaba aqui y NUNCA se volvia a leer: `_reconcile_hvac_mode`
+            # lo sobreescribia mas tarde con `_default_hvac_mode(capability)`,
+            # p.ej. "heat_cool". Y la perdida era PERMANENTE, porque cada ciclo
+            # persiste el valor nuevo. Efecto para el usuario: un termostato que
+            # dejo apagado se enciende SOLO (y empieza a actuar) tras cada
+            # reinicio del addon. Se guarda el estado para reaplicarlo en cuanto
+            # se conozca la capacidad de verdad.
+            self._pending_restore_state = state
 
         saved_preset = state.get("preset_mode")
         if saved_preset in (self._preset_modes or []):
@@ -432,7 +448,25 @@ class ZoneRunner:
     def _reconcile_hvac_mode(self, capability: set[str]) -> None:
         if self._capability_pending and not self._capability_still_pending(capability):
             self._capability_pending = False
-            self.hvac_mode = self._default_hvac_mode(capability)
+            # El modo GUARDADO manda sobre el de por defecto: al construir la
+            # zona no se pudo aplicar porque la capacidad (y con ella
+            # `hvac_modes`) todavia no se conocia -- ver el comentario extenso
+            # en `_restore`. Sin esto, una zona que el usuario dejo apagada se
+            # encendia sola en cada reinicio, y el valor por defecto quedaba
+            # persistido encima del suyo.
+            saved_state = self._pending_restore_state
+            self._pending_restore_state = None
+            saved_mode = (saved_state or {}).get("hvac_mode")
+            if saved_mode in set(self.hvac_modes):
+                self.hvac_mode = saved_mode
+                log.info(
+                    "Zona climate %s: restaurado el modo guardado '%s' al conocerse la "
+                    "capacidad real", self.zone_id, saved_mode,
+                )
+            else:
+                self.hvac_mode = self._default_hvac_mode(capability)
+            if self.hvac_mode != "off":
+                self._last_active_hvac_mode = self.hvac_mode
             # Bug real, confirmado en produccion: `publish_discovery` solo
             # se llamaba UNA vez, al construir la zona (ver
             # ClimatePlugin._start_zone) -- si en ese instante concreto un

@@ -116,6 +116,15 @@ class DPMapping:
         never-toggled byte."""
         if self.bit is None or not raw:
             return None
+        # BUG REAL: un DP de tipo `bitmap` llega MUY a menudo por LAN como un
+        # int, y `bytes(5)` NO codifica el 5 -- reserva cinco bytes a cero, asi
+        # que un bitfield con valor 5 se leia como "todos los bits a False"
+        # (ademas de reservar 100 kB por trama si el valor era 100000). Un int
+        # se trata ahora como el entero que es.
+        if isinstance(raw, bool):
+            return bool(raw) if self.bit == 0 else False
+        if isinstance(raw, int):
+            return bool((raw >> self.bit) & 1)
         try:
             data = bytes.fromhex(raw) if isinstance(raw, str) else bytes(raw)
         except (ValueError, TypeError):
@@ -130,9 +139,23 @@ class DPMapping:
         bit already set in the field - a plain `encode(value)` can't do
         this safely since it has no access to the field's current value."""
         byte_idx, bit_in_byte = divmod(self.bit, 8)
+        # BUG REAL: un `current_raw` entero (como lo reporta muy a menudo el
+        # protocolo LAN) caia en la rama del bytearray VACIO, asi que cambiar un
+        # bit BORRABA todos los demas booleanos empaquetados en el mismo DP --
+        # justo lo que el docstring promete que no puede pasar. Se convierte a
+        # bytes preservando su valor, en little-endian para que el indexado de
+        # bits coincida con `decode_bit` (byte 0 = byte menos significativo).
         try:
-            data = bytearray.fromhex(current_raw) if isinstance(current_raw, str) and current_raw else bytearray()
-        except ValueError:
+            if isinstance(current_raw, bool):
+                data = bytearray([1 if current_raw else 0])
+            elif isinstance(current_raw, int):
+                width = max(byte_idx + 1, (current_raw.bit_length() + 7) // 8 or 1)
+                data = bytearray(current_raw.to_bytes(width, "little"))
+            elif isinstance(current_raw, str) and current_raw:
+                data = bytearray.fromhex(current_raw)
+            else:
+                data = bytearray()
+        except (ValueError, OverflowError):
             data = bytearray()
         if len(data) <= byte_idx:
             data.extend(b"\x00" * (byte_idx + 1 - len(data)))

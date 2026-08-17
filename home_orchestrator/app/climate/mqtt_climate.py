@@ -19,6 +19,8 @@ import logging
 
 import ha_mqtt
 
+from . import presets
+
 DISCOVERY_PREFIX = "homeassistant"
 NODE_ID = "home_orchestrator_climate"
 
@@ -86,6 +88,18 @@ class MqttClimateZone:
         modes = (runner.hvac_modes if runner and runner.hvac_modes else
                  ["off", "heat_cool", "heat", "cool", "dry", "fan_only"])
         fan_modes = (runner.fan_modes if runner and runner.fan_modes else ["auto"])
+        # BUG REAL: esto estaba fijo en ["Automático", "Manual"], asi que los
+        # presets que declara el usuario (`presets_text` -> ZoneRunner.
+        # _preset_modes, p.ej. "Confort"/"Ausente") NUNCA se anunciaban a HA:
+        # no se podian seleccionar desde la entidad, y HA descarta un valor de
+        # estado que no este en la lista anunciada -- asi que al publicar
+        # `preset_mode` = "Confort" la entidad se quedaba incoherente. Es
+        # exactamente el mismo bug que ya se corrigio justo arriba para "modes"
+        # y "fan_modes"; los presets se quedaron sin arreglar.
+        preset_modes = (
+            runner._preset_modes if runner and getattr(runner, "_preset_modes", None)
+            else [presets.PRESET_AUTO, presets.PRESET_MANUAL]
+        )
         payload = {
             "name": None,  # con "name": None + has_entity_name via device, HA usa el nombre del dispositivo tal cual
             "unique_id": f"{NODE_ID}_{self.zone_id}",
@@ -123,7 +137,7 @@ class MqttClimateZone:
             "fan_modes": fan_modes,
             "fan_mode_state_topic": f"{t}/fan_mode/state",
             "fan_mode_command_topic": f"{t}/fan_mode/set",
-            "preset_modes": ["Automático", "Manual"],
+            "preset_modes": preset_modes,
             "preset_mode_state_topic": f"{t}/preset_mode/state",
             "preset_mode_command_topic": f"{t}/preset_mode/set",
             "action_topic": f"{t}/action/state",

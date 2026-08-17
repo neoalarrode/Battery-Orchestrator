@@ -133,8 +133,8 @@ PLUGIN_CATALOG = {
         "description": "Termostatos adaptativos por zona, expuestos como climate.* nativos de HA (HomeKit/Matter) vía MQTT Discovery",
         "version": "0.4.11",  # version PROPIA del plugin (ClimatePlugin.version) -- distinta de "tag", que es la version del REPO de la que se descarga
         "downloadable": True,
-        "tag": "v0.55.0",
-        "sha256": "2b6d8fb54668d2c5d5b210a71973aec5d2a26260fb88db95dc45f5e77e1d0b88",  # sha256 real del tarball de v0.55.0, verificado contra una descarga real antes de fijarlo aqui (hueco de descarga de bateria en _economic_factor)
+        "tag": "v0.57.0",
+        "sha256": "f5fb59cd341fce23b700431a097f23c989741b70951b64094a93983dde0cd05a",  # sha256 real del tarball de v0.57.0, verificado contra una descarga real antes de fijarlo aqui (worker de comandos MQTT + zone_store bajo el lock unico de config_store)
         "files": ["climate_plugin.py", "climate", "climate_templates"],
     },
     "tuya": {
@@ -142,8 +142,8 @@ PLUGIN_CATALOG = {
         "description": "Puente de ingesta para dispositivos Tuya-por-LAN — consumo interno por Climate y/o exposición opcional a HA por MQTT",
         "version": "0.4.7",
         "downloadable": True,
-        "tag": "v0.39.0",
-        "sha256": "7a588ad223aa72553c8982a41889de72f256ec6affaabac6fcd464c016e18e13",  # sha256 real del tarball de v0.39.0, verificado contra una descarga real antes de fijarlo aqui (rediseño: estetica de Dishylink)
+        "tag": "v0.57.0",
+        "sha256": "f5fb59cd341fce23b700431a097f23c989741b70951b64094a93983dde0cd05a",  # sha256 real del tarball de v0.57.0, verificado contra una descarga real antes de fijarlo aqui (worker de comandos MQTT: set_dp ya no bloquea el hilo de red de paho)
         "files": ["tuya_plugin.py", "tuya", "tuya_templates"],
     },
     "lighting": {
@@ -151,8 +151,8 @@ PLUGIN_CATALOG = {
         "description": "Iluminación adaptativa por zona — color y brillo por hora, encendido/apagado por presencia y reglas condicionales (p.ej. TV encendida -> luces laterales en vez del techo)",
         "version": "0.7.12",
         "downloadable": True,
-        "tag": "v0.45.0",
-        "sha256": "77d86e8fbd682c4913123846bd85d94c4cca60031ff347ec08592b4522207924",  # sha256 real del tarball de v0.45.0, verificado contra una descarga real antes de fijarlo aqui (fader tipo Apple Home/Hue para brillo/color)
+        "tag": "v0.57.0",
+        "sha256": "f5fb59cd341fce23b700431a097f23c989741b70951b64094a93983dde0cd05a",  # sha256 real del tarball de v0.57.0, verificado contra una descarga real antes de fijarlo aqui (eco de estado por MQTT + un snapshot vacio ya no apaga las luces)
         "files": ["lighting_plugin.py", "lighting", "lighting_templates"],
     },
     "tplink": {
@@ -160,8 +160,8 @@ PLUGIN_CATALOG = {
         "description": "Puente de ingesta para dispositivos TP-Link (Kasa/Tapo) vía python-kasa (misma librería que usa Home Assistant) — consumo interno por Lighting y/o exposición opcional a HA por MQTT",
         "version": "0.1.13",
         "downloadable": True,
-        "tag": "v0.39.0",
-        "sha256": "7a588ad223aa72553c8982a41889de72f256ec6affaabac6fcd464c016e18e13",  # sha256 real del tarball de v0.39.0, verificado contra una descarga real antes de fijarlo aqui (rediseño: estetica de Dishylink)
+        "tag": "v0.57.0",
+        "sha256": "f5fb59cd341fce23b700431a097f23c989741b70951b64094a93983dde0cd05a",  # sha256 real del tarball de v0.57.0, verificado contra una descarga real antes de fijarlo aqui (worker de comandos MQTT + store bajo el lock unico de config_store)
         "files": ["tplink_plugin.py", "tplink", "tplink_templates", "tplink_store.py"],
     },
     "starlink": {
@@ -169,8 +169,8 @@ PLUGIN_CATALOG = {
         "description": "Monitorización de tu Starlink (rendimiento, latencia, obstrucción, alineación, consumo) — build oficial de Dishylink, servido tal cual, con un proxy local al dish",
         "version": "0.3.1",
         "downloadable": True,
-        "tag": "v0.33.0",
-        "sha256": "546a54ad34ee4e34c84be20d3c06490d71afa6c3ba6942f3bbc21648fa26af90",  # sha256 real del tarball de v0.33.0, verificado contra una descarga real antes de fijarlo aqui (renombrado battery_orchestrator -> home_orchestrator, todas las descargas dependen de este tag ahora)
+        "tag": "v0.57.0",
+        "sha256": "f5fb59cd341fce23b700431a097f23c989741b70951b64094a93983dde0cd05a",  # sha256 real del tarball de v0.57.0, verificado contra una descarga real antes de fijarlo aqui (store bajo el lock unico de config_store, ya no puede borrar la config entera)
         "files": ["starlink_plugin.py", "starlink_store.py", "starlink_dist", "starlink_node"],
     },
     "govee": {
@@ -178,8 +178,8 @@ PLUGIN_CATALOG = {
         "description": "Puente de ingesta para bombillas Govee — LAN API local del propio dispositivo (sin cuenta ni nube) — consumo interno por Lighting y/o exposición opcional a HA por MQTT",
         "version": "0.1.0",
         "downloadable": True,
-        "tag": "v0.46.2",
-        "sha256": "8b5d102654f878a7fb0103e501e31d371652f8f46ed87ead2b242fd2d5d01813",  # sha256 real del tarball de v0.46.2, verificado contra una descarga real antes de fijarlo aqui (HOTFIX: OSError sin atrapar tiraba el addon entero abajo)
+        "tag": "v0.57.0",
+        "sha256": "f5fb59cd341fce23b700431a097f23c989741b70951b64094a93983dde0cd05a",  # sha256 real del tarball de v0.57.0, verificado contra una descarga real antes de fijarlo aqui (worker de comandos MQTT + store bajo el lock unico de config_store)
         "files": ["govee_plugin.py", "govee", "govee_templates", "govee_store.py"],
     },
     "shelly": {
@@ -187,8 +187,8 @@ PLUGIN_CATALOG = {
         "description": "Puente de ingesta para dispositivos Shelly — API local del propio fabricante (Gen1 HTTP / Gen2+ RPC), sin cuenta ni nube — consumo interno por Lighting y/o exposición opcional a HA por MQTT",
         "version": "0.1.2",
         "downloadable": True,
-        "tag": "v0.47.2",
-        "sha256": "e94d60a472fc2b63662cf2547d7573dfe3811fb1d30725cf88bdcd77f0a0512d",  # sha256 real del tarball de v0.47.2, verificado contra una descarga real antes de fijarlo aqui (timeout de barrido a 0.8s)
+        "tag": "v0.57.0",
+        "sha256": "f5fb59cd341fce23b700431a097f23c989741b70951b64094a93983dde0cd05a",  # sha256 real del tarball de v0.57.0, verificado contra una descarga real antes de fijarlo aqui (worker de comandos MQTT + store bajo el lock unico de config_store)
         "files": ["shelly_plugin.py", "shelly", "shelly_templates", "shelly_store.py"],
     },
 }

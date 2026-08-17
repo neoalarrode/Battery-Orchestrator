@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.57.1
+Climate, Tuya, Lighting, TP-Link, Starlink, Govee y Shelly re-pineados al tag `v0.57.0` — es lo que hace que los arreglos de esa versión (worker de comandos MQTT, stores bajo el lock único de `config_store`, apagado indebido de luces) lleguen de verdad a las instalaciones que descargan los plugins. sha256 `f5fb59cd…d05a`, calculado sobre el tarball real y verificado por duplicado (misma URL que usa `plugin_downloader` y su host de redirección dan los mismos bytes) antes de fijarlo; comprobado además que los 25 elementos de las listas `files` de esos siete plugins viajan dentro y que los arreglos están presentes en el código empaquetado.
+
+**Energy NO se re-pinea:** ninguno de los ficheros de su lista `files` ha cambiado en 0.57.0 — `config_store.py` y `ha_mqtt.py` (donde viven el lock único y el worker MQTT) son del **núcleo**, van en la imagen y no se descargan. Sigue apuntando a `v0.56.0` a propósito.
+
+Las versiones propias de los plugins se dejan como están, coincidiendo con lo que hay dentro del tarball pineado — subirlas en el catálogo sin subirlas en el código empaquetado crearía una discrepancia entre lo anunciado y lo que se descarga. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
+
 ## 0.57.0
 
 Tres arreglos de calado: pérdida de datos en la config compartida, apagado indebido de luces, y la lentitud del camino MQTT reportada por el usuario.

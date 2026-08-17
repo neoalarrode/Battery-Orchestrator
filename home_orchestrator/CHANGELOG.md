@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.56.1
+Energy re-pineado al tag `v0.56.0` (fix de arranque por `config.json` corrupto, escrituras atómicas en los 9 stores, previsión solar que borraba las horas a 0, tarifa plana clasificada como 100% valle y `TypeError` de `pv_source` que abortaba el ciclo) — resto sin cambios. Verificado con una descarga real antes de fijarlo: sha256 `460927d7…f609` calculado sobre el tarball real de `v0.56.0`, y comprobado que los 24 elementos de la lista `files` de Energy viajan dentro. Climate NO se re-pinea: su código propio (`climate_plugin.py`, `climate/`, `climate_templates/`) no ha cambiado en esta versión, así que sigue apuntando a `v0.55.0` a propósito. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
+
 ## 0.56.0
 
 **HOTFIX de arranque (crash-loop):** el add-on no arrancaba en absoluto — `json.decoder.JSONDecodeError: Extra data: line 877 column 1` al leer `/data/config.json`, tirando el proceso en `core_app.main()` antes de cargar ningún plugin.

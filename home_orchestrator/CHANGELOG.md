@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.55.1
+Energy y Climate re-pineados al tag `v0.55.0` (hueco de descarga de batería en la señal de red para Climate + fix live/forecast en solar_surplus_now_w) — resto sin cambios. Verificado con una descarga real antes de fijarlo. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
+
 ## 0.55.0
 Revisión a fondo del planificador de Climate a petición del usuario ("que tenga en cuenta precio, solar, baterías"). Dos hallazgos reales, ambos corregidos:
 

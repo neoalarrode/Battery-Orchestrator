@@ -113,10 +113,10 @@ PLUGIN_CATALOG = {
     "battery": {
         "name": "Energy Orchestrator",
         "description": "Baterías, solar y cargas diferibles — carga y descarga adaptativa por precio, sol y consumo real",
-        "version": "0.11.92",
+        "version": "0.11.93",
         "downloadable": True,
-        "tag": "v0.54.0",
-        "sha256": "da907bdaa3859c8c0af6298cc723eb25c9509a71f0c75218fe11eafb009b8a32",  # sha256 real del tarball de v0.54.0, verificado contra una descarga real antes de fijarlo aqui (fix energia cargas diferibles + salud baterias carga/descarga separadas)
+        "tag": "v0.55.0",
+        "sha256": "2b6d8fb54668d2c5d5b210a71973aec5d2a26260fb88db95dc45f5e77e1d0b88",  # sha256 real del tarball de v0.55.0, verificado contra una descarga real antes de fijarlo aqui (hueco de descarga de bateria en la senal de red + fix live/forecast en solar_surplus_now_w)
         "files": [
             "main.py", "battery_plugin.py", "battery_exec.py", "anomaly_store.py",
             "capacity_store.py", "climate_link.py", "deferrable_exec.py",
@@ -131,10 +131,10 @@ PLUGIN_CATALOG = {
     "climate": {
         "name": "Climate Orchestrator",
         "description": "Termostatos adaptativos por zona, expuestos como climate.* nativos de HA (HomeKit/Matter) vía MQTT Discovery",
-        "version": "0.4.10",  # version PROPIA del plugin (ClimatePlugin.version) -- distinta de "tag", que es la version del REPO de la que se descarga
+        "version": "0.4.11",  # version PROPIA del plugin (ClimatePlugin.version) -- distinta de "tag", que es la version del REPO de la que se descarga
         "downloadable": True,
-        "tag": "v0.48.0",
-        "sha256": "55a524d17fbc45bccaa27bc82e8cbb3150242327e30aa6c9136a88e42e3297a3",  # sha256 real del tarball de v0.48.0, verificado contra una descarga real antes de fijarlo aqui (fix real: ventilador del AC nunca escalaba a fuerte)
+        "tag": "v0.55.0",
+        "sha256": "2b6d8fb54668d2c5d5b210a71973aec5d2a26260fb88db95dc45f5e77e1d0b88",  # sha256 real del tarball de v0.55.0, verificado contra una descarga real antes de fijarlo aqui (hueco de descarga de bateria en _economic_factor)
         "files": ["climate_plugin.py", "climate", "climate_templates"],
     },
     "tuya": {

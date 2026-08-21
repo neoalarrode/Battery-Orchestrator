@@ -143,9 +143,13 @@ class MqttLightingZone:
 
     # ------------------------------------------------------------ estado --
 
-    def publish_state(self, runner) -> None:
+    def publish_state(self, runner, states: dict[str, dict] | None = None) -> None:
+        """`states`: lectura de HA ya hecha por quien llama. Se pasa hasta
+        `group_state` para que no pida su PROPIO volcado completo -- con varias
+        zonas eso suponia una lectura entera de HA extra por zona y por evento,
+        deshaciendo la lectura compartida del ciclo reactivo."""
         t = self._base
-        group = runner.group_state()
+        group = runner.group_state(states)
         self._mqtt.publish(f"{t}/state", "ON" if group["on"] else "OFF", retain=True)
         if group.get("brightness_pct") is not None:
             self._mqtt.publish(f"{t}/brightness/state", round(group["brightness_pct"]), retain=True)

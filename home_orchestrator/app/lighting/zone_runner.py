@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import logging
+import threading
 import time
 from collections import deque
 
@@ -80,6 +81,23 @@ class ZoneRunner:
         # prefijo, se tratan como si no existiera ese proveedor).
         self.bridges = bridges
         self._state = dict(state or {})
+
+        # BUG REAL (sintoma: "de vez en cuando deja de controlar"): esta zona es
+        # alcanzable desde CUATRO sitios a la vez y no habia ninguna
+        # sincronizacion --
+        #   - el worker del ciclo reactivo (LightingPlugin._run_reactive_cycle),
+        #   - el hilo periodico de la zona, y puede haber VARIOS por el fuga de
+        #     hilos al guardar una zona (ver LightingPlugin._periodic_loop),
+        #   - los hilos de Flask (/refresh, /manual_command),
+        #   - y el worker de comandos MQTT (ha_mqtt.MqttCommandWorker).
+        # Dos `decide_and_act` solapados deciden sobre el MISMO estado: uno
+        # puede estar apagando las luces fuera de la regla mientras el otro las
+        # enciende, y `_state["commanded"]`/`manual_override` son
+        # lectura-modificacion-escritura entre hilos (una marca de "tocada a
+        # mano" perdida deja una luz sin reajustar, o al contrario). Reentrante
+        # porque los caminos se anidan: manual_command -> after_command ->
+        # publish_state -> group_state, todo en el mismo hilo.
+        self._lock = threading.RLock()
 
         # El texto de reglas se parsea UNA vez al arrancar la zona (se
         # reinicia en cada guardado de config, ver
@@ -380,6 +398,13 @@ class ZoneRunner:
         modulo). Si no se da (arranque de zona, refresco manual desde la
         interfaz, reaplicacion periodica -- todos casos de UNA sola zona,
         sin nada que compartir), se lee aqui mismo, igual que siempre."""
+        # Serializa la decision: ver el comentario del lock en __init__ -- dos
+        # ciclos solapados (reactivo + periodico, o dos periodicos por la fuga
+        # de hilos) se pisaban apagando y encendiendo a la vez.
+        with self._lock:
+            self._decide_and_act_locked(states)
+
+    def _decide_and_act_locked(self, states: dict[str, dict] | None) -> None:
         cfg = self.zone
         now = time.time()
         states = states if states is not None else self._snapshot_states()
@@ -487,7 +512,31 @@ class ZoneRunner:
         self.active_rule = selected_name
         self._state["active_rule"] = selected_name
 
-        if transitioned and selected is not None:
+        if selected is not None:
+            # BUG REAL (sintoma: "de vez en cuando deja de controlar,
+            # manteniendo encendidas luces que no corresponde" -- p.ej. el techo
+            # del salon sin apagarse mientras las lamparas se encienden).
+            #
+            # Esto estaba condicionado a `transitioned`, es decir SOLO en el
+            # flanco: cambio de presencia, cambio de regla, o "acaba de
+            # oscurecer". Mientras la regla activa no cambiase, una luz fuera de
+            # ella que se encendiera por CUALQUIER otra via se quedaba encendida
+            # para siempre, porque nada volvia a mirar. Y hay varias vias:
+            #   - la luz de conjunto por MQTT/HomeKit: `manual_command` apunta a
+            #     `_target_lights()`, que devuelve TODAS las luces de la zona
+            #     cuando no hay regla activa resuelta -- un ON ahi enciende el
+            #     techo Y las lamparas a la vez,
+            #   - otra automatizacion de HA, o una persona,
+            #   - dos ciclos solapados con lecturas distintas (ver el lock).
+            # Deteccion de flanco para un estado que hay que MANTENER: si el
+            # flanco se pierde o el estado se desvia despues, no se recupera
+            # solo.
+            #
+            # Ahora se comprueba en cada ciclo, igual que ya hacia la rama de
+            # "hay luz natural de sobra" unas lineas mas abajo (cuyo comentario
+            # dice exactamente esto: "cada ciclo mientras siga claro, no solo la
+            # primera vez"). La regla activa pasa a ser una invariante que se
+            # mantiene, no un flanco que se aplica una vez.
             for entity_id in all_zone_lights - selected_lights:
                 if self._is_on(states, entity_id):
                     self._turn_off(entity_id)
@@ -591,7 +640,7 @@ class ZoneRunner:
                     )
         return rules.all_lights(self._rules), set(), set()
 
-    def group_state(self) -> dict:
+    def group_state(self, states: dict[str, dict] | None = None) -> dict:
         """Estado agregado para la luz dummy: ON si CUALQUIERA de las
         luces objetivo esta encendida ahora mismo; brillo/color = la
         curva solar ya calculada de la zona (`current_values`, ver
@@ -600,8 +649,16 @@ class ZoneRunner:
         (`_manual_brightness_pct`/`_manual_hs`, fijados desde la propia
         luz dummy via `manual_command`), que GANAN sobre la curva (nunca
         se reportan los dos a la vez, igual que nunca se mandan los dos a
-        la vez, ver `_apply_values`)."""
-        states = self._snapshot_states()
+        la vez, ver `_apply_values`).
+
+        BUG REAL de latencia: esto pedia SIEMPRE su propia lectura completa de
+        HA. El ciclo reactivo hace una sola lectura y la comparte entre zonas
+        (justo para no repetirla), pero despues llama a `publish_state` por
+        zona, y cada una acababa aqui pidiendo el volcado entero otra vez: con
+        7 zonas, 7 lecturas completas EXTRA por evento, deshaciendo la
+        optimizacion. Ahora se acepta el snapshot ya leido; solo se lee si
+        quien llama no tiene ninguno (una peticion HTTP suelta, por ejemplo)."""
+        states = states if states is not None else self._snapshot_states()
         target, _brightness_only, _on_off_only = self._target_lights()
         on = any(self._is_on(states, e) for e in target)
         vals = self.current_values or {}

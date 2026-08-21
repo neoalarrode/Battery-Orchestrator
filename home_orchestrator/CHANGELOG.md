@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.60.0
+
+Lighting: los dos síntomas reportados —tarda en responder, y de vez en cuando deja de controlar manteniendo encendidas luces que no corresponden— con sus causas separadas. Reproducido y verificado con las reglas reales del salón (TV → lámparas, reserva → techo).
+
+### "Deja de controlar": el apagado solo ocurría en el flanco
+
+Apagar las luces que **no** están en la regla activa estaba condicionado a `transitioned`, o sea solo cuando cambiaba la presencia, cambiaba la regla o acababa de oscurecer. Mientras la regla activa no cambiara, una luz fuera de ella que se encendiera por **cualquier otra vía** se quedaba encendida indefinidamente, porque nada volvía a mirar.
+
+Y hay varias vías: la **luz de conjunto por MQTT/HomeKit** (`manual_command` apunta a `_target_lights()`, que devuelve *todas* las luces de la zona cuando no hay regla resuelta — un ON ahí enciende el techo **y** las lámparas), otra automatización de HA, una persona, o dos ciclos solapados con lecturas distintas. Es detección de flanco para un estado que hay que **mantener**: si el flanco se pierde o el estado se desvía después, no se recupera solo.
+
+Ahora se comprueba en cada ciclo, igual que ya hacía la rama de "hay luz natural de sobra" (cuyo comentario decía exactamente eso: *"cada ciclo mientras siga claro, no solo la primera vez"*). La regla activa pasa a ser una invariante que se mantiene, no un flanco que se aplica una vez.
+
+**Cambio de comportamiento visible:** una luz fuera de la regla activa se apaga ahora en cada ciclo. Es lo pedido, pero implica que encender a mano una luz que la regla no contempla no se respeta — el proyecto ya respetaba el apagado manual (`auto_on` solo actúa en la transición), no el encendido fuera de regla.
+
+### "Tarda en responder": una lectura completa de HA extra por zona
+
+`group_state()` pedía **siempre** su propio `_snapshot_states()`. El ciclo reactivo hace una única lectura y la comparte entre zonas justo para no repetirla, pero después llama a `publish_state` por zona y cada una acababa releyendo HA entera: con 7 zonas, **7 volcados completos extra por evento**, deshaciendo la optimización. Ahora `group_state`/`publish_state` aceptan el snapshot ya leído; los caminos de una sola zona (refresh HTTP, comando manual, arranque, reaplicación periódica) siguen leyendo por su cuenta, que es correcto.
+
+### Dos amplificadores
+
+- **Fuga de hilos periódicos.** La condición de salida miraba solo el ID (`while zone_id in self._runners`). Al guardar una zona, `PUT` hace `_stop_zone` + `_start_zone` con el **mismo** id mientras el hilo duerme (hasta `reapply_minutes`, 5 min): al despertar se encontraba el id de vuelta y no salía nunca. Cada guardado dejaba un hilo más, todos reaplicando sobre la misma zona y reescribiendo la config completa a su ritmo. Ahora se compara la **identidad** del runner y se usa un `threading.Event` para salir en el acto. Verificado: 5 guardados dejan 1 hilo, no 5.
+- **Ningún lock en `ZoneRunner`**, siendo alcanzable desde el worker reactivo, los N hilos periódicos, los hilos de Flask (`/refresh`, `/manual_command`) y el worker de comandos MQTT. Dos `decide_and_act` solapados decidían sobre el mismo estado —uno apagando las luces fuera de la regla mientras el otro las encendía— y `_state["commanded"]`/`manual_override` eran lectura-modificación-escritura entre hilos. `RLock` porque los caminos se anidan (`manual_command` → `after_command` → `publish_state` → `group_state`).
+
 ## 0.59.1
 Energy re-pineado al tag `v0.59.0` — es lo que hace que los arreglos de esa versión lleguen a las instalaciones que descargan el plugin. sha256 `326146b7…2a49`, calculado sobre el tarball real y verificado antes de fijarlo; comprobado que los 24 elementos de su lista `files` viajan dentro y que los ocho arreglos están presentes en el código empaquetado.
 

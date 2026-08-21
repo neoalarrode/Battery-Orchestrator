@@ -49,6 +49,10 @@ class LightingPlugin(Plugin):
     def __init__(self) -> None:
         self._runners: dict[str, ZoneRunner] = {}
         self._mqtt_zones: dict[str, MqttLightingZone] = {}
+        # Una señal de parada por zona, para que su hilo periodico salga en el
+        # ACTO al pararla en vez de seguir durmiendo hasta `reapply_minutes`
+        # (ver `_periodic_loop`: ahi estaba la fuga de hilos).
+        self._zone_stops: dict[str, threading.Event] = {}
         self._ws = ha_websocket.HAWebSocketClient(self._on_entity_change)
         self._mqtt = ha_mqtt.HAMqttClient(client_id="home_orchestrator_lighting")
         # margen minimo casi nulo (no cero -- sigue haciendo falta un
@@ -331,9 +335,14 @@ class LightingPlugin(Plugin):
                 )
 
         reapply_minutes = int(cfg.get("reapply_minutes", DEFAULT_REAPPLY_MINUTES) or DEFAULT_REAPPLY_MINUTES)
+        # Señal propia de ESTA encarnacion de la zona: si se vuelve a arrancar
+        # (guardar la config hace stop+start), la anterior queda marcada y su
+        # hilo sale -- ver `_periodic_loop`.
+        stop = threading.Event()
+        self._zone_stops[zone_id] = stop
         threading.Thread(
             target=self._periodic_loop,
-            args=(zone_id, reapply_minutes),
+            args=(zone_id, reapply_minutes, runner, stop),
             name=f"lighting-periodic-{zone_id}",
             daemon=True,
         ).start()
@@ -345,9 +354,14 @@ class LightingPlugin(Plugin):
         if mqtt_zone:
             mqtt_zone.remove_discovery()
         self._runners.pop(zone_id, None)
+        # Despierta al hilo periodico de esta zona AHORA: antes se confiaba en
+        # que se auto-terminara al no encontrar su id en `_runners`, pero con un
+        # stop+start (guardar la zona) el id volvia antes de que despertara y el
+        # hilo se quedaba vivo para siempre. Ver `_periodic_loop`.
+        stop = self._zone_stops.pop(zone_id, None)
+        if stop is not None:
+            stop.set()
         self._refresh_watched_entities()
-        # el hilo periodico de esta zona se auto-termina al no
-        # encontrarse ya en self._runners (ver _periodic_loop)
 
     def _refresh_watched_entities(self) -> None:
         watched: set[str] = set()
@@ -399,7 +413,11 @@ class LightingPlugin(Plugin):
                 pending_states[zone_id] = runner.to_persisted_state()
                 mqtt_zone = self._mqtt_zones.get(zone_id)
                 if mqtt_zone:
-                    mqtt_zone.publish_state(runner)
+                    # Se pasa el snapshot COMPARTIDO: sin esto, `group_state`
+                    # pedia su propia lectura completa de HA por zona, una
+                    # entera extra por zona y por evento -- deshaciendo la
+                    # lectura unica que este ciclo hace justo arriba.
+                    mqtt_zone.publish_state(runner, states)
             except Exception:
                 log.exception("Fallo en ciclo reactivo de zona lighting %s", zone_id)
         try:
@@ -414,16 +432,30 @@ class LightingPlugin(Plugin):
 
     # ------------------------------------------------------------ periodo -
 
-    def _periodic_loop(self, zone_id: str, reapply_minutes: int) -> None:
+    def _periodic_loop(self, zone_id: str, reapply_minutes: int,
+                       runner: ZoneRunner, stop: threading.Event) -> None:
         # sin "stagger" deliberado (a diferencia de Climate, que sondea
         # historico de HA -- caro): reaplicar la curva de una zona de
         # luces es una llamada de servicio ligera, no hace falta repartir
         # el arranque de los hilos en el tiempo.
-        while zone_id in self._runners:
-            time.sleep(max(reapply_minutes, 1) * 60)
-            runner = self._runners.get(zone_id)
-            if runner is None:
-                return
+        #
+        # BUG REAL de fuga de hilos: antes la condicion de salida era
+        # `while zone_id in self._runners` mirando solo el ID. Al GUARDAR una
+        # zona, `PUT /api/zones/<id>` hace `_stop_zone` + `_start_zone` con el
+        # MISMO id mientras este hilo duerme (hasta `reapply_minutes`, 5 min por
+        # defecto): al despertar se encontraba el id de vuelta en `_runners` y
+        # NO salia nunca. Cada guardado dejaba un hilo periodico extra, todos
+        # reaplicando sobre la misma zona y reescribiendo la config completa a
+        # su ritmo -- y sin lock en el runner, pisandose entre ellos.
+        #
+        # Ahora se compara la IDENTIDAD del runner (no el id): si la zona se ha
+        # reiniciado, el objeto es otro y este hilo sale. Y `stop.wait()` en vez
+        # de `time.sleep()` para salir en el acto al pararla, sin quedarse
+        # colgado el resto del intervalo.
+        interval = max(reapply_minutes, 1) * 60
+        while not stop.wait(interval):
+            if self._runners.get(zone_id) is not runner:
+                return  # la zona se reinicio (o se borro): este hilo es el viejo
             try:
                 runner.handle_periodic_reapply()
                 zone_store.update_zone_state(zone_id, runner.to_persisted_state())

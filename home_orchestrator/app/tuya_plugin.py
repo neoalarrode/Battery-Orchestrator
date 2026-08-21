@@ -215,11 +215,42 @@ class TuyaPlugin(Plugin):
         try:
             self._manager.add_device(
                 cfg["device_id"], cfg["address"], cfg["local_key"],
-                cfg.get("protocol_version", "3.3"), cfg.get("profile_yaml", ""),
+                # BUG REAL, visto en produccion: `NotImplementedError: Tuya
+                # protocol  is not implemented` -- con DOS espacios, porque la
+                # version llegaba VACIA, no invalida. `.get(clave, "3.3")`
+                # devuelve el default solo si la clave FALTA; si esta presente
+                # con "" (un alta manual con el campo en blanco, y
+                # `tuya_store.load_devices` hace `merged.update(config)`, asi
+                # que ese "" machaca el "3.3" de DEFAULT_DEVICE_CONFIG)
+                # devolvia "" y el dispositivo no arrancaba nunca. Con `or` se
+                # cubren "" y None. El alta por descubrimiento ya lo hacia bien
+                # (ver `discovered.version or "3.3"` mas arriba).
+                cfg.get("protocol_version") or "3.3",
+                cfg.get("profile_yaml") or "",
             )
         except Exception:
             log.exception("Fallo conectando al dispositivo Tuya '%s'", cfg.get("name") or cfg["device_id"])
-            return
+            # BUG REAL: este `return` se saltaba el bloque de MQTT de abajo, asi
+            # que un dispositivo apagado o que no responde al arrancar NUNCA
+            # recibia su entidad en HA -- ni siquiera cuando el bucle de
+            # reconexion lo levantaba minutos despues, porque nadie volvia a
+            # publicar su discovery. Habia que reiniciar el add-on.
+            #
+            # Un fallo de CONEXION (timeout) no es un fallo de ALTA: el
+            # dispositivo ya quedo registrado en el manager antes de intentar
+            # conectar, y `_reconnect_loop` lo va a seguir intentando. En ese
+            # caso se sigue adelante y se publica la entidad, que simplemente
+            # empieza como no disponible. Si el alta fallo ANTES de registrarlo
+            # (p.ej. version de protocolo invalida), no hay nada que exponer y
+            # se sale de verdad. `profile()` es el discriminador: se rellena
+            # justo tras registrar el dispositivo y antes de conectar.
+            if self._manager.profile(cfg["device_id"]) is None:
+                return
+            log.info(
+                "Dispositivo Tuya '%s' registrado pero sin conectar todavia -- se expone en HA "
+                "igualmente (empezara como no disponible) y el bucle de reconexion sigue "
+                "intentandolo", cfg.get("name") or cfg["device_id"],
+            )
 
         if cfg.get("expose_mqtt"):
             mqtt_dev = MqttTuyaDevice(self._mqtt, self._manager, cfg["device_id"], cfg.get("name") or cfg["device_id"])

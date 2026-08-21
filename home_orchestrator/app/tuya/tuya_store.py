@@ -52,6 +52,15 @@ def load_devices() -> list[dict]:
         for d in devices:
             merged = dict(DEFAULT_DEVICE_CONFIG)
             merged.update(d.get("config") or {})
+            # `update` deja pasar los valores VACIOS guardados, que machacan el
+            # default en vez de caer a el: un alta manual con el campo de
+            # version en blanco guardaba "" y el dispositivo no arrancaba nunca
+            # (`NotImplementedError` con la version vacia, ver
+            # tuya_lan.TuyaLocalDevice). Para los campos con un default que de
+            # verdad sirve, un valor vacio se trata como "no indicado".
+            for key in ("protocol_version",):
+                if not merged.get(key):
+                    merged[key] = DEFAULT_DEVICE_CONFIG[key]
             d["config"] = merged
         return devices
 

@@ -204,9 +204,16 @@ class TuyaLocalDevice:
         on_update: Callable[[dict[int, Any]], None] | None = None,
     ) -> None:
         if protocol_version not in ("3.1", "3.2", "3.3", "3.4", "3.5"):
+            # El caso VACIO se distingue del invalido: era el que se daba de
+            # verdad (un alta manual con el campo en blanco) y el mensaje
+            # quedaba como "Tuya protocol  is not implemented", con dos
+            # espacios y sin pista de que el valor estaba vacio.
+            what = f"'{protocol_version}'" if protocol_version else "vacia (no indicada)"
             raise NotImplementedError(
-                f"Tuya protocol {protocol_version} is not implemented "
-                "(supported: 3.1, 3.2, 3.3, 3.4, 3.5)."
+                f"Version de protocolo Tuya {what} no soportada "
+                "(validas: 3.1, 3.2, 3.3, 3.4, 3.5). Revisa el campo "
+                "'protocol_version' de este dispositivo; si no lo sabes, 3.3 es "
+                "lo mas habitual."
             )
         self.device_id = device_id
         self.address = address

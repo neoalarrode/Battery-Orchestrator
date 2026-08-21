@@ -19,16 +19,61 @@ Cada condicion es `{"entity_id": str, "state": str | [str] | None}`:
 from __future__ import annotations
 
 
+def _split_target(target: str) -> tuple[str, str | None]:
+    """«media_player.tv» -> ("media_player.tv", None)
+    «media_player.tv.media_content_type» -> ("media_player.tv", "media_content_type")
+
+    Un entity_id de HA es siempre `dominio.objeto` (UN punto), asi que todo lo
+    que venga a partir del segundo punto es el nombre del atributo. Con dos
+    trozos o menos no hay atributo: se compara el ESTADO, como siempre."""
+    parts = target.split(".")
+    if len(parts) <= 2:
+        return target, None
+    return ".".join(parts[:2]), ".".join(parts[2:])
+
+
 def _condition_matches(cond: dict, states: dict[str, dict]) -> bool:
     entity_id = cond.get("entity_id")
     if not entity_id:
         return True
-    actual = (states.get(entity_id) or {}).get("state")
+    st = states.get(entity_id) or {}
+    attribute = cond.get("attribute")
+    negate = bool(cond.get("negate"))
+
+    if attribute:
+        actual = (st.get("attributes") or {}).get(attribute)
+        # Un atributo AUSENTE es "sin dato", igual que una entidad no
+        # disponible: ver el porque justo debajo.
+        no_data = actual is None
+    else:
+        actual = st.get("state")
+        no_data = actual in (None, "unavailable", "unknown")
+
     wanted = cond.get("state")
     if wanted is None:
-        return actual not in (None, "unavailable", "unknown")
+        # «si entidad» sin valor: la condicion es "existe y se puede leer".
+        return no_data == negate
+
+    # SIN DATO no coincide NUNCA, ni en afirmativo ni en negativo. En
+    # afirmativo ya era asi de hecho (`None in ["playing"]` es False); lo que
+    # se decide aqui es el caso NUEVO, el negativo: una entidad no disponible
+    # NO cumple un «!=», porque dar por bueno algo que no se puede comprobar es
+    # justo lo que haria que una regla se disparase sola cuando HA tiene un
+    # hipo. Mismo criterio que el resto del proyecto con los datos ausentes
+    # (nunca un cero/True inventado).
+    if no_data:
+        return False
+
     wanted_list = wanted if isinstance(wanted, list) else [wanted]
-    return actual in wanted_list
+    actual_str = actual if isinstance(actual, str) else str(actual)
+    match = actual_str in wanted_list
+    if not match and attribute:
+        # Los atributos, a diferencia de los estados, no son siempre texto en
+        # minusculas (numeros, booleanos, nombres propios) -- se compara sin
+        # distinguir mayusculas SOLO en esta rama, para no cambiar en nada el
+        # comportamiento de siempre de los estados.
+        match = actual_str.lower() in [str(w).lower() for w in wanted_list]
+    return match != negate
 
 
 def select_rule(rules: list[dict], states: dict[str, dict]) -> dict | None:
@@ -105,6 +150,17 @@ def parse_rules_text(text: str) -> list[dict]:
       condiciones en la misma regla van en AND). Varios valores separados
       por comas significan "cualquiera de estos" (OR dentro de esa
       condicion).
+    - «si entidad!=valor» es la NEGACION: coincide cuando el estado no es
+      ninguno de los valores dados.
+    - «si entidad.atributo=valor» (y su «!=») compara un ATRIBUTO en vez del
+      estado. El entity_id es siempre `dominio.objeto`, asi que lo que venga a
+      partir del segundo punto es el nombre del atributo -- p.ej.
+      «si media_player.salon_tv.media_content_type!=music» para que la regla
+      NO se aplique cuando lo que suena es musica.
+    - Una entidad no disponible (o un atributo ausente) NO cumple ninguna
+      condicion, ni afirmativa ni negativa: dar por bueno un «!=» que no se
+      puede comprobar haria que la regla se disparase sola cada vez que HA
+      tuviera un hipo.
     - El trozo «luces=...» (obligatorio, al menos una) es la lista de
       `light.*` que controla esta regla. Una luz puede llevar el sufijo
       «:solo_brillo» («light.x:solo_brillo») para excluirla del cambio de
@@ -145,14 +201,25 @@ def parse_rules_text(text: str) -> list[dict]:
             low = chunk.lower()
             if low.startswith("si "):
                 cond_str = chunk[3:].strip()
-                if "=" not in cond_str:
-                    raise ValueError(f"«{chunk}» no tiene el formato «si entidad=valor» en la regla «{name}»")
-                entity_id, values_str = cond_str.split("=", 1)
-                entity_id = entity_id.strip()
+                # «!=» se comprueba ANTES que «=», porque lo contiene.
+                negate = "!=" in cond_str
+                sep = "!=" if negate else "="
+                if sep not in cond_str:
+                    raise ValueError(
+                        f"«{chunk}» no tiene el formato «si entidad=valor» (o «!=») en la regla «{name}»"
+                    )
+                target, values_str = cond_str.split(sep, 1)
+                target = target.strip()
                 values = [v.strip() for v in values_str.split(",") if v.strip()]
-                if not entity_id or not values:
+                if not target or not values:
                     raise ValueError(f"«{chunk}» no es una condicion valida en la regla «{name}»")
-                conditions.append({"entity_id": entity_id, "state": values[0] if len(values) == 1 else values})
+                entity_id, attribute = _split_target(target)
+                conditions.append({
+                    "entity_id": entity_id,
+                    "attribute": attribute,
+                    "state": values[0] if len(values) == 1 else values,
+                    "negate": negate,
+                })
             elif low.startswith("luces="):
                 entries = [e.strip() for e in chunk[len("luces="):].split(",") if e.strip()]
                 lights = []
@@ -190,7 +257,10 @@ def rules_to_text(rule_list: list[dict]) -> str:
         for c in r.get("conditions") or []:
             state = c.get("state")
             state_str = ",".join(state) if isinstance(state, list) else (state or "")
-            chunks.append(f"si {c.get('entity_id', '')}={state_str}")
+            target = c.get("entity_id", "")
+            if c.get("attribute"):
+                target = f"{target}.{c['attribute']}"
+            chunks.append(f"si {target}{'!=' if c.get('negate') else '='}{state_str}")
         brightness_only = set(r.get("brightness_only") or [])
         on_off_only = set(r.get("on_off_only") or [])
         light_entries = []

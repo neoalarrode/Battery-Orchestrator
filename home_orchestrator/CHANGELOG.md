@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.61.0
+
+### Tuya: dos fallos de arranque vistos en el log
+
+**`NotImplementedError: Tuya protocol  is not implemented`** — con dos espacios, porque la versión llegaba **vacía**, no inválida. `cfg.get("protocol_version", "3.3")` devuelve el valor por defecto solo si la clave **falta**; con `""` guardado (un alta manual con el campo en blanco, y `tuya_store.load_devices` hace `merged.update(config)`, así que ese `""` machaca el `"3.3"` de `DEFAULT_DEVICE_CONFIG`) devolvía `""` y el dispositivo no arrancaba nunca. El alta por descubrimiento ya lo hacía bien (`discovered.version or "3.3"`).
+
+Arreglado en tres capas: normalización al cargar del store (limpia también los que ya estaban mal en disco, sin migración), `or "3.3"` en el punto de uso, y el mensaje de error ahora distingue *"vacía (no indicada)"* de una versión inválida de verdad, y sugiere el valor habitual.
+
+**Un dispositivo que no responde al arrancar no recibía su entidad en HA.** Al capturar el `TimeoutError` se hacía `return`, saltándose el bloque de MQTT — y nadie volvía a publicar su discovery aunque el bucle de reconexión lo levantara minutos después: había que reiniciar el add-on. Ahora se distingue un fallo de **conexión** (el dispositivo ya quedó registrado y se va a reintentar → se expone igualmente, empieza como no disponible) de un fallo de **alta** (nada que exponer → se sale).
+
+### Lighting: negación y atributos en las reglas
+
+Las condiciones solo podían comparar el **estado** con una igualdad. No había forma de expresar "cuando la TV reproduce algo que **no** sea música", porque `media_content_type` es un **atributo** y no existía negación.
+
+- `si entidad!=valor[,valor2]` — negación.
+- `si entidad.atributo=valor` y su `!=` — compara un atributo. Como un `entity_id` es siempre `dominio.objeto`, lo que venga a partir del segundo punto es el nombre del atributo.
+
+```
+Video; si media_player.apple_tv_4k=playing,paused; si media_player.apple_tv_4k.media_content_type!=music; luces=light.lampara_izq,light.lampara_der
+Normal; luces=light.techo_salon
+```
+
+**Lo de siempre no cambia:** los estados se siguen comparando en exacto. La tolerancia a mayúsculas y a valores no textuales (números, booleanos) aplica solo a la rama de atributos, que es donde hace falta.
+
+**Decisión de diseño:** una entidad no disponible, o un atributo ausente, **no cumple ninguna condición — ni afirmativa ni negativa**. En afirmativo ya era así de hecho; lo nuevo es el negativo. Si un `!=` se cumpliera con "no hay dato", cada hipo del WebSocket de HA dispararía la regla sola, y más ahora que la zona mantiene la invariante en cada ciclo (ver 0.60.0). El textarea sigue cuadrando: el ida y vuelta con `!=` y atributos está verificado.
+
 ## 0.60.1
 Lighting re-pineado al tag `v0.60.0` — es lo que hace que los arreglos de esa versión lleguen a las instalaciones que descargan el plugin. sha256 `54376a31…4ba0`, calculado sobre el tarball real y verificado antes de fijarlo; comprobado que los 3 elementos de su lista `files` viajan dentro y que los cinco arreglos están presentes en el código empaquetado.
 

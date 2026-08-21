@@ -74,6 +74,41 @@ def accumulate(battery_id: str, battery_name: str, charged_wh: float, discharged
     _save(data)
 
 
+def rescale_to_aggregate(battery_ids: list[str], target_charged_wh: float,
+                         target_discharged_wh: float) -> dict:
+    """Reescala los acumulados de estas baterias para que su SUMA sea la
+    indicada, conservando el reparto relativo que ya tenian.
+
+    Necesario para deshacer una contabilizacion inflada sin tirar el historico:
+    la potencia que reportan las baterias EcoFlow de un grupo enlazado es la
+    del GRUPO (no la de cada unidad), asi que antes de la desduplicacion CADA
+    bateria declarada sumaba el total del grupo -- con N unidades, el agregado
+    salia Nx. Reescalar al total correcto arregla el agregado (que es lo que
+    consume el Panel de Energia) sin inventar una atribucion por unidad que los
+    datos no permiten conocer.
+
+    Si todas las entradas estaban infladas por igual (el caso tipico), el
+    reparto proporcional deja a cada una con su parte correspondiente."""
+    with _lock:
+        data = _load()
+        cur_charged = sum(data.get(bid, {}).get("charged_wh", 0.0) for bid in battery_ids)
+        cur_discharged = sum(data.get(bid, {}).get("discharged_wh", 0.0) for bid in battery_ids)
+        for bid in battery_ids:
+            entry = data.get(bid)
+            if entry is None:
+                continue
+            if cur_charged > 0:
+                entry["charged_wh"] = entry.get("charged_wh", 0.0) / cur_charged * max(0.0, target_charged_wh)
+            if cur_discharged > 0:
+                entry["discharged_wh"] = entry.get("discharged_wh", 0.0) / cur_discharged * max(0.0, target_discharged_wh)
+            data[bid] = entry
+        _save(data)
+        return {
+            "before": {"charged_wh": cur_charged, "discharged_wh": cur_discharged},
+            "after": {"charged_wh": target_charged_wh, "discharged_wh": target_discharged_wh},
+        }
+
+
 def get_health(battery_id: str, capacity_wh: float, display_id: str | None = None) -> dict | None:
     data = _load()
     entry = data.get(battery_id)

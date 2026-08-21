@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.59.0
+
+Sobrecontabilización en el Panel de Energía y atribución de las baterías EcoFlow en grupo. Todo verificado contra una cuenta EcoFlow real (sistema STREAM de 4 unidades en modo Híbrido) y con pruebas ejecutadas.
+
+### La potencia de un grupo EcoFlow se contaba una vez POR BATERÍA
+
+`battery_power` del puente BLE es la potencia del **grupo entero**, no de la unidad — el comentario del código afirmaba lo contrario. Encaja con el convenio del propio puente, que ya distingue `battery_level` (grupo) de `battery_level_main` (unidad): `battery_power`, sin sufijo `_main`, es del grupo. Cloud tenía desduplicación por grupo desde siempre; BLE no.
+
+Con 4 unidades declaradas, **todo lo que salía de esa suma iba ×4**: el `sensor.battery_orchestrator_power` publicado a HA (que además alimenta `true_load_forecast`, así que corrompía la previsión histórica de consumo), el diagrama de flujo, la reconstrucción de consumo en modo *combined*, el margen de descarga que lee Climate, y los acumulados del Panel de Energía. Ahora se cuenta una vez por grupo en los dos canales. El SOC sigue leyéndose por unidad, que sí es correcto.
+
+En Bluetooth **puro** el grupo no es determinable (el alta por BLE deja `ecoflow_main_sn` con el SN propio de cada unidad), así que en ese caso se cuenta por separado —comportamiento anterior— y se avisa en el log en vez de fallar en silencio. En Híbrido/Cloud la API resuelve el grupo y la desduplicación es exacta.
+
+### `cmsBattSoc = 0.0` se tomaba como un 0% real
+
+Confirmado contra la cuenta real: las unidades **esclavas** devuelven `cmsBattSoc = 0.0` porque ese campo es del **sistema** y solo lo rellena la principal (que reporta `cmsBattSoc=40` junto a su propio `bmsBattSoc=45`, dejando claro que son dos cosas distintas). Como `0.0` no es `None`, se aceptaba: tres de cuatro baterías se veían vacías, por debajo de `min_soc_pct`, con la descarga bloqueada y pidiendo carga desde red estando llenas.
+
+Y la ventana no era corta: el feed MQTT (que sí trae `bmsBattSoc` por unidad) solo empuja **cambios**, y al ser entero una unidad no aparece hasta moverse un 1% completo — así que tras cada reinicio se tira del REST durante minutos. El mismo bug estaba **duplicado** en `main.py`, con un extra: el `break` estaba fuera del `try/except`, así que si `float()` fallaba se salía del bucle sin probar los campos siguientes. Los campos por unidad se siguen aceptando a 0 (una batería vacía de verdad debe saberse para que se cargue), pero se avisa en el log.
+
+### Sobrecontabilización de la red importada
+
+- **La atribución solar/red usaba la etiqueta del planificador**, todo o nada: si decía `"grid"`, la carga entera se contaba como importada aunque el sol la estuviera cubriendo. Y ese número alimenta un `total_increasing`, así que el error se integraba para siempre. `/api/live` ya lo calculaba físicamente y su propio comentario lo llamaba *"más preciso"*; se arregló ahí y el acumulado se quedó con el método viejo. Ahora usan la misma fórmula.
+- **Teniendo medidor de red real, la importación se reconstruía.** Era asimétrico: el vertido ya salía del sensor real y la importación de una reconstrucción a partir de consumo/solar/batería — justo por donde entraba el ×4. Con `net_grid_sensor` declarado se usa la lectura exacta.
+- **Signos sin acotar** en `grid_energy_store`: un medidor que reporte el vertido en negativo **restaba** del acumulado, y HA interpreta un `total_increasing` que baja como reset de contador.
+
+Con los números reales de la instalación de prueba (solar 257 W, consumo 1138 W, batería cargando 744 W en grupo), la importación pasaba de contabilizar **3857 W a los 1625 W reales**.
+
+### Reconstrucción del histórico
+
+`/api/energy/backfill_history` pasa de 2 a **5 series**: batería cargada/descargada, red importada/vertida y solar. Reconstruye desde `history_store` con la fórmula correcta y **alinea los acumuladores locales** con el resultado (nuevos `grid_energy_store.set_totals`, `solar_energy_store.set_total_wh` y `lifetime_store.rescale_to_aggregate`) — sin eso, el sensor seguiría contando desde el total inflado y la siguiente publicación metería un salto en la gráfica recién corregida.
+
+Tres límites, explícitos en la respuesta del endpoint: la base son los valores del **planificador** (`history_store`), no lecturas medidas —limpios del ×4, eso sí, porque nunca pasaron por la lectura en vivo—; solo hay **8 días** de detalle horario y lo anterior se descarta a propósito (el acumulado viejo estaba contaminado y no hay forma de saber qué parte era buena); y para la batería se **reescala el agregado conservando el reparto** relativo, porque una atribución por unidad no es posible con lo que exponen los dos canales.
+
 ## 0.58.1
 Energy, Climate, Tuya, TP-Link, Govee y Shelly re-pineados al tag `v0.58.0` — es lo que hace que los arreglos de esa versión lleguen de verdad a las instalaciones que descargan los plugins. sha256 `2cff5377…e1f6`, calculado sobre el tarball real y verificado antes de fijarlo; comprobado además que los ficheros de sus listas `files` viajan dentro del tarball y que los arreglos están presentes en el código empaquetado.
 

@@ -84,6 +84,14 @@ def accumulate(now: datetime, imported_w: float | None, exported_w: float | None
                 last = datetime.fromisoformat(last_iso)
                 dt_hours = max(0.0, (now - last).total_seconds()) / 3600.0
                 if dt_hours <= MAX_INTEGRATION_GAP_HOURS:
+                    # Se acota el signo: estos dos acumulados se publican como
+                    # `total_increasing` y HA interpreta un `total_increasing`
+                    # que BAJA como un reset de contador (con el salto que eso
+                    # mete en las graficas del Panel de Energia). `exported_w`
+                    # sale del sensor CRUDO del usuario, y un medidor que
+                    # reporte el vertido en negativo restaba del acumulado.
+                    imported_w = max(0.0, imported_w or 0.0)
+                    exported_w = max(0.0, exported_w or 0.0)
                     if imported_w:
                         data["imported_kwh"] += (imported_w / 1000.0) * dt_hours
                     if exported_w:
@@ -91,6 +99,24 @@ def accumulate(now: datetime, imported_w: float | None, exported_w: float | None
             except ValueError:
                 pass
         data["last_update"] = now.isoformat()
+        _save(data)
+        return data
+
+
+def set_totals(imported_kwh: float, exported_kwh: float, since: str | None = None) -> dict:
+    """Fija los dos acumulados a valores concretos -- para dejarlos alineados
+    con un historico recien reconstruido (ver `/api/energy/backfill_history`).
+
+    Tambien reinicia `last_update`: la siguiente vuelta de `accumulate` solo
+    fija el punto de partida sin integrar el hueco, para no sumar de golpe el
+    tiempo que haya pasado durante la reconstruccion."""
+    with _lock:
+        data = _load()
+        data["imported_kwh"] = max(0.0, float(imported_kwh))
+        data["exported_kwh"] = max(0.0, float(exported_kwh))
+        data["last_update"] = None
+        if since is not None:
+            data["since"] = since
         _save(data)
         return data
 

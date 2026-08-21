@@ -191,6 +191,45 @@ def _watched_entities_from_cfg(cfg: dict) -> set[str]:
     return watched
 
 
+_ecoflow_group_key_warned: set[str] = set()
+
+
+def _ecoflow_group_key(b: dict, address: str | None) -> str:
+    """Identificador del GRUPO enlazado al que pertenece esta bateria EcoFlow.
+
+    Hace falta porque la potencia que reportan tanto BLE (`battery_power`) como
+    Cloud (`powGetBpCms`) es la del grupo entero, no la de la unidad: sin
+    agrupar, cada bateria declarada suma el mismo dato otra vez.
+
+    En modo `hybrid`/`cloud`, `ecoflow_main_sn` lo resuelve la propia API
+    (`get_main_sn`) y es el identificador real del grupo -- todas las unidades
+    enlazadas comparten el mismo. En BLE PURO no hay forma de saberlo: el alta
+    por Bluetooth hace `setdefault("ecoflow_main_sn", sn)` (ver
+    `_reconcile_ecoflow_sn_from_ble`), asi que cada unidad acaba con su propio
+    SN como main_sn. En ese caso se devuelve una clave propia por unidad, que
+    equivale a NO agrupar (comportamiento anterior) y se avisa una vez: es
+    preferible a inventarse un grupo que no se puede verificar, pero deja el
+    problema visible en el log en vez de en silencio."""
+    main_sn = b.get("ecoflow_main_sn")
+    own_sn = b.get("ecoflow_sn")
+    if main_sn and main_sn != own_sn:
+        return main_sn  # grupo resuelto por la API: varias unidades lo comparten
+    if main_sn and own_sn and main_sn == own_sn:
+        # Puede ser la unidad PRINCIPAL de un grupo (correcto) o una unidad de
+        # BLE puro cuyo main_sn se relleno con su propio SN (no agrupable).
+        return main_sn
+    key = own_sn or address or b.get("id") or ""
+    if b.get("ecoflow_mode") == "bluetooth" and key and key not in _ecoflow_group_key_warned:
+        _ecoflow_group_key_warned.add(key)
+        log.warning(
+            "Bateria EcoFlow en modo Bluetooth sin `ecoflow_main_sn` resuelto: no se puede "
+            "saber a que grupo pertenece, asi que su potencia se cuenta por separado. Si "
+            "tienes varias unidades ENLAZADAS en modo Bluetooth puro, el total puede salir "
+            "multiplicado -- pasalas a modo Hibrido para que la API resuelva el grupo.",
+        )
+    return key
+
+
 def _live_battery_charge_discharge_w(batteries_cfg: list[dict], cfg: dict) -> tuple[float, float, bool]:
     """
     Carga y descarga TOTAL de todas las baterias AHORA MISMO, leido en vivo
@@ -231,10 +270,29 @@ def _live_battery_charge_discharge_w(batteries_cfg: list[dict], cfg: dict) -> tu
             ecoflow_mode = b.get("ecoflow_mode")
             if ecoflow_mode in ("bluetooth", "hybrid"):
                 address, user_id = b.get("ecoflow_ble_address"), cfg.get("ecoflow_user_id")
-                if address and user_id:
+                # BUG REAL, reportado por el usuario y confirmado contra su
+                # sistema STREAM de 4 unidades: `battery_power` del puente BLE es
+                # la potencia del GRUPO ENTERO, no de esta unidad -- el
+                # comentario de arriba afirmaba lo contrario. Encaja con el
+                # convenio del propio puente, que ya distingue `battery_level`
+                # (grupo) de `battery_level_main` (unidad): `battery_power`, sin
+                # sufijo `_main`, es el del grupo.
+                #
+                # Sin desduplicar, CADA bateria declarada del grupo sumaba la
+                # potencia completa: con 4 unidades, todo lo que depende de esta
+                # suma salia x4 -- el sensor de potencia publicado a HA (que
+                # ademas alimenta `true_load_forecast`), el flujo de energia, la
+                # reconstruccion de consumo en modo "combined" y los totales del
+                # Panel de Energia. Se cuenta UNA vez por grupo, igual que ya se
+                # hacia con el agregado de Cloud.
+                group_key = _ecoflow_group_key(b, address)
+                if group_key in ecoflow_main_sns_counted:
+                    pass  # el grupo ya aporto su potencia en otra bateria de esta vuelta
+                elif address and user_id:
                     state = ecoflow_ble.get_state(address, user_id)
                     if state and state.get("battery_power") is not None:
                         net_power = float(state["battery_power"])
+                        ecoflow_main_sns_counted.add(group_key)
             if net_power is None and ecoflow_mode in ("cloud", "hybrid"):
                 main_sn = b.get("ecoflow_main_sn")
                 access_key, secret_key = cfg.get("ecoflow_access_key"), cfg.get("ecoflow_secret_key")
@@ -869,17 +927,33 @@ def run_cycle():
     flow_load_w = live_base_load_w if live_base_load_w is not None else now_hp.load_w
     flow_charge_w = live_charge_w if live_battery_data_ok else now_hp.charge_w
     flow_discharge_w = live_discharge_w if live_battery_data_ok else now_hp.discharge_w
-    # La FUENTE de la carga (solar vs red) no se puede medir en vivo con un
-    # sensor generico — es una decision que ya tomó el planificador este
-    # mismo ciclo (`now_hp.charge_source`) y que `battery_exec.execute` ya
-    # aplicó de verdad; se reutiliza esa atribución tal cual, solo con el
-    # VATIAJE corregido a la lectura en vivo.
+    # BUG REAL de sobrecontabilizacion en el Panel de Energia: la atribucion
+    # solar/red de la carga se hacia con la ETIQUETA del planificador
+    # (`now_hp.charge_source`), todo o nada -- si decia "grid", la carga ENTERA
+    # se contaba como importada de red aunque el sol la estuviera cubriendo en
+    # ese momento. Y este numero es el que alimenta el acumulado
+    # `grid_imported_energy`, asi que el error no se quedaba en el diagrama: se
+    # integraba para siempre en un sensor `total_increasing`.
+    #
+    # `/api/live` ya lo calculaba BIEN (fisicamente: lo que el excedente solar
+    # cubre va a solar, el resto a red) y su propio comentario lo dice: "mas
+    # preciso y sin ninguna dependencia del ciclo". Se arreglo alli y el
+    # acumulado se quedo con el metodo viejo. Aqui se usa la misma formula.
     solar_to_casa_w = min(flow_pv_w, flow_load_w)
-    solar_to_batt_w = flow_charge_w if now_hp.charge_source == "solar" else 0.0
-    grid_to_batt_w = flow_charge_w if now_hp.charge_source == "grid" else 0.0
+    solar_surplus_w = max(0.0, flow_pv_w - flow_load_w)
+    solar_to_batt_w = min(solar_surplus_w, flow_charge_w)
+    grid_to_batt_w = max(0.0, flow_charge_w - solar_to_batt_w)
     batt_to_casa_w = flow_discharge_w
     grid_to_casa_w = max(0.0, flow_load_w - solar_to_casa_w - batt_to_casa_w)
     grid_total_w = grid_to_casa_w + grid_to_batt_w
+    # Si hay un medidor de red REAL (modo "combined"), su lectura es la
+    # importacion exacta -- no hace falta reconstruirla a partir de
+    # consumo/solar/bateria, que acumula el error de las tres. Era asimetrico:
+    # el VERTIDO ya salia del sensor real (ver `_live_export_w`) mientras la
+    # IMPORTACION se reconstruia, y era justo por donde entraba el error de la
+    # potencia de bateria.
+    if net_grid_now_w is not None:
+        grid_total_w = max(0.0, net_grid_now_w)
     energy_needed_now_w = flow_load_w + flow_charge_w
     autoconsumo_pct = 100.0
     if energy_needed_now_w > 0:
@@ -1553,12 +1627,15 @@ def _live_battery_totals(cfg: dict, *, fresh: bool = False) -> dict:
         source = b.get("source") or "ha"
 
         if source == "ecoflow":
-            # Ver comentario homologo en _live_battery_charge_discharge_w:
-            # el SOC es siempre por unidad (cada bateria tiene el suyo),
-            # pero la potencia agregada por Cloud (`powGetBpCms`) es de
-            # TODO el grupo — solo se cuenta una vez por grupo, en la
-            # unidad "principal". Por BLE (`battery_power`) no hace falta
-            # ese truco, ya es por unidad de verdad.
+            # Ver comentario homologo en _live_battery_charge_discharge_w: el
+            # SOC es siempre por unidad (`battery_level_main` por BLE,
+            # `bmsBattSoc` por Cloud), pero la POTENCIA es del grupo entero por
+            # los DOS canales — `powGetBpCms` en Cloud y tambien
+            # `battery_power` en BLE (esto ultimo lo reporto el usuario y se
+            # confirmo contra su sistema de 4 unidades; el comentario anterior
+            # afirmaba que BLE era por unidad y no lo es). Asi que se cuenta una
+            # sola vez por grupo en los dos casos. El estado BLE SI se sigue
+            # leyendo siempre, porque de ahi sale el SOC de esta unidad.
             soc, power, net_power = None, None, None
             ecoflow_mode = b.get("ecoflow_mode")
             # De donde ha venido el dato de ESTE ciclo -- para el iconito
@@ -1582,8 +1659,15 @@ def _live_battery_totals(cfg: dict, *, fresh: bool = False) -> dict:
                                 ecoflow_source = "bluetooth"
                             except (TypeError, ValueError):
                                 pass
+                        # La potencia es del GRUPO: solo la aporta la primera
+                        # bateria del grupo en esta vuelta. Las demas se quedan
+                        # con net_power None, que es lo honesto (no sabemos su
+                        # potencia individual) y evita multiplicar el total.
                         if state.get("battery_power") is not None:
-                            net_power = float(state["battery_power"])
+                            group_key = _ecoflow_group_key(b, address)
+                            if group_key not in ecoflow_main_sns_counted:
+                                net_power = float(state["battery_power"])
+                                ecoflow_main_sns_counted.add(group_key)
                             ecoflow_source = ecoflow_source or "bluetooth"
 
             if ecoflow_mode in ("cloud", "hybrid") and (soc is None or net_power is None):
@@ -1595,14 +1679,26 @@ def _live_battery_totals(cfg: dict, *, fresh: bool = False) -> dict:
                     if soc is None:
                         state = client.get_live_state(sn, required_fields=battery_exec.ECOFLOW_SOC_FIELDS) if (client and sn) else None
                         if state:
+                            # Mismo criterio que battery_exec._read_ecoflow_soc_pct_via_cloud
+                            # (ver el comentario extenso alli): `cmsBattSoc` es el
+                            # campo del SISTEMA y las unidades esclavas lo devuelven
+                            # a 0.0 por REST -- aceptarlo como 0% real hacia que se
+                            # vieran vacias. Ademas, el `break` estaba FUERA del
+                            # try/except: si `float()` fallaba, se salia del bucle
+                            # igualmente sin probar los campos siguientes.
                             for field in battery_exec.ECOFLOW_SOC_FIELDS:
-                                if state.get(field) is not None:
-                                    try:
-                                        soc = float(state[field])
-                                        ecoflow_source = "cloud"
-                                    except (TypeError, ValueError):
-                                        pass
-                                    break
+                                raw_soc = state.get(field)
+                                if raw_soc is None:
+                                    continue
+                                try:
+                                    candidate = float(raw_soc)
+                                except (TypeError, ValueError):
+                                    continue
+                                if field == "cmsBattSoc" and candidate == 0:
+                                    continue
+                                soc = candidate
+                                ecoflow_source = "cloud"
+                                break
                     if net_power is None and main_sn and main_sn not in ecoflow_main_sns_counted:
                         main_state = client.get_live_state(main_sn, required_fields=("powGetBpCms",)) if client else None
                         if main_state and main_state.get("powGetBpCms") is not None:
@@ -1803,6 +1899,66 @@ def api_battery_health():
     return jsonify(combined)
 
 
+def _hourly_from_history(entries: list[dict], value_fn) -> list[tuple[datetime, float]]:
+    """[(hora, Wh)] ordenado, aplicando `value_fn` a cada entrada del historico.
+    Cada entrada YA es una hora, asi que W durante 1 h = Wh directamente."""
+    hourly: list[tuple[datetime, float]] = []
+    for e in entries:
+        dt_str = e.get("dt")
+        if not dt_str:
+            continue
+        try:
+            dt = datetime.fromisoformat(dt_str).astimezone()  # naive local -> tz-aware, HA lo exige
+        except (ValueError, TypeError):
+            continue
+        try:
+            value = value_fn(e)
+        except (TypeError, ValueError, KeyError):
+            continue
+        if value is None:
+            continue
+        try:
+            hourly.append((dt, max(0.0, float(value))))
+        except (TypeError, ValueError):
+            continue
+    hourly.sort(key=lambda x: x[0])
+    return hourly
+
+
+def _statistics_points(hourly: list[tuple[datetime, float]]) -> tuple[list[dict], float]:
+    """Convierte [(hora, Wh)] en los puntos que pide `recorder/import_statistics`:
+    "sum" es el ACUMULADO hasta el final de esa hora, no la energia de la hora
+    sola. Devuelve tambien el acumulado final, para poder dejar el contador
+    local en el mismo sitio."""
+    points: list[dict] = []
+    running_wh = 0.0
+    if hourly:
+        # Punto ancla a 0 justo antes del primer dato: sin el, HA dibujaria el
+        # primer valor como si viniera de la nada.
+        points.append({"start": (hourly[0][0] - timedelta(hours=1)).isoformat(), "sum": 0.0})
+        for dt, wh in hourly:
+            running_wh += wh
+            points.append({"start": dt.isoformat(), "sum": round(running_wh / 1000, 3)})
+    return points, running_wh
+
+
+def _grid_flows_for_hour(entry: dict) -> tuple[float, float]:
+    """(importado_wh, vertido_wh) de UNA hora del historico, con la misma
+    formula fisica que el flujo en vivo: lo que el excedente solar cubre va a
+    solar y solo el resto a red -- no la etiqueta todo-o-nada del planificador,
+    que era la que sobrecontabilizaba la importacion."""
+    pv = float(entry.get("pv_w") or 0.0)
+    load = float(entry.get("load_w") or 0.0)
+    charge = float(entry.get("charge_w") or 0.0)
+    discharge = float(entry.get("discharge_w") or 0.0)
+    solar_to_casa = min(pv, load)
+    surplus = max(0.0, pv - load)
+    solar_to_batt = min(surplus, charge)
+    grid_to_batt = max(0.0, charge - solar_to_batt)
+    grid_to_casa = max(0.0, load - solar_to_casa - discharge)
+    return grid_to_casa + grid_to_batt, max(0.0, surplus - solar_to_batt)
+
+
 @app.post("/api/energy/backfill_history")
 def api_energy_backfill_history():
     """
@@ -1823,49 +1979,96 @@ def api_energy_backfill_history():
     """
     cfg = config_store.load_config()
     batteries = [_battery_from_cfg(b, cfg) for b in cfg["batteries"]]
-    totals = lifetime_store.get_aggregate_totals([_stable_battery_key(b) for b in batteries])
+    battery_keys = [_stable_battery_key(b) for b in batteries]
     entries = history_store.get_all()
 
     results = {}
-    for direction, field, total_wh in (
-        ("charged", "charge_w", totals["charged_wh"]),
-        ("discharged", "discharge_w", totals["discharged_wh"]),
-    ):
-        hourly = []
-        for e in entries:
-            dt_str = e.get("dt")
-            wh = e.get(field)
-            if not dt_str or wh is None:
-                continue
-            try:
-                dt = datetime.fromisoformat(dt_str).astimezone()  # naive local -> tz-aware, HA lo exige
-            except ValueError:
-                continue
-            hourly.append((dt, max(0.0, float(wh))))  # W durante 1h = Wh, cada entrada YA es una hora
-        hourly.sort(key=lambda x: x[0])
 
-        covered_wh = sum(wh for _, wh in hourly)
-        running_wh = max(0.0, total_wh - covered_wh)  # todo lo de ANTES del detalle horario, de golpe
-
-        points = []
-        if hourly:
-            points.append({
-                "start": (hourly[0][0] - timedelta(hours=1)).isoformat(),
-                "sum": round(running_wh / 1000, 3),
-            })
-            for dt, wh in hourly:
-                running_wh += wh
-                points.append({"start": dt.isoformat(), "sum": round(running_wh / 1000, 3)})
-
+    # --- bateria: se reconstruye ENTERA desde el historico horario ----------
+    # Antes se usaba el acumulado de `lifetime_store` como total y el historico
+    # solo para repartirlo. Pero ese acumulado venia inflado (la potencia de un
+    # grupo EcoFlow enlazado se sumaba una vez POR BATERIA declarada), asi que
+    # el reparto heredaba el error. `history_store` guarda los valores del
+    # PLANIFICADOR (`now_hp.*`), que nunca pasaron por la lectura en vivo
+    # inflada -- es una base limpia. Al final se reescala `lifetime_store` al
+    # total reconstruido para que el sensor en vivo siga desde ahi sin salto.
+    battery_finals = {}
+    for direction, field in (("charged", "charge_w"), ("discharged", "discharge_w")):
+        hourly = _hourly_from_history(entries, lambda e, f=field: e.get(f))
+        points, final_wh = _statistics_points(hourly)
         entity_id = f"sensor.battery_orchestrator_energy_{direction}"
         ok = ha_statistics.import_statistics(entity_id, "kWh", points)
-        results[direction] = {"ok": ok, "points": len(points), "final_kwh": round(running_wh / 1000, 3)}
+        battery_finals[direction] = final_wh
+        results[direction] = {"ok": ok, "points": len(points), "final_kwh": round(final_wh / 1000, 3)}
+
+    # --- red importada / vertida -------------------------------------------
+    # Con la MISMA formula fisica que usa ya el flujo en vivo (ver el
+    # comentario junto a `solar_to_batt_w` en run_cycle), no la etiqueta
+    # todo-o-nada del planificador que sobrecontabilizaba la importacion.
+    grid_hourly = {
+        "grid_imported_energy": _hourly_from_history(entries, lambda e: _grid_flows_for_hour(e)[0]),
+        "grid_exported_energy": _hourly_from_history(entries, lambda e: _grid_flows_for_hour(e)[1]),
+    }
+    grid_finals = {}
+    for name, hourly in grid_hourly.items():
+        points, final_wh = _statistics_points(hourly)
+        ok = ha_statistics.import_statistics(f"sensor.battery_orchestrator_{name}", "kWh", points)
+        grid_finals[name] = final_wh
+        results[name] = {"ok": ok, "points": len(points), "final_kwh": round(final_wh / 1000, 3)}
+
+    # --- solar --------------------------------------------------------------
+    solar_hourly = _hourly_from_history(entries, lambda e: e.get("pv_w"))
+    solar_points, solar_final_wh = _statistics_points(solar_hourly)
+    solar_ok = ha_statistics.import_statistics(
+        "sensor.battery_orchestrator_solar_energy", "kWh", solar_points,
+    )
+    results["solar_energy"] = {
+        "ok": solar_ok, "points": len(solar_points), "final_kwh": round(solar_final_wh / 1000, 3),
+    }
 
     all_ok = all(r["ok"] for r in results.values())
+
+    # Alinear los acumuladores locales con lo reconstruido: si no, el sensor
+    # seguiria contando desde su total viejo (inflado) y la siguiente
+    # publicacion meteria un salto en la grafica que acabamos de arreglar.
+    aligned = {}
     if all_ok:
-        cfg["_energy_history_backfilled_at"] = datetime.now().isoformat()
+        now_iso = datetime.now().isoformat()
+        try:
+            grid_energy_store.set_totals(
+                grid_finals["grid_imported_energy"] / 1000,
+                grid_finals["grid_exported_energy"] / 1000,
+                since=now_iso,
+            )
+            solar_energy_store.set_total_wh(solar_final_wh, since=now_iso)
+            aligned["grid"] = True
+            aligned["solar"] = True
+        except Exception:
+            log.exception("Fallo alineando los acumulados de red/solar tras la reconstruccion")
+            aligned["grid"] = aligned["solar"] = False
+        try:
+            aligned["battery"] = lifetime_store.rescale_to_aggregate(
+                battery_keys, battery_finals["charged"], battery_finals["discharged"],
+            )
+        except Exception:
+            log.exception("Fallo reescalando los acumulados de bateria tras la reconstruccion")
+            aligned["battery"] = False
+
+        cfg["_energy_history_backfilled_at"] = now_iso
         config_store.save_config(cfg)
-    return jsonify({"ok": all_ok, **results})
+
+    return jsonify({
+        "ok": all_ok,
+        # AVISO para quien llama: la reconstruccion se basa en `history_store`,
+        # que son los valores del PLANIFICADOR hora a hora y retiene 8 dias. No
+        # son lecturas medidas, y todo lo anterior a esos 8 dias NO se
+        # reconstruye: se descarta a proposito, porque el acumulado viejo
+        # estaba contaminado y no hay forma de saber que parte era buena.
+        "basis": "history_store (valores del planificador, 8 dias de detalle horario)",
+        "discards_older_than_days": 8,
+        "aligned_local_totals": aligned,
+        **results,
+    })
 
 
 @app.get("/api/savings")

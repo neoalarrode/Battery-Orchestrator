@@ -6,11 +6,14 @@ y ejecucion contra Home Assistant (o solo simulacion en modo dry-run).
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 import ecoflow_ble
 import ecoflow_cloud
 import ha_client
+
+log = logging.getLogger("battery_exec")
 
 # Campos del estado en vivo de EcoFlow Cloud que pueden traer el SOC, por
 # orden de preferencia. IMPORTANTE: "cmsBattSoc" es el SOC AGREGADO de
@@ -96,11 +99,50 @@ class Battery:
             return None
         for field in ECOFLOW_SOC_FIELDS:
             val = state.get(field)
-            if val is not None:
-                try:
-                    return float(val)
-                except (TypeError, ValueError):
-                    continue
+            if val is None:
+                continue
+            try:
+                soc = float(val)
+            except (TypeError, ValueError):
+                continue
+            # BUG REAL, confirmado contra una cuenta EcoFlow de verdad (sistema
+            # STREAM de 4 unidades): por REST (`quota/all`), las unidades
+            # ESCLAVAS devuelven `cmsBattSoc = 0.0` — no es su carga, es que ese
+            # campo es del SISTEMA y solo lo rellena la principal (que reporta
+            # `cmsBattSoc=40` junto a su propio `bmsBattSoc=45`, dejando claro
+            # que son dos cosas distintas). Como 0.0 no es None, se aceptaba
+            # como un 0% real: tres de cuatro baterias se veian vacias, por
+            # debajo de `min_soc_pct`, con la descarga bloqueada y pidiendo
+            # carga desde red estando llenas.
+            #
+            # Y la ventana no es corta: el feed MQTT (que SI trae `bmsBattSoc`
+            # por unidad) solo empuja CAMBIOS, y al ser entero una unidad no
+            # aparece hasta moverse un 1% completo — asi que tras cada reinicio
+            # se tira del REST durante minutos.
+            #
+            # Los campos POR UNIDAD se aceptan tal cual, 0% incluido (una
+            # bateria de verdad vacia es un dato legitimo). De `cmsBattSoc`, que
+            # es el del sistema, se desconfia solo cuando vale exactamente 0.
+            if field == "cmsBattSoc" and soc == 0:
+                log.debug(
+                    "[%s] cmsBattSoc=0 por REST: es el campo de SISTEMA sin rellenar en una "
+                    "unidad esclava, no un 0%% real -- se ignora", self.name,
+                )
+                continue
+            if soc == 0:
+                # Un 0 en un campo POR UNIDAD se acepta a proposito: una bateria
+                # de verdad vacia tiene que saberse para que el planificador la
+                # cargue (si se devolviera None quedaria fuera del plan y nadie
+                # la cargaria). Pero se avisa, porque en una instalacion donde
+                # ninguna unidad llega nunca a 0 esto es mas probable que sea un
+                # fallo de lectura que una bateria vacia -- mejor visible en el
+                # log que silencioso.
+                log.warning(
+                    "[%s] SOC leido como 0%% en el campo por unidad '%s'. Se toma como valido "
+                    "(bateria vacia), pero si esta bateria no puede estar vacia de verdad, es "
+                    "un fallo de lectura del canal EcoFlow.", self.name, field,
+                )
+            return soc
         return None
 
     def _read_ecoflow_soc_pct(self) -> float | None:

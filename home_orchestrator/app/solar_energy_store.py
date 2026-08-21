@@ -54,6 +54,22 @@ def _save(data: dict) -> None:
         os.replace(tmp, SOLAR_ENERGY_PATH)
 
 
+def set_total_wh(wh: float, since: str | None = None) -> dict:
+    """Fija el acumulado a un valor concreto -- para dejarlo alineado con un
+    historico recien reconstruido (ver `/api/energy/backfill_history`).
+
+    Sin esto, reconstruir las estadisticas en HA y dejar el contador local con
+    su valor viejo deja los dos numeros peleados: el sensor seguiria contando
+    desde el total inflado y la grafica daria un salto en la siguiente
+    publicacion."""
+    data = _load()
+    data["wh"] = max(0.0, float(wh))
+    if since is not None:
+        data["since"] = since
+    _save(data)
+    return data
+
+
 def accumulate(wh: float) -> None:
     """Suma `wh` (siempre >= 0, energia real movida desde la ultima
     lectura) al total de por vida."""

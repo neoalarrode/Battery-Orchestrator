@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.61.1
+Tuya y Lighting re-pineados al tag `v0.61.0` — es lo que hace que los arreglos de esa versión lleguen a las instalaciones que descargan los plugins. sha256 `230a3a73…7063`, calculado sobre el tarball real y verificado antes de fijarlo; comprobado que los elementos de sus listas `files` viajan dentro y que los seis arreglos están presentes en el código empaquetado.
+
+**Solo se re-pinean esos dos:** los cuatro ficheros tocados en 0.61.0 (`tuya_plugin.py`, `tuya/tuya_lan.py`, `tuya/tuya_store.py`, `lighting/rules.py`) son de sus listas. El resto de plugins sigue donde estaba. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
+
 ## 0.61.0
 
 ### Tuya: dos fallos de arranque vistos en el log

@@ -142,8 +142,8 @@ PLUGIN_CATALOG = {
         "description": "Puente de ingesta para dispositivos Tuya-por-LAN — consumo interno por Climate y/o exposición opcional a HA por MQTT",
         "version": "0.4.7",
         "downloadable": True,
-        "tag": "v0.58.0",
-        "sha256": "2cff537730f18007d10fd1d31255f4fc6c8cc4a322a9bcdee497ded22fa4e1f6",  # sha256 real del tarball de v0.58.0, verificado contra una descarga real antes de fijarlo aqui (bitmaps con int ya no se corrompen, DP numericos de solo escritura controlables, disponibilidad MQTT revocada)
+        "tag": "v0.61.0",
+        "sha256": "230a3a7304fb275613792e47c5de9a2ab913520cedf00d70fe24aaf91d5e7063",  # sha256 real del tarball de v0.61.0, verificado contra una descarga real antes de fijarlo aqui (version de protocolo vacia ya no impide arrancar, y un dispositivo que no responde al arrancar recibe su entidad en HA igualmente)
         "files": ["tuya_plugin.py", "tuya", "tuya_templates"],
     },
     "lighting": {
@@ -151,8 +151,8 @@ PLUGIN_CATALOG = {
         "description": "Iluminación adaptativa por zona — color y brillo por hora, encendido/apagado por presencia y reglas condicionales (p.ej. TV encendida -> luces laterales en vez del techo)",
         "version": "0.7.12",
         "downloadable": True,
-        "tag": "v0.60.0",
-        "sha256": "54376a3161494dd13549c34bebf0bea1c2f90adf91fa0e766ca5e2886cb14ba0",  # sha256 real del tarball de v0.60.0, verificado contra una descarga real antes de fijarlo aqui (la regla activa se mantiene cada ciclo, lock por zona, snapshot compartido en group_state y fin de la fuga de hilos periodicos)
+        "tag": "v0.61.0",
+        "sha256": "230a3a7304fb275613792e47c5de9a2ab913520cedf00d70fe24aaf91d5e7063",  # sha256 real del tarball de v0.61.0, verificado contra una descarga real antes de fijarlo aqui (negacion `!=` y comparacion de ATRIBUTOS en las condiciones de las reglas)
         "files": ["lighting_plugin.py", "lighting", "lighting_templates"],
     },
     "tplink": {

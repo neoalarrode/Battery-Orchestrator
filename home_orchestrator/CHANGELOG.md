@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.60.1
+Lighting re-pineado al tag `v0.60.0` — es lo que hace que los arreglos de esa versión lleguen a las instalaciones que descargan el plugin. sha256 `54376a31…4ba0`, calculado sobre el tarball real y verificado antes de fijarlo; comprobado que los 3 elementos de su lista `files` viajan dentro y que los cinco arreglos están presentes en el código empaquetado.
+
+**Solo se re-pinea Lighting:** los tres ficheros tocados en 0.60.0 (`lighting_plugin.py`, `lighting/zone_runner.py`, `lighting/mqtt_lighting.py`) son todos de su lista. El resto de plugins sigue donde estaba. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
+
 ## 0.60.0
 
 Lighting: los dos síntomas reportados —tarda en responder, y de vez en cuando deja de controlar manteniendo encendidas luces que no corresponden— con sus causas separadas. Reproducido y verificado con las reglas reales del salón (TV → lámparas, reserva → techo).

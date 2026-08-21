@@ -115,8 +115,8 @@ PLUGIN_CATALOG = {
         "description": "Baterías, solar y cargas diferibles — carga y descarga adaptativa por precio, sol y consumo real",
         "version": "0.11.93",
         "downloadable": True,
-        "tag": "v0.58.0",
-        "sha256": "2cff537730f18007d10fd1d31255f4fc6c8cc4a322a9bcdee497ded22fa4e1f6",  # sha256 real del tarball de v0.58.0, verificado contra una descarga real antes de fijarlo aqui (ahorro acumulado integrado por tiempo real, ya no inflado ~12x por el ciclo reactivo)
+        "tag": "v0.59.0",
+        "sha256": "326146b78233f9b36c43764189f92b2b12e62bef5e51681fec305734d2b42a49",  # sha256 real del tarball de v0.59.0, verificado contra una descarga real antes de fijarlo aqui (potencia de grupo EcoFlow contada una vez, cmsBattSoc=0 ignorado, atribucion fisica solar/red y reconstruccion del historico de 5 series)
         "files": [
             "main.py", "battery_plugin.py", "battery_exec.py", "anomaly_store.py",
             "capacity_store.py", "climate_link.py", "deferrable_exec.py",

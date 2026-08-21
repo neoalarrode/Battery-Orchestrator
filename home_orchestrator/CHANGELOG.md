@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.59.1
+Energy re-pineado al tag `v0.59.0` — es lo que hace que los arreglos de esa versión lleguen a las instalaciones que descargan el plugin. sha256 `326146b7…2a49`, calculado sobre el tarball real y verificado antes de fijarlo; comprobado que los 24 elementos de su lista `files` viajan dentro y que los ocho arreglos están presentes en el código empaquetado.
+
+**Solo se re-pinea Energy:** los cinco ficheros tocados en 0.59.0 (`main.py`, `battery_exec.py`, `grid_energy_store.py`, `lifetime_store.py`, `solar_energy_store.py`) son todos de su lista. El resto de plugins sigue donde estaba. Fichero núcleo (`plugin_loader.py`), lleva Release en GitHub.
+
 ## 0.59.0
 
 Sobrecontabilización en el Panel de Energía y atribución de las baterías EcoFlow en grupo. Todo verificado contra una cuenta EcoFlow real (sistema STREAM de 4 unidades en modo Híbrido) y con pruebas ejecutadas.
